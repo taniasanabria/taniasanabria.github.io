@@ -197,6 +197,9 @@ function horarioDelDia(fechaISO) {
   return { dia, horario: h || null };
 }
 
+const HORA_EXTRA_DESDE = 6 * 60;  // primer turno ofrecido fuera de horario
+const HORA_EXTRA_HASTA = 22 * 60; // último turno ofrecido fuera de horario
+
 function generarHoras() {
   const sel = $('#r-hora');
   const actual = sel.value;
@@ -208,12 +211,20 @@ function generarHoras() {
   let cierra = '20:00';
   if (info && info.horario) { abre = info.horario.abre; cierra = info.horario.cierra; }
   const aMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const hhmm = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  const domingo = !!(info && !info.horario);
   if (!esEvento) {
-    for (let t = aMin(abre); t < aMin(cierra); t += 30) {
-      const hh = String(Math.floor(t / 60)).padStart(2, '0');
-      const mm = String(t % 60).padStart(2, '0');
-      opciones.push(`<option value="${hh}:${mm}">${hh}:${mm} hs</option>`);
+    // Horario habitual + horarios fuera de horario (con costo adicional, solo con turno previo).
+    const normales = [];
+    const extra = [];
+    for (let t = HORA_EXTRA_DESDE; t <= HORA_EXTRA_HASTA; t += 30) {
+      const dentro = !domingo && t >= aMin(abre) && t < aMin(cierra);
+      (dentro ? normales : extra).push(t);
     }
+    if (normales.length) {
+      opciones.push(`<optgroup label="Horario habitual">${normales.map((t) => `<option value="${hhmm(t)}">${hhmm(t)} hs</option>`).join('')}</optgroup>`);
+    }
+    opciones.push(`<optgroup label="${domingo ? 'Domingo' : 'Fuera de horario'} · costo adicional">${extra.map((t) => `<option value="${hhmm(t)}" data-extra="1">${hhmm(t)} hs (costo adicional)</option>`).join('')}</optgroup>`);
   } else {
     for (let t = 8 * 60; t <= 23 * 60; t += 30) {
       const hh = String(Math.floor(t / 60)).padStart(2, '0');
@@ -226,13 +237,25 @@ function generarHoras() {
   if ([...sel.options].some((o) => o.value === actual)) sel.value = actual;
 
   const ayuda = $('#r-fecha-info');
-  if (info && !info.horario && !esEvento) {
-    ayuda.textContent = `Los ${DIAS_ES[info.dia].toLowerCase()}s no figuran en el horario del Studio (${catalogo.negocio.horarioTexto}). Podés enviar igual la solicitud para consultar disponibilidad.`;
+  if (domingo) {
+    ayuda.textContent = `Los domingos se atiende solo con turno previo. Horario habitual: ${catalogo.negocio.horarioTexto}`;
   } else if (esEvento) {
     ayuda.textContent = 'Para eventos indicá el horario aproximado de inicio de la fiesta.';
   } else {
     ayuda.textContent = '';
   }
+  actualizarAvisoExtra();
+}
+
+/** ¿La solicitud cae en domingo o fuera del horario habitual? (implica costo adicional) */
+function esFueraDeHorario() {
+  const info = horarioDelDia($('#r-fecha').value);
+  const opcion = $('#r-hora').selectedOptions[0];
+  return !!((info && !info.horario) || (opcion && opcion.dataset.extra));
+}
+
+function actualizarAvisoExtra() {
+  $('#r-extra').hidden = !esFueraDeHorario();
 }
 
 function actualizarServicio() {
@@ -244,7 +267,12 @@ function actualizarServicio() {
   $('#r-personas-campo').hidden = !(datos && (datos.esEvento || /^maquillaje-(social|alta)/.test(datos.id)));
   const conSena = !!(datos && datos.sena);
   $('#r-politica').hidden = !conSena;
-  if (conSena) $('#r-sena').textContent = datos.sena;
+  if (conSena) {
+    $('#r-sena').textContent = datos.sena;
+    $('#r-pago-sena').textContent = datos.sena;
+    $('#r-pago-total').textContent = datos.precio || 'a confirmar';
+    $('#form-reserva').querySelector('input[name="pago"][value="seña"]').checked = true;
+  }
   $('#r-acepto').checked = false;
   generarHoras();
 }
@@ -312,12 +340,18 @@ function enviarReserva(e) {
   lineas.push(`📅 *Fecha preferida:* ${fechaTexto}`);
   lineas.push(`🕒 *Horario preferido:* ${f.hora.value === 'a coordinar' ? 'A coordinar' : f.hora.value + ' hs'}`);
   if (!$('#r-personas-campo').hidden && f.personas.value) lineas.push(`👥 *Personas:* ${f.personas.value}`);
+  if (esFueraDeHorario()) lineas.push('⚠️ *Domingo / fuera de horario:* entiendo que tiene costo adicional.');
   if (f.notas.value.trim()) lineas.push(`📝 *Comentarios:* ${f.notas.value.trim()}`);
+  if (datos.sena) {
+    const pago = f.pago.value === 'total' ? `Total (${datos.precio || 'a confirmar'})` : `Solo la seña (${datos.sena}); el saldo por transferencia o QR`;
+    lineas.push(`💳 *Forma de reserva:* ${pago}`);
+  }
   lineas.push(datos.sena ? `✅ *Acepta política de seña previa (${datos.sena}).*` : '✅ *Consultas y diseño personalizado (Sin seña previa).*');
   lineas.push('*---------------------------------------*');
   lineas.push(`¡Hola Tania! Me contacto porque quisiera ${datos.accion}, por favor.`);
 
-  const url = `https://wa.me/${catalogo.negocio.whatsapp}?text=${encodeURIComponent(lineas.join('\n'))}`;
+  // api.whatsapp.com directo: la redirección de wa.me rompe los emojis del texto.
+  const url = `https://api.whatsapp.com/send?phone=${catalogo.negocio.whatsapp}&text=${encodeURIComponent(lineas.join('\n'))}`;
   $('#reserva-enlace').href = url;
   const ventana = window.open(url, '_blank');
   if (ventana) ventana.opener = null;
@@ -335,6 +369,7 @@ function prepararReserva() {
   const f = $('#form-reserva');
   $('#r-servicio').addEventListener('change', actualizarServicio);
   $('#r-fecha').addEventListener('change', generarHoras);
+  $('#r-hora').addEventListener('change', actualizarAvisoExtra);
   f.addEventListener('submit', enviarReserva);
   const limpiar = (e) => {
     if (e.target.getAttribute('aria-invalid') === 'true') marcar(e.target, false);

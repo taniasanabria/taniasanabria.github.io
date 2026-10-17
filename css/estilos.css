@@ -388,3 +388,11 @@ dialog::backdrop { background: rgba(20, 16, 10, .62); backdrop-filter: blur(4px)
 }
 
 .solo-lector { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.aviso-extra { display: flex; gap: .55rem; align-items: flex-start; margin: 0 0 .9rem; padding: .75rem .9rem; border-radius: 12px; background: #fff6e0; border: 1px solid #e6c97a; color: #5a4210; font-size: .86rem; }
+.aviso-extra[hidden] { display: none; }
+.aviso-extra .ic { color: var(--oro); margin-top: .15em; flex: none; }
+.opciones-pago { border: 0; padding: 0; margin: .2rem 0 .5rem; }
+.opciones-pago legend { font-weight: 600; color: var(--tinta); margin-bottom: .35rem; padding: 0; }
+.opciones-pago .check { margin-bottom: .35rem; }
+.pie-nota { font-size: .82rem; opacity: .85; font-style: italic; }

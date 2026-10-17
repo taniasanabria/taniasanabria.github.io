@@ -6,14 +6,15 @@
     "nombreLegal": "Tania Sanabria Studio Profesional",
     "whatsapp": "595976122979",
     "telefonoVisible": "+595 976 122 979",
-    "direccion": "Las Residentas 460 c/ 8 de Setiembre, Zona Norte, Fernando de la Mora.",
-    "calle": "Las Residentas 460 c/ 8 de Setiembre",
+    "direccion": "Las Residentas 460 esq. 8 de Diciembre, Zona Norte, Fernando de la Mora.",
+    "calle": "Las Residentas 460 esq. 8 de Diciembre",
     "barrio": "Zona Norte",
     "ciudad": "Fernando de la Mora",
     "departamento": "Central",
     "pais": "PY",
     "mapa": "https://maps.app.goo.gl/jaAUj8b6NrXWj91Z7",
     "horarioTexto": "Lun a Vie: 09:00 a 20:00 hs | Sáb: 09:00 a 16:00 hs.",
+    "horarioEspecial": "Domingos y fuera del horario habitual: solo con turno previo y con costo adicional.",
     "horario": [
       { "dias": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], "abre": "09:00", "cierra": "20:00" },
       { "dias": ["Saturday"], "abre": "09:00", "cierra": "16:00" }
@@ -24,7 +25,17 @@
       "instagram": "https://www.instagram.com/taniasanabria__",
       "tiktok": "https://www.tiktok.com/@taniasanabria__"
     },
-    "politicaSena": "Para asegurar tu cupo exclusivo se abona una seña previa vía transferencia o QR (monto a descontar del total). * Seña no reembolsable en caso de cancelación o inasistencia."
+    "politicaSena": "Para asegurar tu cupo exclusivo podés abonar el total del servicio o solo la seña (monto a descontar del total). El saldo restante se abona por transferencia o QR directamente a Tania. * Seña no reembolsable en caso de cancelación o inasistencia.",
+    "politicaHorario": "Domingos y horarios fuera del horario habitual: solo con turno previo y con costo adicional, que Tania te confirma al responder tu solicitud.",
+    "pago": {
+      "_ayuda": "Opciones de pago al reservar. Hoy no hay cobro en línea: la clienta elige la opción en el formulario y Tania le envía los datos de transferencia/QR por WhatsApp. Cuando se integre una pasarela, completar 'proveedor' y poner enLinea: true.",
+      "opciones": ["total", "seña"],
+      "etiquetas": { "total": "Pagar el total", "seña": "Pagar solo la seña" },
+      "mediosSaldo": ["transferencia", "QR"],
+      "saldoA": "directamente a Tania",
+      "enLinea": false,
+      "proveedor": null
+    }
   },
   "bio": {
     "titulo": "Sobre Tania",
@@ -53,7 +64,7 @@
         { "icono": "star", "etiqueta": "Incluye", "texto": "Preparación facial, diseño de mirada, fijación duradera y pestañas en tira." }
       ],
       "normas": [
-        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Efectivo, Transferencias Bancarias, QR y Tarjetas." },
+        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Desde la web podés abonar el total o solo la seña. El saldo se abona por transferencia o QR directamente a Tania." },
         { "icono": "clock-rotate-left", "etiqueta": "Puntualidad", "texto": "10 minutos de tolerancia. Desde el minuto 11 aplica recargo de Gs. 30.000. Cumplidos los 25 minutos de retraso, el turno queda cancelado sin excepción para no afectar a la siguiente clienta." }
       ],
       "fotos": ["social-1", "social-2", "social-3", "social-4", "social-5", "social-6"]
@@ -72,7 +83,7 @@
         { "icono": "house-chimney", "etiqueta": "Logística", "texto": "En Studio. A domicilio desde 4 personas (viático extra por persona)." }
       ],
       "normas": [
-        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Efectivo, Transferencias, QR y Tarjetas." },
+        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Desde la web podés abonar el total o solo la seña. El saldo se abona por transferencia o QR directamente a Tania." },
         { "icono": "clock-rotate-left", "etiqueta": "Puntualidad", "texto": "10 minutos de tolerancia. A partir del minuto 11 aplica recargo de Gs. 30.000. Cancelación automática a los 25 minutos de retraso." }
       ],
       "fotos": ["social-alta-1", "social-alta-2", "social-alta-3", "social-alta-4", "social-alta-5", "social-alta-6"]
@@ -90,7 +101,7 @@
         { "icono": "eye", "etiqueta": "Pestañas Postizas", "texto": "Aplicación de pestañas premium en tira incluida." }
       ],
       "normas": [
-        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Efectivo, Transferencias, QR y Tarjetas." },
+        { "icono": "hand-holding-dollar", "etiqueta": "Métodos de Pago", "texto": "Desde la web podés abonar el total o solo la seña. El saldo se abona por transferencia o QR directamente a Tania." },
         { "icono": "clock-rotate-left", "etiqueta": "Puntualidad", "texto": "10 minutos de tolerancia con aviso." }
       ],
       "fotos": [],
@@ -357,13 +368,14 @@
       "nombre": "Fotografía Beauty", "nombreReserva": "Curso de Fotografía Beauty",
       "resumen": "Iluminación, ángulos y edición móvil para proyectar tus trabajos en redes.",
       "subtitulo": "Clase intensiva teórico-práctica de 3 horas.",
-      "precio": "Gs. 350.000", "precioReserva": "Gs. 350.000 + Matrícula Gs. 100.000", "sena": "Gs. 100.000",
+      "precio": "Gs. 350.000", "precioNota": "+ Matrícula Gs. 100.000", "precioTotal": "Gs. 450.000", "precioReserva": "Gs. 350.000 + Matrícula Gs. 100.000 (total Gs. 450.000)", "sena": "Gs. 100.000",
       "accion": "inscribirme a esta clase intensiva", "cta": "Inscribirme",
       "detallesTitulo": "Contenido Clave",
       "detalles": [
         { "icono": "camera-retro", "texto": "Esquemas de iluminación con aros de luz y luz natural." },
         { "icono": "camera-retro", "texto": "Ajustes de cámara del móvil para no perder nitidez ni color real." },
-        { "icono": "camera-retro", "texto": "Retoque sutil y estilismo fotográfico." }
+        { "icono": "camera-retro", "texto": "Retoque sutil y estilismo fotográfico." },
+        { "icono": "receipt", "texto": "Inversión total: Gs. 450.000 (Clase Gs. 350.000 + Matrícula Gs. 100.000)." }
       ],
       "fotos": ["social-alta-6", "social-alta-1", "social-alta-2"],
       "fotosPendientes": ["curso-foto-1", "curso-foto-2", "academia"]

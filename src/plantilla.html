@@ -125,9 +125,10 @@
       <ol class="pasos">
         <li><span class="paso-num">1</span><h3>Elegí tu servicio</h3><p>Mirá los detalles, la duración y el valor de referencia.</p></li>
         <li><span class="paso-num">2</span><h3>Proponé fecha y horario</h3><p>Completá el formulario: te lleva a WhatsApp con todo listo para enviar.</p></li>
-        <li><span class="paso-num">3</span><h3>Confirmá tu cupo</h3><p>Tania te confirma la disponibilidad y, si corresponde, abonás la seña por transferencia o QR.</p></li>
+        <li><span class="paso-num">3</span><h3>Confirmá tu cupo</h3><p>Tania te confirma la disponibilidad y te envía los datos para abonar el total o solo la seña por transferencia o QR.</p></li>
       </ol>
       <p class="pasos-politica">{{ICONO_INFO}} {{POLITICA}}</p>
+      <p class="pasos-politica">{{ICONO_RELOJ}} {{POLITICA_HORARIO}}</p>
       <div class="centrado"><button type="button" class="btn btn-primario btn-grande" data-reservar="">Reservar turno</button></div>
     </div>
   </section>
@@ -142,6 +143,7 @@
     <address class="pie-datos">
       <p>{{ICONO_UBICACION}} {{DIRECCION}}</p>
       <p>{{ICONO_RELOJ}} {{HORARIO}}</p>
+      <p class="pie-nota">{{HORARIO_ESPECIAL}}</p>
       <p>{{ICONO_CANDADO}} {{ATENCION}}</p>
       <p>{{ICONO_WA}} <a href="https://wa.me/{{WA}}" target="_blank" rel="noopener">{{TEL}}</a></p>
     </address>
@@ -213,6 +215,7 @@
         </div>
       </div>
       <p class="campo-ayuda" id="r-fecha-info" aria-live="polite"></p>
+      <p class="aviso-extra" id="r-extra" role="status" hidden>{{ICONO_INFO}} <span><strong>Costo adicional:</strong> {{POLITICA_HORARIO}}</span></p>
       <div class="campo" id="r-personas-campo" hidden>
         <label for="r-personas">Cantidad aproximada de personas / invitados</label>
         <input id="r-personas" name="personas" type="number" min="1" inputmode="numeric" placeholder="Ej: 4">
@@ -228,8 +231,15 @@
 
       <div class="politica" id="r-politica" hidden>
         <p class="politica-titulo">{{ICONO_INFO}} Política de reserva</p>
-        <p>Para asegurar tu cupo exclusivo se abona una seña previa de <strong id="r-sena">—</strong> vía transferencia o QR (monto a descontar del total).</p>
+        <p>Para asegurar tu cupo exclusivo podés abonar el <strong>total</strong> o solo la <strong>seña de <span id="r-sena">—</span></strong> (se descuenta del total). El saldo restante se abona por transferencia o QR directamente a Tania.</p>
+        <fieldset class="opciones-pago">
+          <legend>¿Cómo querés reservar?</legend>
+          <label class="check"><input type="radio" name="pago" value="seña" checked> <span>Pagar solo la seña (<span id="r-pago-sena">—</span>)</span></label>
+          <label class="check"><input type="radio" name="pago" value="total"> <span>Pagar el total (<span id="r-pago-total">—</span>)</span></label>
+        </fieldset>
+        <p class="campo-ayuda">Por ahora no se cobra en la web: Tania te envía los datos de transferencia o QR por WhatsApp.</p>
         <p><em>* Seña no reembolsable en caso de cancelación o inasistencia.</em></p>
+        <p>{{POLITICA_HORARIO}}</p>
         <label class="check"><input type="checkbox" id="r-acepto" name="acepto"> <span>Leí y acepto la política de reserva.</span></label>
       </div>
 

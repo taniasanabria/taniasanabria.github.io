@@ -48,7 +48,7 @@ const jsonld = {
   telephone: '+' + n.whatsapp,
   priceRange: 'Gs. 80.000 - Gs. 1.500.000',
   currenciesAccepted: 'PYG',
-  paymentAccepted: 'Efectivo, Transferencia bancaria, QR, Tarjeta',
+  paymentAccepted: 'Transferencia bancaria, QR',
   address: {
     '@type': 'PostalAddress',
     streetAddress: n.calle,
@@ -69,7 +69,7 @@ const jsonld = {
     name: s.nombre,
     description: s.resumen,
     priceCurrency: 'PYG',
-    ...(/^Gs\. [\d.]+$/.test(s.precio) ? { price: s.precio.replace(/[^\d]/g, '') } : {}),
+    ...(/^Gs\. [\d.]+$/.test(s.precioTotal || s.precio) ? { price: (s.precioTotal || s.precio).replace(/[^\d]/g, '') } : {}),
     url: URL_SITIO + '#servicio-' + s.id,
   })),
 };
@@ -110,6 +110,8 @@ const reemplazos = {
   CERTIFICADOS: certificados,
   OPCIONES: R.opcionesServicio(catalogo.categorias, catalogo.servicios),
   POLITICA: R.esc(n.politicaSena),
+  POLITICA_HORARIO: R.esc(n.politicaHorario),
+  HORARIO_ESPECIAL: R.esc(n.horarioEspecial),
   DIRECCION: R.esc(n.direccion),
   HORARIO: R.esc(n.horarioTexto),
   ATENCION: R.esc(n.atencionNota),

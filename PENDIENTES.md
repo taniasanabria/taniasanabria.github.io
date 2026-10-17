@@ -1,22 +1,27 @@
 # Preguntas pendientes para Tania / Harold
 
-No se inventó ningún dato. Donde había contradicciones se mantuvo el texto actual del sitio, y quedan listadas acá para confirmarlas.
+No se inventó ningún dato. Donde había contradicciones se mantuvo el texto actual del sitio, y quedan listadas acá para confirmarlas. Las ya respondidas figuran como resueltas.
 
-## Datos del negocio
-1. **Dirección.** El sitio dice "Las Residentas 460 c/ **8 de Setiembre**", pero Google Maps muestra "**8 de diciembre**". ¿Cuál es la correcta? (Se mantuvo "8 de Setiembre".)
-2. **Domingos.** El horario publicado es Lun–Vie 09–20 y Sáb 09–16. ¿El domingo está cerrado? (Hoy el formulario solo muestra un aviso suave si se elige un domingo.)
-3. **Medios de pago.** Se menciona "Tarjetas" como medio de pago, pero la seña se paga solo por transferencia o QR. ¿Se acepta tarjeta para el saldo?
-4. **Tolerancia de puntualidad.** El servicio Aerógrafo tiene una tolerancia distinta a la de los demás servicios. ¿Es intencional?
+## Resuelto (respuestas de Tania, 17/10/2026)
+- ✅ **Dirección:** "Las Residentas 460 esq. 8 de Diciembre". Aplicada en el pie, en la sección de contacto y en el JSON-LD.
+- ✅ **Domingos y fuera de horario:** solo con turno previo y con costo adicional. El formulario los permite y muestra un aviso claro, la nota queda en el mensaje de WhatsApp y la regla figura en las políticas y en el pie.
+- ✅ **Fotografía Beauty:** Gs. 350.000 + Matrícula Gs. 100.000 (total Gs. 450.000). Ahora coinciden la tarjeta, el detalle, el formulario y el mensaje.
+- ✅ **Pagos:** desde la web se puede elegir abonar el total o solo la seña. El saldo se paga por transferencia o QR directamente a Tania. Todavía no hay cobro en línea; los campos quedaron listos en `negocio.pago` (`opciones: ["total","seña"]`, `enLinea: false`, `proveedor: null`).
 
-## Precios
-5. **Fotografía Beauty.** La tarjeta dice "Gs. 350.000", pero el mensaje de reserva dice "Gs. 350.000 + Matrícula Gs. 100.000". ¿Se cobra matrícula? (Se mantuvieron los dos textos como estaban.)
+## Datos del negocio (pendientes)
+1. **Efectivo y tarjetas:** las normas de 3 servicios decían "Efectivo, Transferencias, QR y Tarjetas". Siguiendo la respuesta sobre pagos, ahora dicen "total o seña desde la web; saldo por transferencia o QR". ¿Se sigue aceptando efectivo o tarjeta en el Studio? Si es así, se vuelve a agregar.
+2. **Monto del costo adicional** de domingos y horarios especiales: ¿hay un monto fijo o un porcentaje para publicar? Hoy dice "a confirmar por Tania".
+3. **Rango fuera de horario:** el formulario ofrece turnos de 06:00 a 22:00 (los que caen fuera del horario habitual se marcan con costo adicional). ¿Es un rango razonable?
+4. **Eventos (Glitter Bar / Neon Party):** ¿el costo adicional también aplica a eventos de noche o en domingo? Hoy los eventos ofrecen de 08:00 a 23:00 sin aviso por horario; solo el domingo muestra el aviso.
+5. **Tolerancia de puntualidad:** el servicio Aerógrafo tiene una tolerancia distinta a la de los demás servicios. ¿Es intencional?
+6. **Datos de pago:** ¿qué banco, alias o QR se va a usar? Sirve para cuando se integre el cobro en línea o para mostrarlos en el sitio.
 
 ## Certificados
-6. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).
+7. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).
 
 ## Fotos
-7. Los cursos de la Academia reutilizan fotos de Maquillaje Social. ¿Hay fotos propias de las clases?
-8. Faltan las siguientes fotos. En el sitio viejo daban error 404, y ahora se muestra un marcador elegante o se oculta el álbum:
+8. Los cursos de la Academia reutilizan fotos de Maquillaje Social. ¿Hay fotos propias de las clases?
+9. Faltan las siguientes fotos. En el sitio viejo daban error 404, y ahora se muestra un marcador elegante o se oculta el álbum:
 - **Maquillaje HD con Aerógrafo** (`maquillaje-aerografo`): aerografo, aerografo-2, aerografo-3, aerografo-4, aerografo-5, aerografo-6
 - **Maquillaje para Novias** (`maquillaje-novias`): novias, novias-1, novias-2, novias-3, novias-4, novias-5
 - **Quinceañeras & Debutantes** (`maquillaje-quinceaneras`): quince-1, quince-2, quince-3, quince-4, mirada, tocado-2
@@ -43,5 +48,5 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - Álbum **Aerógrafo HD** (`aerografo`): 6 fotos (aerografo, aerografo-2, aerografo-3, aerografo-4, aerografo-5, aerografo-6)
 
 ## Publicación
-9. **Repositorio.** Definido: cuenta nueva `taniasanabria`, repo `taniasanabria.github.io`, URL `https://taniasanabria.github.io/`. Falta crear la cuenta y el repo. Si se usa otro nombre, hay que cambiar `url` en `data/sitio.json` y volver a compilar.
-10. **Dominio propio.** ¿Se va a usar uno (por ejemplo, taniasanabria.com.py)? Si es así, hay que agregar el archivo `CNAME` y actualizar `url`.
+10. **Repositorio.** Definido: cuenta nueva `taniasanabria`, repo `taniasanabria.github.io`, URL `https://taniasanabria.github.io/`. Falta crear la cuenta y el repo. Si se usa otro nombre, hay que cambiar `url` en `data/sitio.json` y volver a compilar.
+11. **Dominio propio.** ¿Se va a usar uno (por ejemplo, taniasanabria.com.py)? Si es así, hay que agregar el archivo `CNAME` y actualizar `url`.
