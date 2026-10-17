@@ -594,8 +594,29 @@ function elegirAlbum(chip) {
   $$('[data-album-panel]').forEach((p) => { p.hidden = p.dataset.albumPanel !== chip.dataset.album; });
 }
 
+// Asistente virtual: se descarga recién al tocar el botón (no afecta la carga de la página).
+const VERSION_JS = new URL(import.meta.url).search;
+let chatModulo = null;
+const cargarChat = () => (chatModulo ||= import('./chat.js' + VERSION_JS));
+async function abrirAsistente(origen) {
+  try {
+    const m = await cargarChat();
+    m.abrirChat({ catalogo: () => catalogo, abrirReserva, abrirDetalle }, origen);
+  } catch (err) {
+    console.warn('No se pudo abrir el asistente:', err);
+    chatModulo = null;
+    window.open(`https://wa.me/${catalogo.negocio.whatsapp}`, '_blank', 'noopener');
+  }
+}
+
 function prepararClics() {
+  // Precarga suave cuando el dedo o el mouse se acerca al botón del chat
+  ['pointerenter', 'touchstart', 'focusin'].forEach((ev) => document.addEventListener(ev, (e) => {
+    if (e.target.closest && e.target.closest('[data-chat]')) cargarChat().catch(() => { chatModulo = null; });
+  }, { passive: true, capture: true }));
   document.addEventListener('click', (e) => {
+    const asistente = e.target.closest('[data-chat]');
+    if (asistente) { e.preventDefault(); abrirAsistente(asistente); return; }
     const reservar = e.target.closest('[data-reservar]');
     if (reservar) { e.preventDefault(); abrirReserva(reservar.dataset.reservar, reservar); return; }
     const detalle = e.target.closest('[data-detalle]');

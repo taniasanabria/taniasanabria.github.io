@@ -6,3 +6,5 @@ export const SUPABASE = {
   "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmbmdkZ3FpaHRpcWtva2h4anF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNDkzNTgsImV4cCI6MjEwNzgyNTM1OH0.sDz0p3GDcLaxOueUqTPa_iN04RZ1bT192CZyvmp9VFQ"
 };
 export const URL_SITIO = "https://taniasanabria.github.io/";
+// Asistente del sitio: backend opcional con IA (null = solo el motor local, sin costo).
+export const CHAT = {"backend":null};

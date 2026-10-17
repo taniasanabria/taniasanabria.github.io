@@ -124,7 +124,7 @@ const reemplazos = {
   MANIFIESTO: jsonSeguro(manifiesto),
   ICONO_MENU: I('bars'), ICONO_CALENDARIO: I('calendar-check'), ICONO_CANDADO: I('user-lock'), ICONO_RELOJ: I('clock'),
   ICONO_UBICACION: I('location-dot'), ICONO_IG: I('instagram'), ICONO_FB: I('facebook-f'), ICONO_TT: I('tiktok'),
-  ICONO_COMPARTIR: I('share-nodes'), ICONO_INFO: I('circle-info'), ICONO_WA: I('whatsapp'), ICONO_MAPA: I('map-location-dot'),
+  ICONO_COMPARTIR: I('share-nodes'), ICONO_INFO: I('circle-info'), ICONO_WA: I('whatsapp'), ICONO_CHAT: I('comment-dots'), ICONO_MAPA: I('map-location-dot'),
   ICONO_X: I('xmark'), ICONO_IZQ: I('chevron-left'), ICONO_DER: I('chevron-right'), ICONO_CHECK: I('check'),
 };
 
@@ -208,6 +208,8 @@ escribir('js/config.js', `// Generado por tools/build.mjs desde data/sitio.json.
 export const FUENTE_DATOS = ${JSON.stringify(sitio.fuenteDatos || 'embebido')};
 export const SUPABASE = ${JSON.stringify({ url: sb.url || '', anonKey: sb.anonKey || '' }, null, 2)};
 export const URL_SITIO = ${JSON.stringify(URL_SITIO)};
+// Asistente del sitio: backend opcional con IA (null = solo el motor local, sin costo).
+export const CHAT = ${JSON.stringify({ backend: (sitio.chat && sitio.chat.backend) || null })};
 `);
 
 console.log(`Listo: index.html (${(html.length / 1024).toFixed(1)} KB), 404.html, sitemap.xml, robots.txt, site.webmanifest. URL: ${URL_SITIO}`);

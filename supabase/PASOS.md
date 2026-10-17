@@ -27,6 +27,8 @@ Los dos archivos son **idempotentes**: se pueden volver a ejecutar sin perder da
 10. Primera vez en el panel, en **Ajustes**: cargar los **datos para el pago** (banco, alias, titular). Sin esos datos, el mensaje de aprobación sale sin datos de pago.
 
 ## Avisos al celular de Tania (push, gratis, sin cuentas nuevas)
+> ✅ **Estado (17/10/2026): instalado y funcionando.** La función `avisar-reserva` está publicada con Verify JWT desactivado, los secretos VAPID están cargados y `avisos.sql` se ejecutó. Los pasos de abajo quedan como referencia, por si hay que reinstalar o mover el proyecto. **No regenerar las claves VAPID** (los celulares tendrían que volver a activar los avisos).
+
 Sin este paso igual funcionan los avisos **con el panel abierto o en segundo plano** (sonido, vibración, notificación, número en la pestaña y en el ícono). Este paso agrega el aviso **con el panel cerrado**.
 
 Opción A (recomendada, un comando): crear un token personal en **supabase.com/dashboard/account/tokens** (con la cuenta de Tania) y ejecutar

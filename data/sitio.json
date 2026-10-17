@@ -10,5 +10,9 @@
     "_ayuda": "Proyecto de Supabase (fase 2). La clave 'anon' es pública por diseño: la seguridad la dan las políticas RLS de supabase/schema.sql. Si Supabase no responde, el sitio usa los datos embebidos (data/catalogo.json).",
     "url": "https://wfngdgqihtiqkokhxjqv.supabase.co",
     "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmbmdkZ3FpaHRpcWtva2h4anF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNDkzNTgsImV4cCI6MjEwNzgyNTM1OH0.sDz0p3GDcLaxOueUqTPa_iN04RZ1bT192CZyvmp9VFQ"
+  },
+  "chat": {
+    "_ayuda": "Asistente del sitio. Responde solo con los datos del catálogo (js/chat-motor.js). 'backend' es opcional: URL de una Edge Function con IA que recibe {pregunta, historial} y responde {respuesta}. Se usa solo para preguntas que el motor local no entiende. Dejar null para no usar IA (costo cero).",
+    "backend": null
   }
 }

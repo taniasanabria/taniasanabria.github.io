@@ -27,12 +27,23 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - **Fotos faltantes (punto 9):** se pueden subir directamente desde el panel (pestaña Fotos), sin compilar.
 
 ## Avisos de reservas nuevas (17/10/2026)
-- ✅ **Con el panel abierto o en segundo plano (ya funciona):** sonido, vibración, mensaje en pantalla, notificación del sistema, número de pendientes en la pestaña (`(2) Panel de Tania`), en la solapa Citas y en el ícono de la app (Android/Chrome).
-- ✅ **Panel instalable** como app (`admin/manifest.webmanifest` + `admin/sw.js`). En Ajustes hay una tarjeta "Avisos de reservas nuevas" con el estado, **Activar avisos** y **Probar aviso**.
-- ⏳ **Con el panel cerrado (push):** el código está listo y probado localmente (Chrome real suscripto a FCM y FCM aceptó el envío). Falta instalarlo en Supabase: ver `supabase/PASOS.md` → "Avisos al celular de Tania". Necesita un token personal de Supabase de la cuenta de Tania, o hacerlo a mano en el panel de Supabase. No necesita cuentas nuevas ni cuesta nada.
-- Después de instalarlo, Tania tiene que abrir el panel y tocar **Activar avisos** una vez en cada celular (los que ya lo activaron se suscriben solos al volver a abrir el panel).
+- ✅ **Con el panel abierto o en segundo plano:** sonido, vibración, mensaje en pantalla, notificación del sistema, número de pendientes en la pestaña (`(2) Panel de Tania`), en la solapa Citas y en el ícono de la app (Android/Chrome).
+- ✅ **Panel instalable** como app (`admin/manifest.webmanifest` + `admin/sw.js`). En Ajustes, la tarjeta "Avisos de reservas nuevas" muestra el estado y tiene **Activar avisos** y **Probar aviso**.
+- ✅ **Con el panel cerrado (push):** instalado en Supabase. La Edge Function `avisar-reserva` está publicada (Verify JWT desactivado), las claves VAPID están cargadas como secretos y el trigger con `pg_net` está activo.
+- Tania tiene que abrir el panel y tocar **Activar avisos** una vez en cada celular. Los que ya lo activaron se suscriben solos al volver a abrir el panel.
 - **iPhone:** las notificaciones web solo funcionan con iOS 16.4 o superior y con el panel agregado a la pantalla de inicio.
-- Alternativas que se descartaron por ahora: email con Resend (requiere crear una cuenta) y bot de Telegram (requiere que Tania cree el bot y Telegram en el celular). Se pueden sumar más adelante sobre el mismo trigger.
+- No cambiar las claves VAPID: si se cambian, hay que volver a tocar "Activar avisos" en cada celular.
+- Alternativas descartadas por ahora: email con Resend (requiere crear una cuenta) y bot de Telegram (requiere que Tania cree el bot). Se pueden sumar más adelante sobre el mismo trigger.
+
+## Asistente del sitio (chat para clientas, 17/10/2026)
+- ✅ Botón "¿Dudas? Preguntame" (escritorio) y botón 💬 en la barra inferior (celular). Se descarga recién al tocarlo, así que no afecta la velocidad de la página. No aparece en `/admin/`.
+- Responde **solo con los datos del sitio**: los servicios, precios y señas que Tania edita en el panel, más los horarios, la dirección, las políticas y los cursos (`data/catalogo.json`). Si no sabe algo, lo dice y ofrece **Hablar con Tania** por WhatsApp, con la pregunta ya escrita.
+- Lleva al formulario de reserva con el servicio ya elegido.
+- Pruebas: `node tools/probar-chat.mjs` corre más de 40 preguntas de ejemplo y verifica que ningún precio de las respuestas falte en el catálogo.
+- **Para decidir:**
+  - Una IA conversacional (opcional, `sitio.json → chat.backend`). El sitio ya está preparado para conectarla, pero necesita un proveedor de IA (con cuenta y, en general, con costo). Hoy está apagada, con costo cero.
+  - Si conviene registrar las preguntas que el asistente no supo responder, para ir mejorándolo. Hoy no se guarda nada.
+- Cuando Tania agregue servicios nuevos, el asistente los encuentra por el nombre. Para sinónimos extra (por ejemplo "boda" → Novias), editar `SINONIMOS` en `js/chat-motor.js`.
 
 ## Certificados
 7. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).
