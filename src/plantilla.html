@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITULO}}</title>
+  <meta name="description" content="{{DESCRIPCION}}">
+  <link rel="canonical" href="{{URL}}">
+  <meta name="theme-color" content="{{COLOR}}">
+  <meta name="format-detection" content="telephone=no">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_PY">
+  <meta property="og:site_name" content="Tania Sanabria Makeup Studio">
+  <meta property="og:title" content="{{TITULO}}">
+  <meta property="og:description" content="{{DESCRIPCION}}">
+  <meta property="og:url" content="{{URL}}">
+  <meta property="og:image" content="{{OG_IMAGEN}}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Tania Sanabria, maquilladora profesional, junto al logo TS Makeup Studio">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <link rel="preload" href="fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" as="image" href="img/retrato-540.webp" imagesrcset="img/retrato-280.webp 280w, img/retrato-540.webp 540w" imagesizes="(min-width: 900px) 420px, 52vw" fetchpriority="high">
+  <link rel="stylesheet" href="css/estilos.css?v={{VERSION}}">
+  <script type="application/ld+json">{{JSONLD}}</script>
+</head>
+<body>
+{{SPRITE}}
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<header class="cabecera" id="cabecera">
+  <div class="contenedor cabecera-fila">
+    <a class="marca" href="#inicio">
+      <img src="img/logo-96.webp" srcset="img/logo-96.webp 1x, img/logo-192.webp 2x" width="44" height="45" alt="">
+      <span class="marca-texto"><span class="marca-nombre">Tania Sanabria</span><span class="marca-sub">Makeup Studio Professional</span></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Secciones">
+      <ul>
+        <li><a href="#maquillaje">Maquillaje</a></li>
+        <li><a href="#estetica">Estética &amp; Hair</a></li>
+        <li><a href="#eventos">Eventos VIP</a></li>
+        <li><a href="#academia">Academia</a></li>
+        <li><a href="#galeria">Galería</a></li>
+        <li><a href="#sobre-tania">Sobre Tania</a></li>
+        <li><a href="#contacto">Contacto</a></li>
+      </ul>
+    </nav>
+    <button type="button" class="btn btn-primario btn-chico solo-escritorio" data-reservar="">Reservar turno</button>
+    <button type="button" class="btn-menu" id="btn-menu" aria-expanded="false" aria-controls="nav" aria-label="Abrir menú">{{ICONO_MENU}}</button>
+  </div>
+</header>
+
+<main id="contenido">
+  <section class="hero" id="inicio" aria-labelledby="hero-titulo">
+    <div class="contenedor hero-grilla">
+      <div class="hero-texto">
+        <p class="sobretitulo">Tania Sanabria · Makeup Studio Professional</p>
+        <h1 id="hero-titulo">Maquillaje profesional que resalta tu <span class="acento">belleza genuina</span></h1>
+        <p class="hero-bajada">Novias, quinceañeras, eventos sociales, Glitter Bar &amp; Neon Party y academia de maquillaje en Fernando de la Mora.</p>
+        <div class="hero-acciones">
+          <button type="button" class="btn btn-primario btn-grande" data-reservar="">{{ICONO_CALENDARIO}} Reservar turno</button>
+          <a class="btn btn-secundario btn-grande" href="#maquillaje">Ver servicios</a>
+        </div>
+        <ul class="hero-datos">
+          <li>{{ICONO_CANDADO}} {{ATENCION}}</li>
+          <li>{{ICONO_RELOJ}} {{HORARIO}}</li>
+          <li>{{ICONO_UBICACION}} Zona Norte, Fernando de la Mora</li>
+        </ul>
+      </div>
+      <div class="hero-foto">
+        <div class="hero-arco" aria-hidden="true"></div>
+        {{HERO_RETRATO}}
+      </div>
+    </div>
+    <nav class="contenedor accesos" aria-label="¿Qué estás buscando?">
+      {{ACCESOS}}
+    </nav>
+  </section>
+
+  {{SECCIONES}}
+
+  <section class="seccion" id="galeria" aria-labelledby="titulo-galeria">
+    <div class="contenedor">
+      <header class="seccion-cabecera">
+        <p class="sobretitulo">Galería de fotos</p>
+        <h2 id="titulo-galeria">Nuestro <span class="acento">Portafolio</span></h2>
+        <p class="seccion-bajada">Resultados reales de nuestras clientas. Tocá una foto para verla en grande.</p>
+      </header>
+      <div class="galeria" id="galeria-contenido">{{GALERIA}}</div>
+    </div>
+  </section>
+
+  <section class="seccion seccion-bio" id="sobre-tania" aria-labelledby="titulo-bio">
+    <div class="contenedor bio-grilla">
+      <div class="bio-foto">{{BIO_FOTO}}</div>
+      <div class="bio-texto">
+        <p class="sobretitulo">Tu Master Makeup Artist</p>
+        <h2 id="titulo-bio">Sobre <span class="acento">Tania</span></h2>
+        <p>{{BIO_TEXTO}}</p>
+        {{CERTIFICADOS}}
+        <div class="redes" role="group" aria-label="Redes sociales">
+          <a class="red" href="{{IG}}" target="_blank" rel="noopener" aria-label="Instagram de Tania Sanabria">{{ICONO_IG}}</a>
+          <a class="red" href="{{FB}}" target="_blank" rel="noopener" aria-label="Facebook de Tania Sanabria">{{ICONO_FB}}</a>
+          <a class="red" href="{{TT}}" target="_blank" rel="noopener" aria-label="TikTok de Tania Sanabria">{{ICONO_TT}}</a>
+          <button type="button" class="red" data-compartir="" aria-label="Compartir esta página">{{ICONO_COMPARTIR}}</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="seccion seccion-pasos" id="como-reservar" aria-labelledby="titulo-pasos">
+    <div class="contenedor">
+      <header class="seccion-cabecera">
+        <p class="sobretitulo">Simple y rápido</p>
+        <h2 id="titulo-pasos">¿Cómo <span class="acento">reservar</span>?</h2>
+      </header>
+      <ol class="pasos">
+        <li><span class="paso-num">1</span><h3>Elegí tu servicio</h3><p>Mirá los detalles, la duración y el valor de referencia.</p></li>
+        <li><span class="paso-num">2</span><h3>Proponé fecha y horario</h3><p>Completá el formulario: te lleva a WhatsApp con todo listo para enviar.</p></li>
+        <li><span class="paso-num">3</span><h3>Confirmá tu cupo</h3><p>Tania te confirma la disponibilidad y, si corresponde, abonás la seña por transferencia o QR.</p></li>
+      </ol>
+      <p class="pasos-politica">{{ICONO_INFO}} {{POLITICA}}</p>
+      <div class="centrado"><button type="button" class="btn btn-primario btn-grande" data-reservar="">Reservar turno</button></div>
+    </div>
+  </section>
+</main>
+
+<footer class="pie" id="contacto">
+  <div class="contenedor pie-grilla">
+    <div>
+      <p class="pie-marca">Tania Sanabria</p>
+      <p class="pie-sub">Makeup Studio Professional</p>
+    </div>
+    <address class="pie-datos">
+      <p>{{ICONO_UBICACION}} {{DIRECCION}}</p>
+      <p>{{ICONO_RELOJ}} {{HORARIO}}</p>
+      <p>{{ICONO_CANDADO}} {{ATENCION}}</p>
+      <p>{{ICONO_WA}} <a href="https://wa.me/{{WA}}" target="_blank" rel="noopener">{{TEL}}</a></p>
+    </address>
+    <div class="pie-acciones">
+      <a class="btn btn-secundario" href="{{MAPA}}" target="_blank" rel="noopener">{{ICONO_MAPA}} Abrir en Google Maps</a>
+      <button type="button" class="btn btn-primario" data-reservar="">Reservar turno</button>
+    </div>
+  </div>
+  <p class="pie-copy">© {{ANIO}} Tania Sanabria Studio Profesional. Todos los derechos reservados.</p>
+</footer>
+
+<section class="barra-movil" aria-label="Acciones rápidas">
+  <button type="button" class="btn btn-primario" data-reservar="">{{ICONO_CALENDARIO}} Reservar turno</button>
+  <a class="btn btn-wa" href="https://wa.me/{{WA}}" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">{{ICONO_WA}}</a>
+</section>
+<a class="wa-flotante" href="https://wa.me/{{WA}}" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">{{ICONO_WA}}</a>
+
+<!-- Detalle de servicio -->
+<dialog class="dialogo" id="dlg-detalle" aria-labelledby="detalle-titulo">
+  <div class="dialogo-barra"><button type="button" class="btn-cerrar" data-cerrar aria-label="Cerrar">{{ICONO_X}}</button></div>
+  <div class="dialogo-cuerpo" id="detalle-contenido"></div>
+</dialog>
+
+<!-- Visor de fotos -->
+<dialog class="visor" id="dlg-visor" aria-label="Visor de fotos">
+  <div class="visor-barra">
+    <span class="visor-contador" id="visor-contador" aria-live="polite"></span>
+    <button type="button" class="btn-cerrar btn-cerrar-claro" data-cerrar aria-label="Cerrar visor">{{ICONO_X}}</button>
+  </div>
+  <div class="visor-escenario" id="visor-escenario">
+    <img id="visor-img" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="1000" height="1500">
+  </div>
+  <button type="button" class="visor-nav visor-prev" id="visor-prev" aria-label="Foto anterior">{{ICONO_IZQ}}</button>
+  <button type="button" class="visor-nav visor-sig" id="visor-sig" aria-label="Foto siguiente">{{ICONO_DER}}</button>
+  <p class="visor-ayuda">Deslizá o usá las flechas · Tocá la foto para acercar</p>
+</dialog>
+
+<!-- Formulario de reserva -->
+<dialog class="dialogo" id="dlg-reserva" aria-labelledby="reserva-titulo">
+  <div class="dialogo-barra"><button type="button" class="btn-cerrar" data-cerrar aria-label="Cerrar">{{ICONO_X}}</button></div>
+  <div class="dialogo-cuerpo">
+    <form id="form-reserva" novalidate>
+      <h2 class="dialogo-titulo" id="reserva-titulo">Reservá tu turno</h2>
+      <p class="dialogo-subtitulo">Completá tus datos y te llevamos a WhatsApp con la solicitud lista para enviar a Tania.</p>
+
+      <div class="campo">
+        <label for="r-servicio">Servicio</label>
+        <select id="r-servicio" name="servicio" required>{{OPCIONES}}</select>
+        <p class="campo-ayuda" id="r-servicio-info" aria-live="polite"></p>
+      </div>
+      <div class="campo-fila">
+        <div class="campo">
+          <label for="r-nombre">Nombre y apellido</label>
+          <input id="r-nombre" name="nombre" type="text" autocomplete="name" placeholder="Ej: María López" required>
+        </div>
+        <div class="campo">
+          <label for="r-telefono">Teléfono / WhatsApp</label>
+          <input id="r-telefono" name="telefono" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 0981 123 456" required>
+        </div>
+      </div>
+      <div class="campo-fila">
+        <div class="campo">
+          <label for="r-fecha">Fecha preferida</label>
+          <input id="r-fecha" name="fecha" type="date" required>
+        </div>
+        <div class="campo">
+          <label for="r-hora">Horario preferido</label>
+          <select id="r-hora" name="hora" required></select>
+        </div>
+      </div>
+      <p class="campo-ayuda" id="r-fecha-info" aria-live="polite"></p>
+      <div class="campo" id="r-personas-campo" hidden>
+        <label for="r-personas">Cantidad aproximada de personas / invitados</label>
+        <input id="r-personas" name="personas" type="number" min="1" inputmode="numeric" placeholder="Ej: 4">
+      </div>
+      <label class="check" id="r-tocado-campo" hidden>
+        <input type="checkbox" id="r-tocado" name="tocado">
+        <span>Añadir <strong>Tocado Exclusivo</strong> (Gs. 300.000 a 500.000)</span>
+      </label>
+      <div class="campo">
+        <label for="r-notas">Comentarios <span class="opcional">(opcional)</span></label>
+        <textarea id="r-notas" name="notas" rows="2" placeholder="Ej: tipo de evento, lugar, si es a domicilio…"></textarea>
+      </div>
+
+      <div class="politica" id="r-politica" hidden>
+        <p class="politica-titulo">{{ICONO_INFO}} Política de reserva</p>
+        <p>Para asegurar tu cupo exclusivo se abona una seña previa de <strong id="r-sena">—</strong> vía transferencia o QR (monto a descontar del total).</p>
+        <p><em>* Seña no reembolsable en caso de cancelación o inasistencia.</em></p>
+        <label class="check"><input type="checkbox" id="r-acepto" name="acepto"> <span>Leí y acepto la política de reserva.</span></label>
+      </div>
+
+      <p class="form-error" id="r-error" role="alert"></p>
+      <button type="submit" class="btn btn-primario btn-grande btn-ancho">{{ICONO_WA}} Enviar solicitud por WhatsApp</button>
+      <p class="campo-ayuda centrado">La fecha y el horario quedan sujetos a confirmación de Tania.</p>
+    </form>
+    <div class="reserva-ok" id="reserva-ok" hidden tabindex="-1">
+      <h2 class="dialogo-titulo">¡Solicitud lista! {{ICONO_CHECK}}</h2>
+      <p>Abrimos WhatsApp con tu mensaje para Tania. Solo tenés que tocar <strong>Enviar</strong>.</p>
+      <p>¿No se abrió? <a id="reserva-enlace" href="#" target="_blank" rel="noopener">Tocá aquí para abrir WhatsApp</a>.</p>
+      <button type="button" class="btn btn-secundario" data-cerrar>Listo</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="datos-catalogo">{{DATOS}}</script>
+<script type="application/json" id="datos-fotos">{{MANIFIESTO}}</script>
+<script type="module" src="js/app.js?v={{VERSION}}"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "_ayuda": "Configuración de publicación. Cambiá 'url' si el repositorio de GitHub Pages tiene otro nombre (ej. https://harold89556.github.io/ si el repo se llama harold89556.github.io) o cuando haya dominio propio. Después ejecutá: node tools/build.mjs",
+  "url": "https://harold89556.github.io/taniasanabria/",
+  "titulo": "Tania Sanabria | Makeup Studio Professional en Fernando de la Mora",
+  "descripcion": "Tania Sanabria Makeup Studio Professional. Maquillaje social y de novias, aerógrafo HD, cejas, trenzas, Glitter Bar, Neon Party y academia de maquillaje en Fernando de la Mora. Reservá tu turno por WhatsApp.",
+  "imagenCompartir": "img/og-tania-sanabria.jpg",
+  "colorTema": "#1b1610",
+  "fuenteDatos": "embebido"
+}

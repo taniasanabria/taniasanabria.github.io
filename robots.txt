@@ -1,0 +1,5 @@
+# Permite que los buscadores indexen todo el sitio.
+User-agent: *
+Allow: /
+
+Sitemap: https://harold89556.github.io/taniasanabria/sitemap.xml
