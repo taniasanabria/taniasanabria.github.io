@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1b1610">
+  <title>Panel de Tania · Tania Sanabria Makeup Studio</title>
+  <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+  <link rel="stylesheet" href="admin.css">
+  <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
+  <script src="vendor/supabase.js" defer></script>
+  <script type="module" src="admin.js"></script>
+</head>
+<body>
+  <div class="cargando" id="vista-cargando"><img src="../img/logo-192.webp" width="72" height="74" alt=""><p>Cargando…</p></div>
+
+  <!-- ===== Ingreso ===== -->
+  <main class="acceso" id="vista-login" aria-label="Ingresar" hidden>
+    <img class="acceso-logo" src="../img/logo-192.webp" width="88" height="90" alt="Tania Sanabria Makeup Studio">
+    <h1>Panel de Tania</h1>
+    <p class="suave">Ingresá con tu email y contraseña.</p>
+    <form id="form-login" novalidate>
+      <label for="l-email">Email</label>
+      <input id="l-email" name="email" type="email" autocomplete="username" inputmode="email" required>
+      <label for="l-clave">Contraseña</label>
+      <div class="con-boton">
+        <input id="l-clave" name="clave" type="password" autocomplete="current-password" required>
+        <button type="button" class="btn-ojo" id="l-ver" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+      </div>
+      <p class="error" id="login-error" role="alert"></p>
+      <button type="submit" class="btn btn-principal btn-grande" id="l-entrar">Entrar</button>
+    </form>
+    <button type="button" class="btn-link" id="l-olvide">Olvidé mi contraseña</button>
+    <p class="suave pie-acceso"><a href="../">← Volver al sitio</a></p>
+  </main>
+
+  <!-- ===== Nueva contraseña (desde el email de recuperación) ===== -->
+  <main class="acceso" id="vista-clave" aria-label="Nueva contraseña" hidden>
+    <h1>Nueva contraseña</h1>
+    <form id="form-clave" novalidate>
+      <label for="c-nueva">Nueva contraseña (mínimo 8 caracteres)</label>
+      <input id="c-nueva" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="c-repetir">Repetir contraseña</label>
+      <input id="c-repetir" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="error" id="clave-error" role="alert"></p>
+      <button type="submit" class="btn btn-principal btn-grande">Guardar contraseña</button>
+    </form>
+  </main>
+
+  <!-- ===== Panel ===== -->
+  <div class="panel" id="vista-panel" hidden>
+    <header class="barra">
+      <img src="../img/logo-96.webp" width="36" height="37" alt="">
+      <div class="barra-titulo"><strong>Panel de Tania</strong><span id="estado-conexion" class="conexion">Conectando…</span></div>
+      <button type="button" class="btn btn-chico btn-borde" id="btn-salir">Salir</button>
+    </header>
+
+    <main class="contenido" aria-label="Panel">
+      <!-- Citas -->
+      <section class="tab" id="tab-citas" aria-labelledby="t-citas">
+        <div class="tab-cabecera">
+          <h2>Citas</h2>
+          <button type="button" class="btn btn-principal" id="btn-nueva-cita">＋ Agregar cita</button>
+        </div>
+        <h3 class="subtitulo">Pendientes de confirmar <span class="pildora" id="n-pendientes">0</span></h3>
+        <div id="lista-pendientes" class="lista"></div>
+
+        <h3 class="subtitulo">Agenda</h3>
+        <div class="agenda-controles">
+          <div class="segmentado" role="group" aria-label="Vista de la agenda">
+            <button type="button" data-vista="dia" aria-pressed="true">Día</button>
+            <button type="button" data-vista="semana" aria-pressed="false">Semana</button>
+          </div>
+          <div class="nav-fecha">
+            <button type="button" class="btn btn-chico btn-borde" id="ag-prev" aria-label="Anterior">‹</button>
+            <button type="button" class="btn btn-chico btn-borde" id="ag-hoy">Hoy</button>
+            <button type="button" class="btn btn-chico btn-borde" id="ag-sig" aria-label="Siguiente">›</button>
+          </div>
+        </div>
+        <p class="agenda-titulo" id="ag-titulo"></p>
+        <div id="agenda" class="lista"></div>
+      </section>
+
+      <!-- Horarios -->
+      <section class="tab" id="tab-horarios" aria-labelledby="t-horarios" hidden>
+        <h2>Horarios</h2>
+        <div class="tarjeta">
+          <h3>Horario de cada semana</h3>
+          <p class="suave">Marcá los días que atendés y el horario. Los domingos siempre llevan costo adicional.</p>
+          <div id="horario-semanal" class="horario-semanal"></div>
+          <button type="button" class="btn btn-principal" id="btn-guardar-horario">Guardar horario</button>
+        </div>
+        <div class="tarjeta">
+          <h3>Bloquear un día</h3>
+          <p class="suave">Vacaciones, feriados o días que no vas a atender: no se van a poder reservar.</p>
+          <form id="form-bloqueo" class="fila-form">
+            <label>Fecha <input type="date" name="fecha" required></label>
+            <label>Motivo (opcional) <input type="text" name="motivo" maxlength="80" placeholder="Ej: Feriado"></label>
+            <button type="submit" class="btn btn-principal">Bloquear día</button>
+          </form>
+          <div id="lista-bloqueos" class="lista-simple"></div>
+        </div>
+        <div class="tarjeta">
+          <h3>Abrir un horario extra</h3>
+          <p class="suave">Para abrir un domingo o un horario especial. Las clientas lo ven como “costo adicional”.</p>
+          <form id="form-extra" class="fila-form">
+            <label>Fecha <input type="date" name="fecha" required></label>
+            <label>Desde <input type="time" name="inicio" step="900" required></label>
+            <label>Hasta <input type="time" name="fin" step="900" required></label>
+            <label class="check"><input type="checkbox" name="costo_extra" checked> Con costo adicional</label>
+            <button type="submit" class="btn btn-principal">Agregar horario extra</button>
+          </form>
+          <div id="lista-extras" class="lista-simple"></div>
+        </div>
+      </section>
+
+      <!-- Fotos -->
+      <section class="tab" id="tab-fotos" aria-labelledby="t-fotos" hidden>
+        <h2>Fotos</h2>
+        <div class="tarjeta">
+          <label for="f-destino">¿Dónde van las fotos?</label>
+          <select id="f-destino"></select>
+          <label class="btn btn-principal btn-grande btn-subir">
+            📷 Subir fotos
+            <input type="file" id="f-archivos" accept="image/*" multiple>
+          </label>
+          <p class="suave">Podés elegir varias a la vez. Se achican y optimizan solas antes de subir.</p>
+          <div id="f-progreso" class="progreso" aria-live="polite"></div>
+        </div>
+        <div id="f-grilla" class="grilla-fotos"></div>
+      </section>
+
+      <!-- Servicios -->
+      <section class="tab" id="tab-servicios" aria-labelledby="t-servicios" hidden>
+        <h2>Servicios y precios</h2>
+        <p class="suave">Tocá un servicio para cambiar el precio, la seña o la descripción. Los cambios se ven en el sitio al instante.</p>
+        <div id="lista-servicios"></div>
+      </section>
+
+      <!-- Ajustes -->
+      <section class="tab" id="tab-ajustes" aria-labelledby="t-ajustes" hidden>
+        <h2>Ajustes</h2>
+        <form id="form-ajustes" class="tarjeta">
+          <h3>Contacto y pagos</h3>
+          <label for="a-whatsapp">Número de WhatsApp (con 595, sin espacios)</label>
+          <input type="text" id="a-whatsapp" name="whatsapp" inputmode="numeric" pattern="[0-9]{8,15}" required>
+          <label for="a-datos-pago">Datos para el pago (banco, alias, QR…)</label>
+          <textarea id="a-datos-pago" name="datos_pago" rows="4" placeholder="Ej: Banco … · Cuenta … · Alias … · A nombre de Tania Sanabria"></textarea>
+          <p class="suave">Se agregan al mensaje de WhatsApp cuando aprobás una cita. No se muestran en el sitio.</p>
+          <h3>Textos del sitio</h3>
+          <label for="a-politica-sena">Política de seña y pagos</label>
+          <textarea id="a-politica-sena" name="politica_sena" rows="4"></textarea>
+          <label for="a-politica-horario">Domingos y fuera de horario</label>
+          <textarea id="a-politica-horario" name="politica_horario" rows="3"></textarea>
+          <h3>Mensajes de WhatsApp</h3>
+          <p class="suave">Podés usar: {nombre} {servicio} {fecha} {hora} {monto} {pago} {sena} {precio} {datos_pago}</p>
+          <label for="a-msg-ok">Al aprobar una cita</label>
+          <textarea id="a-msg-ok" name="mensaje_aprobacion" rows="6"></textarea>
+          <label for="a-msg-no">Al rechazar una cita</label>
+          <textarea id="a-msg-no" name="mensaje_rechazo" rows="4"></textarea>
+          <h3>Agenda</h3>
+          <div class="fila-form">
+            <label>Turnos cada
+              <select name="intervalo_min"><option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select>
+            </label>
+            <label>Anticipación mínima (horas) <input type="number" name="anticipacion_horas" min="0" max="168" required></label>
+            <label>Reservas hasta (días) <input type="number" name="dias_reserva_max" min="1" max="365" required></label>
+          </div>
+          <button type="submit" class="btn btn-principal btn-grande">Guardar ajustes</button>
+        </form>
+        <form id="form-cambiar-clave" class="tarjeta">
+          <h3>Mi cuenta</h3>
+          <p class="suave" id="cuenta-email"></p>
+          <label for="k-nueva">Nueva contraseña (mínimo 8 caracteres)</label>
+          <input id="k-nueva" type="password" autocomplete="new-password" minlength="8">
+          <button type="submit" class="btn btn-borde">Cambiar contraseña</button>
+        </form>
+        <p class="suave centrado"><a href="../" target="_blank" rel="noopener">Ver el sitio ↗</a></p>
+      </section>
+    </main>
+
+    <nav class="tabs" role="tablist" aria-label="Secciones del panel">
+      <button type="button" role="tab" id="t-citas" data-tab="citas" aria-selected="true"><span aria-hidden="true">📅</span>Citas<span class="insignia" id="insignia" hidden>0</span></button>
+      <button type="button" role="tab" id="t-horarios" data-tab="horarios" aria-selected="false"><span aria-hidden="true">🕒</span>Horarios</button>
+      <button type="button" role="tab" id="t-fotos" data-tab="fotos" aria-selected="false"><span aria-hidden="true">📷</span>Fotos</button>
+      <button type="button" role="tab" id="t-servicios" data-tab="servicios" aria-selected="false"><span aria-hidden="true">💄</span>Servicios</button>
+      <button type="button" role="tab" id="t-ajustes" data-tab="ajustes" aria-selected="false"><span aria-hidden="true">⚙️</span>Ajustes</button>
+    </nav>
+  </div>
+
+  <!-- ===== Agregar cita a mano ===== -->
+  <dialog id="dlg-cita" aria-labelledby="dlg-cita-titulo">
+    <form id="form-cita" method="dialog" novalidate>
+      <h2 id="dlg-cita-titulo">Agregar cita</h2>
+      <label for="n-servicio">Servicio</label>
+      <select id="n-servicio" name="servicio" required></select>
+      <div class="fila-form">
+        <label>Fecha <input type="date" name="fecha" required></label>
+        <label>Hora <input type="time" name="hora" step="900" required></label>
+      </div>
+      <label for="n-nombre">Nombre de la clienta</label>
+      <input type="text" id="n-nombre" name="nombre" autocomplete="off" required>
+      <label for="n-telefono">Teléfono / WhatsApp</label>
+      <input id="n-telefono" name="telefono" type="tel" inputmode="tel" autocomplete="off" required>
+      <label for="n-notas">Notas (opcional)</label>
+      <textarea id="n-notas" name="notas" rows="2"></textarea>
+      <div class="fila-form">
+        <label>Pago
+          <select name="pago"><option value="sena">Seña</option><option value="total">Total</option></select>
+        </label>
+        <label>Estado
+          <select name="estado"><option value="aprobada">Confirmada</option><option value="pagada">Pagada</option><option value="pendiente">Pendiente</option></select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" name="costo_extra"> Domingo / fuera de horario (costo adicional)</label>
+      <p class="error" id="cita-error" role="alert"></p>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde" value="cancelar" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-principal" value="guardar">Guardar cita</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

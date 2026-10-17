@@ -19,8 +19,13 @@ export function icono(nombre, clase = '') {
   return `<svg class="ic${clase ? ' ' + clase : ''}" aria-hidden="true" focusable="false"><use href="#i-${esc(nombre)}"></use></svg>`;
 }
 
-/** Ruta de la foto en un ancho dado. */
-export function rutaFoto(base, ancho) {
+/**
+ * Ruta de la foto en un ancho dado.
+ * `info` es la entrada del manifiesto: si trae `url` (foto subida a Supabase Storage) se usa esa base;
+ * si no, la foto está en img/ del repositorio.
+ */
+export function rutaFoto(base, ancho, info) {
+  if (info && info.url) return `${info.url}-${ancho}.${info.ext || 'webp'}`;
   return `img/${base}-${ancho}.webp`;
 }
 
@@ -33,8 +38,8 @@ export function imagen(base, manifiesto, { alt = '', sizes = '100vw', clase = ''
   if (!info) return marcador({ clase });
   let anchos = info.anchos.slice();
   if (anchoMax) anchos = anchos.filter((a) => a <= anchoMax).concat(anchos.filter((a) => a > anchoMax).slice(0, 1));
-  const src = rutaFoto(base, anchos[Math.min(1, anchos.length - 1)]);
-  const srcset = anchos.map((a) => `${rutaFoto(base, a)} ${a}w`).join(', ');
+  const src = rutaFoto(base, anchos[Math.min(1, anchos.length - 1)], info);
+  const srcset = anchos.map((a) => `${rutaFoto(base, a, info)} ${a}w`).join(', ');
   const alto = Math.round((info.h / info.w) * 1000);
   return `<img${clase ? ` class="${esc(clase)}"` : ''} src="${src}" srcset="${srcset}" sizes="${esc(sizes)}" width="1000" height="${alto}" alt="${esc(alt)}" ${prioridad ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"'}>`;
 }
@@ -186,12 +191,12 @@ export function indiceReservas(servicios) {
   for (const s of servicios) {
     if (s.variantes) {
       for (const v of s.variantes) {
-        mapa[v.id] = { id: v.id, servicioId: s.id, nombre: v.nombreReserva || s.nombre, precio: v.precioReserva || v.precio, sena: v.sena ?? '', accion: v.accion || s.accion, categoria: s.categoria };
+        mapa[v.id] = { id: v.id, servicioId: s.id, nombre: v.nombreReserva || s.nombre, precio: v.precioReserva || v.precio, sena: v.sena ?? '', accion: v.accion || s.accion, categoria: s.categoria, usaTurno: s.usaTurno === true };
       }
     } else {
-      mapa[s.id] = { id: s.id, servicioId: s.id, nombre: s.nombreReserva || s.nombre, precio: s.precioReserva || s.precio, sena: s.sena ?? '', accion: s.accion, categoria: s.categoria, permiteTocado: !!s.permiteTocado, esEvento: !!s.esEvento };
+      mapa[s.id] = { id: s.id, servicioId: s.id, nombre: s.nombreReserva || s.nombre, precio: s.precioReserva || s.precio, sena: s.sena ?? '', accion: s.accion, categoria: s.categoria, permiteTocado: !!s.permiteTocado, esEvento: !!s.esEvento, usaTurno: s.usaTurno === true };
     }
   }
-  mapa.consulta = { id: 'consulta', nombre: 'Consulta general', precio: '', sena: '', accion: 'hacer una consulta', categoria: 'otros' };
+  mapa.consulta = { id: 'consulta', nombre: 'Consulta general', precio: '', sena: '', accion: 'hacer una consulta', categoria: 'otros', usaTurno: false };
   return mapa;
 }

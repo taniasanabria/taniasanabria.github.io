@@ -14,7 +14,17 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 3. **Rango fuera de horario:** el formulario ofrece turnos de 06:00 a 22:00 (los que caen fuera del horario habitual se marcan con costo adicional). ¿Es un rango razonable?
 4. **Eventos (Glitter Bar / Neon Party):** ¿el costo adicional también aplica a eventos de noche o en domingo? Hoy los eventos ofrecen de 08:00 a 23:00 sin aviso por horario; solo el domingo muestra el aviso.
 5. **Tolerancia de puntualidad:** el servicio Aerógrafo tiene una tolerancia distinta a la de los demás servicios. ¿Es intencional?
-6. **Datos de pago:** ¿qué banco, alias o QR se va a usar? Sirve para cuando se integre el cobro en línea o para mostrarlos en el sitio.
+6. **Datos de pago:** ¿qué banco, alias o QR se va a usar? Hay que cargarlos en el panel (Ajustes → Datos para el pago) para que salgan en el mensaje de aprobación.
+
+## Agenda y reservas (fase 2, valores supuestos, se cambian desde el panel)
+- **Duración de cada servicio en la agenda:** se tomó el número más alto del texto de duración (por ejemplo, "2 a 2,5 horas" = 150 min). Cejas, trenzas y tocados no tenían duración y quedaron en 60 min. Revisar en Servicios → "Minutos que ocupa en la agenda".
+- **Turnos:** cada 30 minutos, con al menos 2 horas de anticipación y hasta 60 días adelante. Se cambia en Ajustes.
+- **Horario semanal:** se cargó a partir del horario publicado en el sitio. Revisar en Horarios.
+- **Eventos y Academia:** no ocupan agenda. Se piden con fecha preferida y Tania confirma. Los pedidos para domingo se marcan con costo adicional.
+- **Solicitudes pendientes:** bloquean su horario hasta que se aprueben o se rechacen. No vencen solas.
+- **Anti-spam:** máximo 3 solicitudes pendientes por teléfono en 24 horas, y 30 solicitudes web cada 10 minutos en total.
+- **Zona horaria:** UTC-3 fija (`Etc/GMT+3`), porque Paraguay ya no cambia la hora desde octubre de 2024.
+- **Fotos faltantes (punto 9):** se pueden subir directamente desde el panel (pestaña Fotos), sin compilar.
 
 ## Certificados
 7. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).

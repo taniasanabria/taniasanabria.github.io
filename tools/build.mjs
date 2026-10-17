@@ -97,6 +97,7 @@ const reemplazos = {
   TITULO: R.esc(sitio.titulo),
   DESCRIPCION: R.esc(sitio.descripcion),
   URL: URL_SITIO,
+  SUPABASE_ORIGEN: (sitio.supabase && sitio.supabase.url) ? new URL(sitio.supabase.url).origin : URL_SITIO,
   OG_IMAGEN: URL_SITIO + sitio.imagenCompartir,
   COLOR: sitio.colorTema,
   VERSION,
@@ -178,9 +179,10 @@ escribir('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
   <url><loc>${URL_SITIO}</loc><lastmod>${hoy}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
 </urlset>
 `);
-escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio.
+escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio, salvo el panel de administración.
 User-agent: *
 Allow: /
+Disallow: /admin/
 
 Sitemap: ${URL_SITIO}sitemap.xml
 `);
@@ -198,5 +200,14 @@ escribir('site.webmanifest', JSON.stringify({
   ],
 }, null, 2) + '\n');
 if (!existsSync(join(raiz, '.nojekyll'))) escribir('.nojekyll', '');
+
+// --- Configuración compartida por el sitio y el panel (/admin/) ---
+const sb = sitio.supabase || {};
+escribir('js/config.js', `// Generado por tools/build.mjs desde data/sitio.json. No editar a mano.
+// La clave "anon" de Supabase es pública por diseño; la seguridad está en las políticas RLS (supabase/schema.sql).
+export const FUENTE_DATOS = ${JSON.stringify(sitio.fuenteDatos || 'embebido')};
+export const SUPABASE = ${JSON.stringify({ url: sb.url || '', anonKey: sb.anonKey || '' }, null, 2)};
+export const URL_SITIO = ${JSON.stringify(URL_SITIO)};
+`);
 
 console.log(`Listo: index.html (${(html.length / 1024).toFixed(1)} KB), 404.html, sitemap.xml, robots.txt, site.webmanifest. URL: ${URL_SITIO}`);

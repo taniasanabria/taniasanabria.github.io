@@ -396,3 +396,18 @@ dialog::backdrop { background: rgba(20, 16, 10, .62); backdrop-filter: blur(4px)
 .opciones-pago legend { font-weight: 600; color: var(--tinta); margin-bottom: .35rem; padding: 0; }
 .opciones-pago .check { margin-bottom: .35rem; }
 .pie-nota { font-size: .82rem; opacity: .85; font-style: italic; }
+
+/* Reservas en línea (Supabase) */
+.trampa { position: absolute !important; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.dias-libres { margin: -.2rem 0 .9rem; }
+.dias-libres[hidden] { display: none; }
+.dias-libres-lista { display: flex; flex-wrap: wrap; gap: .45rem; }
+.dia-chip { border: 1px solid var(--oro-claro); background: #fff; color: var(--tinta); border-radius: 999px; padding: .5rem .85rem; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; min-height: 40px; text-transform: capitalize; }
+.dia-chip:hover, .dia-chip:focus-visible { background: var(--marfil-2); }
+.dia-chip.dia-extra::after { content: " *"; color: var(--oro); }
+.reserva-ok-resumen { font-weight: 600; color: var(--tinta); background: var(--marfil-2); border-radius: 10px; padding: .7rem .9rem; }
+.btn-wa-texto { display: inline-flex; align-items: center; gap: .5rem; padding: .75rem 1.1rem; border-radius: 999px; background: #1f8f4e; color: #fff; font-weight: 600; text-decoration: none; }
+.btn-wa-texto:hover { background: #18723e; }
+select:disabled { opacity: .7; }
+
+[hidden] { display: none !important; }

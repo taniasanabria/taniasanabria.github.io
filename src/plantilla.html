@@ -29,6 +29,7 @@
   <link rel="preload" href="fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" href="img/retrato-540.webp" imagesrcset="img/retrato-280.webp 280w, img/retrato-540.webp 540w" imagesizes="(min-width: 900px) 420px, 52vw" fetchpriority="high">
+  <link rel="preconnect" href="{{SUPABASE_ORIGEN}}" crossorigin>
   <link rel="stylesheet" href="css/estilos.css?v={{VERSION}}">
   <script type="application/ld+json">{{JSONLD}}</script>
 </head>
@@ -127,8 +128,8 @@
         <li><span class="paso-num">2</span><h3>Proponé fecha y horario</h3><p>Completá el formulario: te lleva a WhatsApp con todo listo para enviar.</p></li>
         <li><span class="paso-num">3</span><h3>Confirmá tu cupo</h3><p>Tania te confirma la disponibilidad y te envía los datos para abonar el total o solo la seña por transferencia o QR.</p></li>
       </ol>
-      <p class="pasos-politica">{{ICONO_INFO}} {{POLITICA}}</p>
-      <p class="pasos-politica">{{ICONO_RELOJ}} {{POLITICA_HORARIO}}</p>
+      <p class="pasos-politica">{{ICONO_INFO}} <span data-texto="politicaSena">{{POLITICA}}</span></p>
+      <p class="pasos-politica">{{ICONO_RELOJ}} <span data-texto="politicaHorario">{{POLITICA_HORARIO}}</span></p>
       <div class="centrado"><button type="button" class="btn btn-primario btn-grande" data-reservar="">Reservar turno</button></div>
     </div>
   </section>
@@ -187,7 +188,7 @@
   <div class="dialogo-cuerpo">
     <form id="form-reserva" novalidate>
       <h2 class="dialogo-titulo" id="reserva-titulo">Reservá tu turno</h2>
-      <p class="dialogo-subtitulo">Completá tus datos y te llevamos a WhatsApp con la solicitud lista para enviar a Tania.</p>
+      <p class="dialogo-subtitulo" id="reserva-bajada">Completá tus datos y te llevamos a WhatsApp con la solicitud lista para enviar a Tania.</p>
 
       <div class="campo">
         <label for="r-servicio">Servicio</label>
@@ -204,6 +205,14 @@
           <input id="r-telefono" name="telefono" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 0981 123 456" required>
         </div>
       </div>
+      <div class="campo">
+        <label for="r-email">Email <span class="opcional">(opcional)</span></label>
+        <input id="r-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="Ej: maria@gmail.com">
+      </div>
+      <div class="trampa" aria-hidden="true">
+        <label for="r-sitio">No completar</label>
+        <input id="r-sitio" name="sitio_web" type="text" tabindex="-1" autocomplete="off">
+      </div>
       <div class="campo-fila">
         <div class="campo">
           <label for="r-fecha">Fecha preferida</label>
@@ -215,7 +224,11 @@
         </div>
       </div>
       <p class="campo-ayuda" id="r-fecha-info" aria-live="polite"></p>
-      <p class="aviso-extra" id="r-extra" role="status" hidden>{{ICONO_INFO}} <span><strong>Costo adicional:</strong> {{POLITICA_HORARIO}}</span></p>
+      <div class="dias-libres" id="r-dias" hidden>
+        <p class="campo-ayuda">Próximos días con horarios libres:</p>
+        <div class="dias-libres-lista" id="r-dias-lista"></div>
+      </div>
+      <p class="aviso-extra" id="r-extra" role="status" hidden>{{ICONO_INFO}} <span><strong>Costo adicional:</strong> <span data-texto="politicaHorario">{{POLITICA_HORARIO}}</span></span></p>
       <div class="campo" id="r-personas-campo" hidden>
         <label for="r-personas">Cantidad aproximada de personas / invitados</label>
         <input id="r-personas" name="personas" type="number" min="1" inputmode="numeric" placeholder="Ej: 4">
@@ -239,18 +252,26 @@
         </fieldset>
         <p class="campo-ayuda">Por ahora no se cobra en la web: Tania te envía los datos de transferencia o QR por WhatsApp.</p>
         <p><em>* Seña no reembolsable en caso de cancelación o inasistencia.</em></p>
-        <p>{{POLITICA_HORARIO}}</p>
+        <p data-texto="politicaHorario">{{POLITICA_HORARIO}}</p>
         <label class="check"><input type="checkbox" id="r-acepto" name="acepto"> <span>Leí y acepto la política de reserva.</span></label>
       </div>
 
       <p class="form-error" id="r-error" role="alert"></p>
-      <button type="submit" class="btn btn-primario btn-grande btn-ancho">{{ICONO_WA}} Enviar solicitud por WhatsApp</button>
+      <button type="submit" class="btn btn-primario btn-grande btn-ancho" id="r-enviar">{{ICONO_WA}} <span id="r-enviar-texto">Enviar solicitud por WhatsApp</span></button>
       <p class="campo-ayuda centrado">La fecha y el horario quedan sujetos a confirmación de Tania.</p>
     </form>
     <div class="reserva-ok" id="reserva-ok" hidden tabindex="-1">
-      <h2 class="dialogo-titulo">¡Solicitud lista! {{ICONO_CHECK}}</h2>
-      <p>Abrimos WhatsApp con tu mensaje para Tania. Solo tenés que tocar <strong>Enviar</strong>.</p>
-      <p>¿No se abrió? <a id="reserva-enlace" href="#" target="_blank" rel="noopener">Tocá aquí para abrir WhatsApp</a>.</p>
+      <h2 class="dialogo-titulo"><span id="reserva-ok-titulo">¡Solicitud lista!</span> {{ICONO_CHECK}}</h2>
+      <div id="reserva-ok-registrada" hidden>
+        <p class="reserva-ok-resumen" id="reserva-ok-resumen"></p>
+        <p><strong>Tania te va a confirmar por WhatsApp.</strong> Tu horario queda reservado como pendiente hasta que ella lo apruebe.</p>
+        <p>Si querés, también podés enviarle tu solicitud por WhatsApp ahora:</p>
+        <p><a class="btn btn-wa-texto" id="reserva-enlace-extra" href="#" target="_blank" rel="noopener">{{ICONO_WA}} Enviar también por WhatsApp</a></p>
+      </div>
+      <div id="reserva-ok-whatsapp">
+        <p>Abrimos WhatsApp con tu mensaje para Tania. Solo tenés que tocar <strong>Enviar</strong>.</p>
+        <p>¿No se abrió? <a id="reserva-enlace" href="#" target="_blank" rel="noopener">Tocá aquí para abrir WhatsApp</a>.</p>
+      </div>
       <button type="button" class="btn btn-secundario" data-cerrar>Listo</button>
     </div>
   </div>

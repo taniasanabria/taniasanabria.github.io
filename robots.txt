@@ -1,5 +1,6 @@
-# Permite que los buscadores indexen todo el sitio.
+# Permite que los buscadores indexen todo el sitio, salvo el panel de administración.
 User-agent: *
 Allow: /
+Disallow: /admin/
 
 Sitemap: https://taniasanabria.github.io/sitemap.xml

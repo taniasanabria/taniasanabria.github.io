@@ -5,5 +5,10 @@
   "descripcion": "Tania Sanabria Makeup Studio Professional. Maquillaje social y de novias, aerógrafo HD, cejas, trenzas, Glitter Bar, Neon Party y academia de maquillaje en Fernando de la Mora. Reservá tu turno por WhatsApp.",
   "imagenCompartir": "img/og-tania-sanabria.jpg",
   "colorTema": "#1b1610",
-  "fuenteDatos": "embebido"
+  "fuenteDatos": "supabase",
+  "supabase": {
+    "_ayuda": "Proyecto de Supabase (fase 2). La clave 'anon' es pública por diseño: la seguridad la dan las políticas RLS de supabase/schema.sql. Si Supabase no responde, el sitio usa los datos embebidos (data/catalogo.json).",
+    "url": "https://wfngdgqihtiqkokhxjqv.supabase.co",
+    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmbmdkZ3FpaHRpcWtva2h4anF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNDkzNTgsImV4cCI6MjEwNzgyNTM1OH0.sDz0p3GDcLaxOueUqTPa_iN04RZ1bT192CZyvmp9VFQ"
+  }
 }
