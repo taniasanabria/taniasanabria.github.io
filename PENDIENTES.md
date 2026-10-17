@@ -26,6 +26,14 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - **Zona horaria:** UTC-3 fija (`Etc/GMT+3`), porque Paraguay ya no cambia la hora desde octubre de 2024.
 - **Fotos faltantes (punto 9):** se pueden subir directamente desde el panel (pestaña Fotos), sin compilar.
 
+## Avisos de reservas nuevas (17/10/2026)
+- ✅ **Con el panel abierto o en segundo plano (ya funciona):** sonido, vibración, mensaje en pantalla, notificación del sistema, número de pendientes en la pestaña (`(2) Panel de Tania`), en la solapa Citas y en el ícono de la app (Android/Chrome).
+- ✅ **Panel instalable** como app (`admin/manifest.webmanifest` + `admin/sw.js`). En Ajustes hay una tarjeta "Avisos de reservas nuevas" con el estado, **Activar avisos** y **Probar aviso**.
+- ⏳ **Con el panel cerrado (push):** el código está listo y probado localmente (Chrome real suscripto a FCM y FCM aceptó el envío). Falta instalarlo en Supabase: ver `supabase/PASOS.md` → "Avisos al celular de Tania". Necesita un token personal de Supabase de la cuenta de Tania, o hacerlo a mano en el panel de Supabase. No necesita cuentas nuevas ni cuesta nada.
+- Después de instalarlo, Tania tiene que abrir el panel y tocar **Activar avisos** una vez en cada celular (los que ya lo activaron se suscriben solos al volver a abrir el panel).
+- **iPhone:** las notificaciones web solo funcionan con iOS 16.4 o superior y con el panel agregado a la pantalla de inicio.
+- Alternativas que se descartaron por ahora: email con Resend (requiere crear una cuenta) y bot de Telegram (requiere que Tania cree el bot y Telegram en el celular). Se pueden sumar más adelante sobre el mismo trigger.
+
 ## Certificados
 7. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).
 

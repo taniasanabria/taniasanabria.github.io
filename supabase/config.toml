@@ -1,0 +1,6 @@
+# Configuración mínima para `supabase functions deploy` (solo se usa al desplegar).
+project_id = "wfngdgqihtiqkokhxjqv"
+
+[functions.avisar-reserva]
+# La llama el trigger de la base sin JWT; la función se protege sola (ver index.ts).
+verify_jwt = false

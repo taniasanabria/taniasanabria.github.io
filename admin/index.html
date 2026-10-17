@@ -8,6 +8,10 @@
   <title>Panel de Tania · Tania Sanabria Makeup Studio</title>
   <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Panel Tania">
   <link rel="stylesheet" href="admin.css">
   <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
   <script src="vendor/supabase.js" defer></script>
@@ -63,6 +67,10 @@
         <div class="tab-cabecera">
           <h2>Citas</h2>
           <button type="button" class="btn btn-principal" id="btn-nueva-cita">＋ Agregar cita</button>
+        </div>
+        <div class="aviso-activar" id="aviso-activar" hidden>
+          <p><strong>🔔 Activá los avisos</strong> para enterarte al instante de cada reserva nueva.</p>
+          <button type="button" class="btn btn-principal" data-activar-avisos>Activar avisos</button>
         </div>
         <h3 class="subtitulo">Pendientes de confirmar <span class="pildora" id="n-pendientes">0</span></h3>
         <div id="lista-pendientes" class="lista"></div>
@@ -170,6 +178,16 @@
           </div>
           <button type="submit" class="btn btn-principal btn-grande">Guardar ajustes</button>
         </form>
+        <div class="tarjeta" id="tarjeta-avisos">
+          <h3>Avisos de reservas nuevas</h3>
+          <p class="suave">Cuando una clienta pide un turno desde la web, este celular suena y muestra una notificación.</p>
+          <ul class="avisos-estado" id="avisos-estado" aria-live="polite"></ul>
+          <div class="acciones">
+            <button type="button" class="btn btn-principal" data-activar-avisos>Activar avisos en este celular</button>
+            <button type="button" class="btn btn-borde" id="btn-probar-aviso">Probar aviso</button>
+          </div>
+          <p class="suave" id="avisos-ayuda"></p>
+        </div>
         <form id="form-cambiar-clave" class="tarjeta">
           <h3>Mi cuenta</h3>
           <p class="suave" id="cuenta-email"></p>

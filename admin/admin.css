@@ -156,3 +156,14 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 .toast.mal { background: var(--rojo); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Avisos de reservas nuevas */
+.aviso-activar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; background: var(--ambar-claro); border: 1px solid #ecd9a8; border-radius: var(--radio); padding: .8rem 1rem; margin-bottom: 1rem; }
+.aviso-activar p { margin: 0; flex: 1 1 14rem; }
+.avisos-estado { list-style: none; padding: 0; margin: .4rem 0 1rem; display: grid; gap: .35rem; }
+.avisos-estado li { padding-left: 1.6rem; position: relative; }
+.avisos-estado li::before { position: absolute; left: 0; }
+.avisos-estado .si::before { content: "✅"; }
+.avisos-estado .no::before { content: "⚠️"; }
+.avisos-estado .info::before { content: "ℹ️"; }
+#tarjeta-avisos .acciones { display: flex; flex-wrap: wrap; gap: .6rem; }

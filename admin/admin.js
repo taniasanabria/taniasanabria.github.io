@@ -142,6 +142,9 @@ async function entrarAlPanel() {
   await cargarBase();
   elegirTab(location.hash.replace('#', '') || 'citas', false);
   suscribirse();
+  await registrarSW();
+  await asegurarPush(); // renueva la suscripción si ya había permiso
+  pintarAvisos();
 }
 
 // ------------------------------------------------------------------ datos base
@@ -218,6 +221,7 @@ async function cargarPendientes({ avisar = false } = {}) {
   const ins = $('#insignia');
   ins.hidden = n === 0; ins.textContent = n;
   document.title = (n ? `(${n}) ` : '') + 'Panel de Tania · Tania Sanabria Makeup Studio';
+  ponerInsigniaApp(n);
   $('#lista-pendientes').innerHTML = n
     ? data.map((r) => tarjetaCita(r, { nueva: nuevas.some((x) => x.id === r.id) })).join('')
     : '<p class="vacio">No hay solicitudes pendientes. 🎉</p>';
@@ -225,6 +229,7 @@ async function cargarPendientes({ avisar = false } = {}) {
     sonar();
     ins.classList.remove('latido'); void ins.offsetWidth; ins.classList.add('latido');
     toast(nuevas.length === 1 ? `Nueva solicitud: ${nuevas[0].cliente_nombre} · ${nuevas[0].servicio_nombre}` : `${nuevas.length} solicitudes nuevas`);
+    notificarNuevas(nuevas);
   }
 }
 
@@ -599,6 +604,7 @@ function pintarAjustes() {
   f.whatsapp.value = a.whatsapp; f.politica_sena.value = a.politica_sena; f.politica_horario.value = a.politica_horario;
   f.intervalo_min.value = String(a.intervalo_min); f.anticipacion_horas.value = a.anticipacion_horas; f.dias_reserva_max.value = a.dias_reserva_max;
   f.datos_pago.value = p.datos_pago; f.mensaje_aprobacion.value = p.mensaje_aprobacion; f.mensaje_rechazo.value = p.mensaje_rechazo;
+  pintarAvisos();
 }
 async function guardarAjustes(e) {
   e.preventDefault();
@@ -622,6 +628,131 @@ async function cambiarClave(e) {
   if (error) { toast(errorLegible(error), true); return; }
   $('#k-nueva').value = '';
   toast('Contraseña cambiada ✓');
+}
+
+// ------------------------------------------------------------------ avisos (notificaciones del sistema + push)
+const avisos = { reg: null, clavePush: undefined, sub: null };
+const hayNotificaciones = () => 'Notification' in window && 'serviceWorker' in navigator;
+const hayPush = () => hayNotificaciones() && 'PushManager' in window;
+const esIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const instalada = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+async function registrarSW() {
+  if (avisos.reg || !('serviceWorker' in navigator)) return avisos.reg;
+  try {
+    avisos.reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data?.tipo === 'reserva-nueva') cargarPendientes({ avisar: true });
+      if (e.data?.tipo === 'ir-a-citas') elegirTab('citas');
+    });
+  } catch (err) { console.warn('Service worker no disponible:', err); }
+  return avisos.reg;
+}
+
+// Clave pública VAPID que entrega la Edge Function "avisar-reserva" (null si todavía no está instalada).
+async function clavePushServidor() {
+  if (avisos.clavePush !== undefined) return avisos.clavePush;
+  try {
+    const r = await fetch(`${SUPABASE.url}/functions/v1/avisar-reserva`, { headers: { apikey: SUPABASE.anonKey, Authorization: `Bearer ${SUPABASE.anonKey}` } });
+    avisos.clavePush = r.ok ? ((await r.json()).vapidPublicKey || null) : null;
+  } catch { avisos.clavePush = null; }
+  return avisos.clavePush;
+}
+function bytesDeB64u(t) {
+  const b = atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (t.length % 4)) % 4));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+}
+async function guardarSuscripcion(sub) {
+  const j = sub.toJSON();
+  const { error } = await sb.from('push_suscripciones').upsert({
+    endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, dispositivo: navigator.userAgent.slice(0, 300),
+  });
+  if (error) { console.warn('No se pudo guardar la suscripción push:', error); return false; }
+  return true;
+}
+// Suscribe (o renueva) este dispositivo a los avisos push. Solo si ya hay permiso.
+async function asegurarPush() {
+  avisos.sub = null;
+  if (!hayPush() || Notification.permission !== 'granted' || !avisos.reg) return false;
+  const clave = await clavePushServidor();
+  if (!clave) return false;
+  try {
+    await navigator.serviceWorker.ready;
+    let sub = await avisos.reg.pushManager.getSubscription();
+    const misma = sub && sub.options?.applicationServerKey
+      && new Uint8Array(sub.options.applicationServerKey).join() === bytesDeB64u(clave).join();
+    if (sub && !misma) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await avisos.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesDeB64u(clave) });
+    if (await guardarSuscripcion(sub)) avisos.sub = sub;
+  } catch (err) { console.warn('No se pudo activar el push:', err); }
+  return !!avisos.sub;
+}
+async function quitarPush() {
+  try {
+    const sub = avisos.reg && await avisos.reg.pushManager?.getSubscription();
+    if (sub) { await sb.from('push_suscripciones').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
+  } catch { /* nada */ }
+  avisos.sub = null;
+}
+
+async function activarAvisos() {
+  prepararAudio();
+  if (!hayNotificaciones()) { toast('Este navegador no permite notificaciones. Probá con Chrome.', true); pintarAvisos(); return; }
+  if (esIOS() && !instalada()) { toast('En iPhone primero agregá el panel a la pantalla de inicio (Compartir → Agregar a inicio) y abrilo desde ahí.', true); pintarAvisos(); return; }
+  let permiso = Notification.permission;
+  if (permiso === 'default') permiso = await Notification.requestPermission();
+  if (permiso !== 'granted') {
+    toast('Las notificaciones están bloqueadas. Habilitalas en los ajustes del navegador para este sitio.', true);
+    pintarAvisos(); return;
+  }
+  const push = await asegurarPush();
+  toast(push ? 'Avisos activados ✓ Te van a llegar aunque el panel esté cerrado.' : 'Avisos activados ✓ (con el panel abierto)');
+  pintarAvisos();
+}
+
+async function mostrarNotificacion(titulo, cuerpo, tag) {
+  if (!hayNotificaciones() || Notification.permission !== 'granted') return false;
+  const op = { body: cuerpo, tag, renotify: true, icon: '../img/icono-192.png', badge: '../img/favicon-32.png', vibrate: [200, 100, 200], data: { url: location.href.split('#')[0] + '#citas' } };
+  try {
+    const reg = avisos.reg || await navigator.serviceWorker.getRegistration();
+    if (reg) { await reg.showNotification(titulo, op); return true; }
+    new Notification(titulo, op); return true;
+  } catch (err) { console.warn('No se pudo mostrar la notificación:', err); return false; }
+}
+// Aviso del sistema para solicitudes nuevas detectadas con el panel abierto (o en segundo plano).
+function notificarNuevas(nuevas) {
+  if (!document.hidden && document.hasFocus()) return; // en pantalla ya hay sonido + mensaje + insignia
+  if (avisos.sub) return; // el push del servidor ya la muestra (evita duplicados)
+  for (const r of nuevas.slice(0, 3)) {
+    mostrarNotificacion(`Nueva solicitud: ${r.servicio_nombre}`, `${r.cliente_nombre} · ${textoCuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`, `reserva-${r.id}`);
+  }
+  if (nuevas.length > 3) mostrarNotificacion(`${nuevas.length} solicitudes nuevas`, 'Tocá para verlas en el panel.', 'reservas-varias');
+}
+function ponerInsigniaApp(n) {
+  try { if (n && navigator.setAppBadge) navigator.setAppBadge(n); else if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch { /* sin insignia */ }
+}
+
+async function pintarAvisos() {
+  const lista = $('#avisos-estado'); const ayuda = $('#avisos-ayuda');
+  const permiso = hayNotificaciones() ? Notification.permission : 'no';
+  const clave = await clavePushServidor();
+  const items = [];
+  if (permiso === 'no') items.push(['no', 'Este navegador no permite notificaciones. Usá Chrome (Android) o Safari con el panel en la pantalla de inicio (iPhone).']);
+  else if (permiso === 'granted') items.push(['si', 'Notificaciones permitidas en este celular.']);
+  else if (permiso === 'denied') items.push(['no', 'Notificaciones bloqueadas. Tocá el candado 🔒 junto a la dirección → Permisos → Notificaciones → Permitir.']);
+  else items.push(['no', 'Todavía no activaste los avisos en este celular.']);
+  if (permiso === 'granted') {
+    if (avisos.sub) items.push(['si', 'Avisos con el panel cerrado: activos.']);
+    else if (!clave) items.push(['info', 'Por ahora el aviso llega con el panel abierto o en segundo plano. El aviso con el panel cerrado se activa cuando se termine de instalar en el servidor.']);
+    else items.push(['no', 'Avisos con el panel cerrado: no se pudieron activar. Tocá “Activar avisos”.']);
+  }
+  if (esIOS() && !instalada()) items.push(['info', 'En iPhone, agregá el panel a la pantalla de inicio (Compartir → Agregar a inicio) y abrilo desde ese ícono.']);
+  else if (!instalada()) items.push(['info', 'Consejo: agregá el panel a la pantalla de inicio (menú ⋮ → Agregar a la pantalla principal).']);
+  lista.innerHTML = items.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join('');
+  ayuda.textContent = 'Si el celular está en silencio o en “No molestar”, la notificación llega igual pero sin sonido.';
+  const listo = permiso === 'granted' && (avisos.sub || !clave);
+  $$('[data-activar-avisos]').forEach((b) => { b.textContent = listo ? (b.closest('#tarjeta-avisos') ? 'Volver a activar' : 'Activar avisos') : (b.closest('#tarjeta-avisos') ? 'Activar avisos en este celular' : 'Activar avisos'); });
+  $('#aviso-activar').hidden = listo || permiso === 'no';
 }
 
 // ------------------------------------------------------------------ tiempo real
@@ -672,6 +803,8 @@ function prepararEventos() {
   $('#btn-salir').addEventListener('click', async () => {
     if (estado.canal) { await sb.removeChannel(estado.canal); estado.canal = null; }
     clearInterval(estado.sondeo);
+    await quitarPush();
+    ponerInsigniaApp(0);
     await sb.auth.signOut();
     estado.pendientesVistos = null;
     mostrarVista('login');
@@ -729,6 +862,14 @@ function prepararEventos() {
   // Servicios
   $('#lista-servicios').addEventListener('submit', (e) => { e.preventDefault(); guardarServicio(e.target); });
   $('#lista-servicios').addEventListener('click', (e) => { const b = e.target.closest('[data-orden]'); if (b) ordenarServicio(b.closest('details').dataset.servicio, Number(b.dataset.orden)); });
+  // Avisos
+  $$('[data-activar-avisos]').forEach((b) => b.addEventListener('click', activarAvisos));
+  $('#btn-probar-aviso').addEventListener('click', async () => {
+    prepararAudio(); sonar();
+    if (window.Notification?.permission !== 'granted') { toast('Primero tocá “Activar avisos”.', true); return; }
+    const ok = await mostrarNotificacion('Prueba de aviso ✓', 'Así te va a llegar cada solicitud nueva.', 'prueba');
+    toast(ok ? 'Listo: revisá la notificación arriba en la pantalla.' : 'No se pudo mostrar la notificación.', !ok);
+  });
   // Ajustes
   $('#form-ajustes').addEventListener('submit', guardarAjustes);
   $('#form-cambiar-clave').addEventListener('submit', cambiarClave);
