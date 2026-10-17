@@ -43,5 +43,5 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - Álbum **Aerógrafo HD** (`aerografo`): 6 fotos (aerografo, aerografo-2, aerografo-3, aerografo-4, aerografo-5, aerografo-6)
 
 ## Publicación
-9. **Repositorio.** Se asumió `github.com/Harold89556/taniasanabria`, que queda publicado en `https://harold89556.github.io/taniasanabria/`. Si se usa otro nombre, hay que cambiar `url` en `data/sitio.json` y volver a compilar.
+9. **Repositorio.** Definido: cuenta nueva `taniasanabria`, repo `taniasanabria.github.io`, URL `https://taniasanabria.github.io/`. Falta crear la cuenta y el repo. Si se usa otro nombre, hay que cambiar `url` en `data/sitio.json` y volver a compilar.
 10. **Dominio propio.** ¿Se va a usar uno (por ejemplo, taniasanabria.com.py)? Si es así, hay que agregar el archivo `CNAME` y actualizar `url`.

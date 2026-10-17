@@ -2,4 +2,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://harold89556.github.io/taniasanabria/sitemap.xml
+Sitemap: https://taniasanabria.github.io/sitemap.xml

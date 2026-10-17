@@ -31,12 +31,16 @@ Editar `url` en `data/sitio.json` y volver a compilar. El `404.html` usa `<base 
 
 ## Publicar en GitHub Pages
 ```bash
-gh repo create Harold89556/taniasanabria --public --source . --push
-# Luego: Settings → Pages → Deploy from branch → main / (root)
+# En la cuenta de GitHub de Tania (taniasanabria):
+gh repo create taniasanabria/taniasanabria.github.io --public --source . --push
+# Luego: Settings → Pages → Deploy from branch → main / (root).
+# Al ser un sitio de usuario, se publica en https://taniasanabria.github.io/
 ```
 
 ## Probar localmente
-Usar cualquier servidor estático, por ejemplo `npx serve .`, o servir la carpeta bajo `/taniasanabria/` para que el 404 funcione igual que en Pages.
+Usar cualquier servidor estático, por ejemplo `npx serve .`, sirviendo la carpeta en la raíz (`/`), igual que en GitHub Pages.
+
+URL pública: https://taniasanabria.github.io/
 
 ## Créditos
 Íconos: Font Awesome Free 6.5.1 (CC BY 4.0). Fuentes: Cinzel y Montserrat (SIL OFL).

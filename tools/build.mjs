@@ -21,7 +21,7 @@ const sitio = leerJSON('data/sitio.json');
 const manifiesto = leerJSON('img/manifiesto.json');
 const n = catalogo.negocio;
 const URL_SITIO = sitio.url.endsWith('/') ? sitio.url : sitio.url + '/';
-const rutaBase = new URL(URL_SITIO).pathname; // ej. /taniasanabria/
+const rutaBase = new URL(URL_SITIO).pathname; // "/" en un sitio de usuario (taniasanabria.github.io)
 const VERSION = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
 // --- Validación: toda foto referenciada debe existir (evita imágenes rotas) ---
