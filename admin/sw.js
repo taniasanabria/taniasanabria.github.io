@@ -40,7 +40,7 @@ self.addEventListener('notificationclick', (e) => {
   e.waitUntil((async () => {
     const abiertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const panel = abiertas.find((c) => c.url.startsWith(self.registration.scope));
-    if (panel) { await panel.focus(); panel.postMessage({ tipo: 'ir-a-citas' }); return; }
+    if (panel) { await panel.focus(); panel.postMessage({ tipo: 'ir-a', tab: new URL(destino).hash.slice(1) || 'citas' }); return; }
     await self.clients.openWindow(destino);
   })());
 });

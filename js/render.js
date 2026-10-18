@@ -107,21 +107,64 @@ function listaDetalles(items) {
     .join('')}</ul>`;
 }
 
+const NUM = '(\\d{1,3}(?:\\.\\d{3})+|\\d+)';
+const aNumero = (m) => (m ? Number(m[1].replace(/\./g, '')) : null);
+export const formatoGs = (n) => 'Gs. ' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+/**
+ * Monto de inscripción a partir del texto de precio del curso (misma regla que public._monto_curso en
+ * supabase/cursos.sql). "Gs. 450.000 mensual + Matrícula Gs. 100.000" → { curso: 450000, matricula: 100000, total: 550000, mensual: true }
+ */
+export function montoCurso(texto) {
+  const t = String(texto || '');
+  const curso = aNumero(t.match(new RegExp(NUM)));
+  const matricula = aNumero(t.match(new RegExp('matr[ií]cula[^0-9(]*gs\\.?\\s*' + NUM, 'i')));
+  let total = aNumero(t.match(new RegExp('total[^0-9]*gs\\.?\\s*' + NUM, 'i')));
+  if (total === null && curso !== null) total = curso + (matricula || 0);
+  return { curso, matricula, total, mensual: /(mensual|\/\s*mes|por mes)/i.test(t) };
+}
+
+/** Opciones de inscripción de un curso: una por variante, o el curso mismo. */
+export function opcionesCurso(s) {
+  return s.variantes
+    ? s.variantes.map((v) => ({ id: v.id, etiqueta: v.etiqueta, nombre: v.nombreReserva || `${s.nombre}: ${v.etiqueta}`, precioTexto: v.precioReserva || v.precio, precioVisible: v.precio }))
+    : [{ id: s.id, etiqueta: '', nombre: s.nombreReserva || s.nombre, precioTexto: s.precioReserva || s.precio, precioVisible: s.precio }];
+}
+
+/** Ficha del curso: modalidad e inversión (precio, matrícula y lo que se paga al inscribirse). */
+export function fichaCurso(s) {
+  const filas = [];
+  const modalidad = s.modalidad || s.subtitulo;
+  if (modalidad) filas.push(['Modalidad', esc(modalidad)]);
+  for (const o of opcionesCurso(s)) {
+    const m = montoCurso(o.precioTexto);
+    const partes = [`<strong>${esc(o.precioVisible)}</strong>`];
+    if (m.matricula) partes.push(`+ matrícula ${formatoGs(m.matricula)}`);
+    else if (/sin matr[ií]cula/i.test(o.precioTexto)) partes.push('· sin matrícula');
+    else if (/matr[ií]cula/i.test(o.precioTexto)) partes.push('· matrícula incluida');
+    const total = m.total && (m.total !== m.curso || o.etiqueta)
+      ? `<br><small>${m.mensual ? 'Para inscribirte (1.ª cuota + matrícula)' : 'Total a pagar'}: <strong>${formatoGs(m.total)}</strong></small>` : '';
+    filas.push([o.etiqueta ? esc(o.etiqueta) : 'Inversión', partes.join(' ') + total]);
+  }
+  filas.push(['Pago', 'Transferencia o QR. Tu lugar se confirma al recibir el comprobante.']);
+  return `<dl class="ficha-curso">${filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+}
+
 /** Contenido del cuadro de detalle de un servicio. */
 export function detalleServicio(s, manifiesto) {
   const fotos = fotosDisponibles(s.fotos, manifiesto);
   const galeria = fotos.length
-    ? `<div class="tira-fotos" role="list">${fotos
-        .map((f, i) => `<button type="button" role="listitem" class="tira-foto" data-lightbox="${esc(s.id)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}">${imagen(f, manifiesto, { alt: `${s.nombre}, foto ${i + 1}`, sizes: '(min-width: 700px) 200px, 40vw', anchoMax: 480 })}</button>`)
+    ? `<div class="tira-fotos">${fotos
+        .map((f, i) => `<button type="button" class="tira-foto" data-lightbox="${esc(s.id)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}">${imagen(f, manifiesto, { alt: `${s.nombre}, foto ${i + 1}`, sizes: '(min-width: 700px) 200px, 40vw', anchoMax: 480 })}</button>`)
         .join('')}</div>`
     : `<div class="tira-vacia">${marcador({ texto: 'Pronto vas a ver fotos de este servicio aquí' })}</div>`;
 
   const complemento = s.complemento
-    ? `<div class="caja-complemento"><h4>${icono('gem')} ${esc(s.complemento.titulo)}</h4><p>${esc(s.complemento.texto)}</p></div>`
+    ? `<div class="caja-complemento"><h3 class="sub">${icono('gem')} ${esc(s.complemento.titulo)}</h3><p>${esc(s.complemento.texto)}</p></div>`
     : '';
-  const detalles = s.detalles && s.detalles.length ? `<h4>${esc(s.detallesTitulo || 'Detalles')}</h4>${listaDetalles(s.detalles)}` : '';
+  const detalles = s.detalles && s.detalles.length ? `<h3 class="sub">${esc(s.detallesTitulo || 'Detalles')}</h3>${listaDetalles(s.detalles)}` : '';
   const secciones = (s.secciones || [])
-    .map((sec) => `<h4>${esc(sec.titulo)}</h4>${listaDetalles(sec.items.map((t) => ({ icono: 'check', texto: t })))}`)
+    .map((sec) => `<h3 class="sub">${esc(sec.titulo)}</h3>${listaDetalles(sec.items.map((t) => ({ icono: 'check', texto: t })))}`)
     .join('');
   const beneficios = s.beneficios && s.beneficios.length ? `<div class="caja-suave">${listaDetalles(s.beneficios)}</div>` : '';
   const normas = s.normas && s.normas.length ? `<div class="caja-normas">${listaDetalles(s.normas)}</div>` : '';
@@ -132,9 +175,11 @@ export function detalleServicio(s, manifiesto) {
         .join('')
     : `<div class="pie-opcion"><div><span class="pie-etiqueta">${s.sena ? `Seña ${esc(s.sena)}` : 'Valor de referencia'}</span><span class="pie-precio">${esc(s.precio)}${s.precioNota ? ` <small>${esc(s.precioNota)}</small>` : ''}</span></div><button type="button" class="btn btn-primario" data-reservar="${esc(s.id)}">${esc(s.cta || 'Reservar')}</button></div>`;
 
+  const curso = s.categoria === 'academia';
   return `
 <h2 class="dialogo-titulo" id="detalle-titulo">${esc(s.tituloDetalle || s.nombre)}</h2>
-${s.subtitulo ? `<p class="dialogo-subtitulo">${esc(s.subtitulo)}</p>` : `<p class="dialogo-subtitulo">${esc(s.resumen)}</p>`}
+${s.subtitulo && !curso ? `<p class="dialogo-subtitulo">${esc(s.subtitulo)}</p>` : `<p class="dialogo-subtitulo">${esc(s.resumen)}</p>`}
+${curso ? fichaCurso(s) : ''}
 ${galeria}
 ${complemento}
 ${detalles}

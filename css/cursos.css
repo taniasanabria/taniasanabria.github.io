@@ -1,0 +1,24 @@
+/* Inscripción online a cursos (se carga recién al tocar "Inscribirme"). Usa los estilos base de estilos.css. */
+.dialogo-inscripcion .sobretitulo { margin: 0; }
+.dialogo-inscripcion .ficha-curso { margin-bottom: 1rem; }
+.ins-monto { margin: -.4rem 0 1rem; padding: .7rem 1rem; border-radius: 12px; background: var(--tinta); color: #f6e7bd; font-size: .95rem; }
+.ins-monto strong { color: #fff; font-size: 1.1rem; }
+.ins-opciones { border: 0; padding: 0; margin: 0 0 .6rem; }
+.ins-opciones legend { font-weight: 600; font-size: .88rem; color: var(--tinta); margin-bottom: .4rem; }
+.ins-opciones .check { background: #fff; border: 1.5px solid var(--linea); border-radius: 12px; padding: .75rem .9rem; margin: 0 0 .5rem; }
+.ins-opciones .check:has(input:checked) { border-color: var(--oro-claro); box-shadow: 0 0 0 3px rgba(201, 162, 74, .18); }
+.ins-ok { outline: none; }
+.ins-ok > p { color: var(--texto); }
+.ins-pago { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 1rem 1.1rem; margin: 1rem 0; }
+.ins-pago h3 { display: flex; align-items: center; gap: .5rem; font-size: 1.05rem; margin: 0 0 .6rem; }
+.ins-pago h3 .ic { color: var(--oro); }
+.ins-pago p { margin: 0 0 .6rem; font-size: .93rem; }
+.ins-pago-monto { font-size: 1rem !important; }
+.ins-pago-monto strong { font-size: 1.25rem; color: var(--tinta); }
+.ins-pago-sub { font-size: .74rem !important; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--oro); margin-top: .9rem !important; }
+.ins-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; background: var(--marfil-2); padding: .1rem .4rem; border-radius: 6px; }
+.ins-datos { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: .93rem; background: var(--marfil); border: 1px dashed var(--oro-claro); border-radius: 10px; padding: .7rem .8rem; margin: 0 0 .6rem; user-select: all; }
+.ins-qr { display: block; width: min(240px, 70vw); height: auto; aspect-ratio: 1; object-fit: contain; background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: .5rem; margin: .2rem auto .8rem; }
+.ins-pasos { padding-left: 1.2rem; margin: 0 0 1.1rem; display: grid; gap: .45rem; font-size: .93rem; color: var(--texto); }
+.ins-pasos a { color: var(--oro); }
+.ins-ok .btn { margin-top: .6rem; }

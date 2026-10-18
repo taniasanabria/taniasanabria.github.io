@@ -19,7 +19,10 @@ const sb = window.supabase.createClient(SUPABASE.url, SUPABASE.anonKey, {
 const estado = {
   zona: 'Etc/GMT+3', ajustes: null, privados: null, servicios: [], albumes: [], horario: [],
   pendientesVistos: null, vista: 'dia', fechaAgenda: null, canal: null, sondeo: null, email: '',
+  filtroIns: 'pendiente', cursoSel: null, lecciones: [], cursosInstalado: true,
 };
+const URL_AULA = new URL('../alumnas/', location.href).href;
+const METODOS = { transferencia: 'Transferencia', qr: 'QR', tarjeta: 'Tarjeta', efectivo: 'Efectivo', otro: 'Otro' };
 
 // ------------------------------------------------------------------ utilidades
 let tToast;
@@ -164,7 +167,7 @@ async function cargarBase() {
 }
 
 // ------------------------------------------------------------------ pestañas
-const cargadores = { citas: cargarCitas, horarios: cargarHorarios, fotos: cargarFotos, servicios: pintarServicios, ajustes: pintarAjustes };
+const cargadores = { citas: cargarCitas, horarios: cargarHorarios, fotos: cargarFotos, cursos: cargarCursos, servicios: pintarServicios, ajustes: pintarAjustes };
 function elegirTab(nombre, foco = true) {
   if (!cargadores[nombre]) nombre = 'citas';
   $$('.tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === nombre)));
@@ -215,21 +218,30 @@ async function cargarPendientes({ avisar = false } = {}) {
   const previos = estado.pendientesVistos;
   const nuevas = previos ? data.filter((r) => !previos.has(r.id)) : [];
   estado.pendientesVistos = new Set(data.map((r) => r.id));
-  const n = data.length;
+  // Las inscripciones a cursos tienen una "reserva espejo" (para el aviso push): se muestran en Cursos.
+  const citas = data.filter((r) => !r.inscripcion_id);
+  const deCursos = data.filter((r) => r.inscripcion_id);
+  const n = citas.length; const nc = deCursos.length; const total = n + nc;
   $('#n-pendientes').textContent = n;
   $('#n-pendientes').classList.toggle('hay', n > 0);
   const ins = $('#insignia');
   ins.hidden = n === 0; ins.textContent = n;
-  document.title = (n ? `(${n}) ` : '') + 'Panel de Tania · Tania Sanabria Makeup Studio';
-  ponerInsigniaApp(n);
+  const insC = $('#insignia-cursos');
+  insC.hidden = nc === 0; insC.textContent = nc;
+  $('#aviso-cursos').hidden = nc === 0;
+  $('#aviso-cursos-texto').textContent = nc === 1 ? '1 inscripción a un curso espera tu confirmación de pago.' : `${nc} inscripciones a cursos esperan tu confirmación de pago.`;
+  document.title = (total ? `(${total}) ` : '') + 'Panel de Tania · Tania Sanabria Makeup Studio';
+  ponerInsigniaApp(total);
   $('#lista-pendientes').innerHTML = n
-    ? data.map((r) => tarjetaCita(r, { nueva: nuevas.some((x) => x.id === r.id) })).join('')
+    ? citas.map((r) => tarjetaCita(r, { nueva: nuevas.some((x) => x.id === r.id) })).join('')
     : '<p class="vacio">No hay solicitudes pendientes. 🎉</p>';
   if (nuevas.length && (avisar || previos)) {
     sonar();
-    ins.classList.remove('latido'); void ins.offsetWidth; ins.classList.add('latido');
-    toast(nuevas.length === 1 ? `Nueva solicitud: ${nuevas[0].cliente_nombre} · ${nuevas[0].servicio_nombre}` : `${nuevas.length} solicitudes nuevas`);
+    const latir = nuevas.some((r) => !r.inscripcion_id) ? ins : insC;
+    latir.classList.remove('latido'); void latir.offsetWidth; latir.classList.add('latido');
+    toast(nuevas.length === 1 ? (nuevas[0].inscripcion_id ? `Nueva inscripción: ${nuevas[0].cliente_nombre} · ${String(nuevas[0].servicio_nombre).replace(/^Inscripción: /, '')}` : `Nueva solicitud: ${nuevas[0].cliente_nombre} · ${nuevas[0].servicio_nombre}`) : `${nuevas.length} solicitudes nuevas`);
     notificarNuevas(nuevas);
+    if (nuevas.some((r) => r.inscripcion_id) && !$('#tab-cursos').hidden) cargarInscripciones();
   }
 }
 
@@ -550,6 +562,8 @@ function pintarServicios() {
         <label>Precio en el mensaje de reserva (opcional) <input name="precio_reserva_texto" value="${esc(s.precio_reserva_texto || '')}"></label>
         ${variantes.map((v, k) => `<div class="variante"><label>Opción: ${esc(v.etiqueta)} — precio <input name="var-precio-${k}" value="${esc(v.precio || '')}"></label>
           <label>Seña de esta opción (texto, ej. Gs. 100.000) <input name="var-sena-${k}" value="${esc(v.sena || '')}"></label></div>`).join('')}
+        ${s.categoria === 'academia' ? `<label>Modalidad (opcional; si queda vacío se usa el subtítulo) <input name="modalidad" maxlength="200" value="${esc((s.extra && s.extra.modalidad) || '')}" placeholder="Ej: Presencial en el Studio + clases grabadas"></label>
+        <label>Contenido del curso (un tema por línea) <textarea name="contenido" rows="5">${esc(((s.extra && s.extra.detalles) || []).map((d) => d.texto).join('\n'))}</textarea></label>` : ''}
         <label class="check"><input type="checkbox" name="usa_turno" ${s.usa_turno ? 'checked' : ''}> Se reserva con horario de la agenda</label>
         <label class="check"><input type="checkbox" name="activo" ${s.activo ? 'checked' : ''}> Mostrar en el sitio (activo)</label>
         <div class="acciones">
@@ -575,6 +589,13 @@ async function guardarServicio(form) {
   if (s.extra && Array.isArray(s.extra.variantes)) {
     cambios.extra = { ...s.extra, variantes: s.extra.variantes.map((v, k) => ({ ...v, precio: form[`var-precio-${k}`].value.trim(), sena: form[`var-sena-${k}`].value.trim() })) };
   }
+  if (s.categoria === 'academia' && form.contenido) {
+    const base = cambios.extra || { ...(s.extra || {}) };
+    const temas = form.contenido.value.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 40);
+    const modalidad = form.modalidad.value.trim();
+    cambios.extra = { ...base, detalles: temas.map((texto) => ({ icono: 'check', texto })) };
+    if (modalidad) cambios.extra.modalidad = modalidad; else delete cambios.extra.modalidad;
+  }
   if (!cambios.nombre) { toast('El nombre no puede quedar vacío.', true); return; }
   const { data, error } = await sb.from('servicios').update(cambios).eq('id', s.id).select().single();
   if (error) { toast(errorLegible(error), true); return; }
@@ -597,6 +618,346 @@ async function ordenarServicio(id, paso) {
   pintarServicios();
 }
 
+// ------------------------------------------------------------------ cursos: inscripciones
+const cacheIns = new Map();
+const cursos = () => estado.servicios.filter((s) => s.categoria === 'academia');
+const faltaInstalar = (error) => error && (error.code === '42P01' || error.code === 'PGRST205' || error.code === 'PGRST202' || /does not exist|schema cache|Could not find/i.test(error.message || ''));
+const MSG_INSTALAR = 'Falta activar los cursos en Supabase (ejecutar supabase/cursos.sql). Mientras tanto, las inscripciones llegan como solicitudes en Citas.';
+
+function rellenarAcceso(plantilla, i, codigo) {
+  const enlace = `${URL_AULA}?email=${encodeURIComponent(i.cliente_email)}`;
+  const v = { nombre: (i.cliente_nombre || '').split(/\s+/)[0], curso: i.curso_nombre, enlace, email: i.cliente_email, codigo: codigo || '' };
+  const base = plantilla || '¡Hola {nombre}! Ya tenés acceso a las clases de *{curso}* ✅\nEntrá en {enlace}\nEmail: {email}\nCódigo: *{codigo}*';
+  return String(base).replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
+}
+
+function tarjetaInscripcion(i, codigos) {
+  const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${i.estado === 'pendiente' ? 'Por cobrar' : i.estado === 'pagada' ? 'Pagada' : 'Cancelada'}</span>`];
+  if (i.acceso) et.push('<span class="etiqueta acceso-si">🔓 Con acceso</span>');
+  else if (i.estado !== 'cancelada') et.push('<span class="etiqueta">🔒 Sin acceso</span>');
+  if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
+  et.push(`<span class="etiqueta">${i.origen === 'web' ? 'Desde la web' : 'Cargada a mano'}</span>`);
+  let acc = '';
+  if (i.estado === 'pendiente') acc = `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Registrar pago</button>
+      <button type="button" class="btn btn-wa" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>
+      <button type="button" class="btn btn-borde" data-ins="cancelar" data-id="${i.id}">Cancelar</button>`;
+  else if (i.estado === 'pagada') acc = (i.acceso
+      ? `<button type="button" class="btn btn-wa" data-ins="reenviar" data-id="${i.id}">📲 Enviar acceso</button>
+         <button type="button" class="btn btn-borde" data-ins="quitar" data-id="${i.id}">🔒 Quitar acceso</button>`
+      : `<button type="button" class="btn btn-aprobar" data-ins="dar" data-id="${i.id}">🔓 Dar acceso</button>`)
+    + `<button type="button" class="btn btn-borde" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>`;
+  else acc = `<button type="button" class="btn btn-borde btn-borrar" data-ins="borrar" data-id="${i.id}">🗑 Borrar</button>`;
+  const cod = codigos[i.cliente_email];
+  return `<article class="cita inscripcion estado-${i.estado === 'pendiente' ? 'pendiente' : i.estado}" data-inscripcion="${i.id}">
+    <div class="cita-cuando">${esc(fmtFecha(new Date(i.creado), { day: 'numeric', month: 'numeric', year: 'numeric' }))} · Ref. <code>${esc(i.referencia)}</code></div>
+    <div class="cita-servicio">${esc(i.curso_nombre)}</div>
+    <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a> · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a></div>
+    <p class="cita-monto">${i.monto_gs ? 'A pagar: ' + gs(i.monto_gs) : esc(i.precio_ref || '')}</p>
+    ${i.notas ? `<p class="cita-notas">📝 ${esc(i.notas)}</p>` : ''}
+    ${i.acceso && cod ? `<p class="suave">Código de acceso: <code>${esc(cod.codigo)}</code>${cod.user_id ? ' · ya entró al aula' : ' · todavía no entró'}</p>` : ''}
+    <div class="etiquetas">${et.join('')}</div>
+    <div class="cita-acciones">${acc}</div>
+  </article>`;
+}
+
+async function cargarInscripciones() {
+  let q = sb.from('inscripciones').select('*').order('creado', { ascending: false }).limit(200);
+  if (estado.filtroIns !== 'todas') q = q.eq('estado', estado.filtroIns);
+  const [r, al, np] = await Promise.all([q, sb.from('alumnos').select('email,codigo,user_id'), sb.from('inscripciones').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')]);
+  const err = r.error || al.error;
+  estado.cursosInstalado = !faltaInstalar(err);
+  if (err) { $('#lista-inscripciones').innerHTML = `<p class="vacio">${esc(faltaInstalar(err) ? MSG_INSTALAR : errorLegible(err))}</p>`; return; }
+  const codigos = Object.fromEntries((al.data || []).map((a) => [a.email, a]));
+  r.data.forEach((i) => cacheIns.set(i.id, i));
+  const n = np.count || 0;
+  $('#n-ins-pendientes').textContent = n; $('#n-ins-pendientes').classList.toggle('hay', n > 0);
+  $('#lista-inscripciones').innerHTML = r.data.length ? r.data.map((i) => tarjetaInscripcion(i, codigos)).join('')
+    : `<p class="vacio">${estado.filtroIns === 'pendiente' ? 'No hay inscripciones por cobrar. 🎉' : 'Todavía no hay inscripciones.'}</p>`;
+}
+
+async function cargarCursos() {
+  const sel = $('#c-curso');
+  const lista = cursos();
+  if (!estado.cursoSel || !lista.some((c) => c.id === estado.cursoSel)) estado.cursoSel = lista[0] && lista[0].id;
+  sel.innerHTML = lista.map((c) => `<option value="${esc(c.id)}"${c.id === estado.cursoSel ? ' selected' : ''}>${esc(c.nombre)}${c.activo ? '' : ' (oculto)'}</option>`).join('');
+  await Promise.all([cargarInscripciones(), cargarLecciones()]);
+}
+
+function abrirWa(ventana, tel, texto) { abrirWhatsApp(ventana, urlWhatsApp(tel, texto)); }
+
+async function enviarAcceso(i, codigo, ventana) {
+  abrirWa(ventana, i.cliente_telefono, rellenarAcceso(estado.privados.mensaje_acceso, i, codigo));
+}
+
+let insPago = null;
+function abrirPago(i) {
+  insPago = i;
+  const f = $('#form-pago'); f.reset(); f.acceso.checked = true; $('#pago-error').textContent = '';
+  $('#pago-resumen').textContent = `${i.cliente_nombre} · ${i.curso_nombre}${i.monto_gs ? ' · ' + gs(i.monto_gs) : ''} · Ref. ${i.referencia}`;
+  $('#dlg-pago').showModal();
+}
+async function confirmarPago(e) {
+  e.preventDefault();
+  const f = e.target; const i = insPago; if (!i) return;
+  const dar = f.acceso.checked;
+  const ventana = dar ? window.open('', '_blank') : null; // se abre ya (con el toque) para que el celular no la bloquee
+  const btn = f.querySelector('[type="submit"]'); btn.disabled = true;
+  const { data, error } = await sb.rpc('admin_registrar_pago', { p_id: i.id, p_metodo: f.metodo.value, p_ref: f.ref.value.trim() || null, p_dar_acceso: dar });
+  btn.disabled = false;
+  if (error || !data || data.ok === false) { if (ventana) ventana.close(); $('#pago-error').textContent = errorLegible(error) || 'No se pudo registrar.'; return; }
+  $('#dlg-pago').close();
+  if (dar && data.codigo) { await enviarAcceso(i, data.codigo, ventana); toast('Pago registrado y acceso enviado ✓'); }
+  else toast('Pago registrado 💰');
+  await Promise.all([cargarInscripciones(), cargarPendientes()]);
+}
+
+async function accionInscripcion(accion, id, boton) {
+  const i = cacheIns.get(id); if (!i) return;
+  if (accion === 'pago') { abrirPago(i); return; }
+  if (accion === 'whatsapp') { window.open(urlWhatsApp(i.cliente_telefono, `¡Hola ${(i.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
+  if (accion === 'dar' || accion === 'reenviar') {
+    const ventana = window.open('', '_blank');
+    boton.disabled = true;
+    const { data, error } = await sb.rpc('admin_dar_acceso', { p_id: i.id, p_acceso: true });
+    if (error || !data || !data.codigo) { if (ventana) ventana.close(); toast(errorLegible(error) || 'No se pudo dar acceso.', true); boton.disabled = false; return; }
+    await enviarAcceso(i, data.codigo, ventana);
+    toast(accion === 'dar' ? 'Acceso habilitado ✓' : 'Abrimos WhatsApp con su acceso');
+  } else if (accion === 'quitar') {
+    if (!confirm(`¿Quitarle el acceso a las clases a ${i.cliente_nombre}?`)) return;
+    const { error } = await sb.rpc('admin_dar_acceso', { p_id: i.id, p_acceso: false });
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Acceso quitado');
+  } else if (accion === 'cancelar') {
+    if (!confirm(`¿Cancelar la inscripción de ${i.cliente_nombre}?`)) return;
+    const { error } = await sb.from('inscripciones').update({ estado: 'cancelada' }).eq('id', i.id);
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Inscripción cancelada');
+  } else if (accion === 'borrar') {
+    if (!confirm(`¿Borrar definitivamente la inscripción de ${i.cliente_nombre}?`)) return;
+    const { error } = await sb.from('inscripciones').delete().eq('id', i.id);
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Inscripción borrada');
+  }
+  await Promise.all([cargarInscripciones(), cargarPendientes()]);
+}
+
+function opcionesCursos() {
+  return cursos().flatMap((s) => ((s.extra && s.extra.variantes) || []).length
+    ? s.extra.variantes.map((v) => ({ id: v.id, servicio: s, variante: v, nombre: `${s.nombre}: ${v.etiqueta}` }))
+    : [{ id: s.id, servicio: s, variante: null, nombre: s.nombre }]);
+}
+function montoDe(texto) {
+  const t = String(texto || ''); const NUM = '(\\d{1,3}(?:\\.\\d{3})+|\\d+)';
+  const n = (m) => (m ? Number(m[1].replace(/\./g, '')) : null);
+  const curso = n(t.match(new RegExp(NUM))); const mat = n(t.match(new RegExp('matr[ií]cula[^0-9(]*gs\\.?\\s*' + NUM, 'i')));
+  const total = n(t.match(new RegExp('total[^0-9]*gs\\.?\\s*' + NUM, 'i')));
+  return total ?? (curso === null ? null : curso + (mat || 0));
+}
+function abrirNuevaAlumna() {
+  const f = $('#form-alumna'); f.reset(); f.pagada.checked = true; f.acceso.checked = true; $('#alumna-error').textContent = '';
+  $('#al-curso').innerHTML = opcionesCursos().map((o) => `<option value="${esc(o.id)}">${esc(o.nombre)}</option>`).join('');
+  if (estado.cursoSel) { const o = opcionesCursos().find((x) => x.servicio.id === estado.cursoSel); if (o) $('#al-curso').value = o.id; }
+  $('#dlg-alumna').showModal();
+}
+async function guardarAlumna(e) {
+  e.preventDefault();
+  const f = e.target; const o = opcionesCursos().find((x) => x.id === f.curso.value);
+  const email = f.email.value.trim().toLowerCase();
+  if (!o || f.nombre.value.trim().length < 2 || f.telefono.value.replace(/\D/g, '').length < 6 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    $('#alumna-error').textContent = 'Completá curso, nombre, teléfono y un email válido.'; return;
+  }
+  const precio = o.variante ? (o.variante.precioReserva || o.variante.precio) : (o.servicio.precio_reserva_texto || o.servicio.precio_texto);
+  const fila = {
+    servicio_id: o.servicio.id, variante_id: o.variante ? o.variante.id : null,
+    curso_nombre: (o.variante && o.variante.nombreReserva) || (o.servicio.extra && o.servicio.extra.nombreReserva) || o.servicio.nombre,
+    precio_ref: precio, monto_gs: montoDe(precio), cliente_nombre: f.nombre.value.trim(), cliente_telefono: f.telefono.value.trim(),
+    cliente_email: email, origen: 'admin', estado: f.pagada.checked ? 'pagada' : 'pendiente',
+  };
+  const dar = f.acceso.checked;
+  const ventana = dar ? window.open('', '_blank') : null;
+  const btn = f.querySelector('[type="submit"]'); btn.disabled = true;
+  const { data, error } = await sb.from('inscripciones').insert(fila).select().single();
+  if (error) { btn.disabled = false; if (ventana) ventana.close(); $('#alumna-error').textContent = faltaInstalar(error) ? MSG_INSTALAR : errorLegible(error); return; }
+  if (dar) {
+    const r = await sb.rpc('admin_dar_acceso', { p_id: data.id, p_acceso: true });
+    if (r.error || !r.data?.codigo) { if (ventana) ventana.close(); toast(errorLegible(r.error) || 'No se pudo dar acceso.', true); }
+    else await enviarAcceso(data, r.data.codigo, ventana);
+  }
+  btn.disabled = false;
+  $('#dlg-alumna').close();
+  toast('Alumna agregada ✓');
+  estado.filtroIns = data.estado === 'pendiente' ? 'pendiente' : 'pagada';
+  $$('[data-filtro-ins]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.filtroIns === estado.filtroIns)));
+  cargarInscripciones();
+}
+
+// ------------------------------------------------------------------ cursos: clases
+function tipoDeVideo(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\.|^m\./, '');
+    if (h === 'youtu.be' || /youtube\.com$/.test(h)) return 'YouTube';
+    if (h === 'drive.google.com') return 'Google Drive';
+    if (h === 'vimeo.com') return 'Vimeo';
+  } catch { /* inválido */ }
+  return null;
+}
+async function cargarLecciones() {
+  const id = estado.cursoSel;
+  if (!id) { $('#lista-lecciones').innerHTML = '<p class="suave">No hay cursos cargados.</p>'; return; }
+  const { data, error } = await sb.from('lecciones').select('*').eq('servicio_id', id).order('orden').order('creado');
+  if (error) { $('#lista-lecciones').innerHTML = `<p class="vacio">${esc(faltaInstalar(error) ? MSG_INSTALAR : errorLegible(error))}</p>`; $('#form-leccion').hidden = faltaInstalar(error); return; }
+  $('#form-leccion').hidden = false;
+  estado.lecciones = data;
+  let modulo = null;
+  $('#lista-lecciones').innerHTML = data.length ? data.map((l, k) => {
+    let cab = '';
+    if ((l.modulo || '') !== (modulo || '')) { modulo = l.modulo; if (modulo) cab = `<p class="modulo-admin">${esc(modulo)}</p>`; }
+    const meta = l.tipo === 'archivo' ? `📎 ${esc(l.archivo_nombre || 'archivo')}${l.archivo_bytes ? ' · ' + (l.archivo_bytes >= 1048576 ? (l.archivo_bytes / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(l.archivo_bytes / 1024)) + ' KB') : ''}`
+      : l.tipo === 'video' ? `▶ ${esc(tipoDeVideo(l.url) || 'Video')} · ${esc(l.url)}` : `🔗 ${esc(l.url)}`;
+    return `${cab}<div class="leccion${l.activo ? '' : ' oculta'}" data-leccion="${l.id}">
+      <div><div class="leccion-titulo">${k + 1}. ${esc(l.titulo)}${l.activo ? '' : ' · OCULTA'}</div><div class="leccion-meta">${meta}</div></div>
+      <div class="leccion-acciones">
+        <button type="button" class="btn btn-chico btn-borde" data-lc="-1" ${k === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
+        <button type="button" class="btn btn-chico btn-borde" data-lc="1" ${k === data.length - 1 ? 'disabled' : ''} aria-label="Bajar">↓</button>
+        <button type="button" class="btn btn-chico btn-borde" data-lc="ver">Ver</button>
+        <button type="button" class="btn btn-chico btn-borde" data-lc="editar">Editar</button>
+        <button type="button" class="btn btn-chico btn-borde btn-borrar" data-lc="borrar">🗑</button>
+      </div></div>`;
+  }).join('') : '<p class="suave">Todavía no hay clases en este curso. Agregá la primera abajo.</p>';
+}
+function tipoLeccion() { return $('#form-leccion').querySelector('input[name="tipo"]:checked').value; }
+function pintarTipoLeccion() {
+  const t = tipoLeccion();
+  $('#lc-campo-url').hidden = t === 'archivo'; $('#lc-campo-archivo').hidden = t !== 'archivo';
+}
+function limpiarLeccion() {
+  const f = $('#form-leccion'); f.reset(); f.id.value = ''; f.activo.checked = true;
+  $('#leccion-titulo-form').textContent = 'Agregar clase'; $('#lc-cancelar').hidden = true; $('#leccion-error').textContent = '';
+  $('#lc-archivo-info').textContent = 'Hasta 25 MB. Solo lo ven las alumnas con acceso.';
+  pintarTipoLeccion();
+}
+function editarLeccion(l) {
+  const f = $('#form-leccion');
+  f.id.value = l.id; f.titulo.value = l.titulo; f.modulo.value = l.modulo || ''; f.descripcion.value = l.descripcion || '';
+  f.querySelector(`input[name="tipo"][value="${l.tipo}"]`).checked = true; f.url.value = l.url || ''; f.activo.checked = l.activo;
+  $('#lc-archivo-info').textContent = l.archivo ? `Archivo actual: ${l.archivo_nombre || l.archivo}. Elegí otro solo si querés reemplazarlo.` : 'Hasta 25 MB. Solo lo ven las alumnas con acceso.';
+  $('#leccion-titulo-form').textContent = 'Editar clase'; $('#lc-cancelar').hidden = false; pintarTipoLeccion();
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function prepararArchivo(archivo) {
+  const tipos = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  if (!tipos[archivo.type]) throw new Error('Solo PDF o fotos JPG, PNG o WebP.');
+  // Fotos grandes: se achican a 1600 px para que carguen rápido en el celular.
+  if (archivo.type !== 'application/pdf' && archivo.size > 1.5 * 1024 * 1024) {
+    try {
+      const bmp = await createImageBitmap(archivo, { imageOrientation: 'from-image' });
+      const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      let b = await canvasABlob(c, 'image/webp', 0.85);
+      if (!b || b.type !== 'image/webp') b = await canvasABlob(c, 'image/jpeg', 0.85);
+      if (b) return { blob: b, ext: tipos[b.type], tipo: b.type };
+    } catch { /* se sube como está */ }
+  }
+  if (archivo.size > 25 * 1024 * 1024) throw new Error('El archivo pesa más de 25 MB.');
+  return { blob: archivo, ext: tipos[archivo.type], tipo: archivo.type };
+}
+async function guardarLeccion(e) {
+  e.preventDefault();
+  const f = e.target; const err = $('#leccion-error'); err.textContent = '';
+  const tipo = tipoLeccion(); const previo = estado.lecciones.find((x) => x.id === f.id.value);
+  const fila = { servicio_id: estado.cursoSel, titulo: f.titulo.value.trim(), modulo: f.modulo.value.trim() || null, descripcion: f.descripcion.value.trim(), tipo, activo: f.activo.checked };
+  if (!fila.titulo) { err.textContent = 'Escribí un título.'; f.titulo.focus(); return; }
+  const archivo = $('#lc-archivo').files[0];
+  if (tipo === 'archivo') {
+    if (!archivo && !(previo && previo.archivo)) { err.textContent = 'Elegí un PDF o una foto.'; return; }
+    fila.url = null;
+  } else {
+    let u = f.url.value.trim(); if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+    if (!/^https:\/\/\S+$/.test(u)) { err.textContent = 'Pegá un enlace que empiece con https://'; f.url.focus(); return; }
+    if (tipo === 'video' && !tipoDeVideo(u)) { err.textContent = 'Ese enlace no es de YouTube, Google Drive ni Vimeo. Elegí “Otro enlace” si es de otro lado.'; return; }
+    fila.url = u; fila.archivo = null; fila.archivo_nombre = null; fila.archivo_bytes = null;
+  }
+  const btn = $('#lc-guardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  let subido = null;
+  try {
+    if (tipo === 'archivo' && archivo) {
+      const { blob, ext, tipo: ct } = await prepararArchivo(archivo);
+      subido = `${estado.cursoSel}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await sb.storage.from('cursos').upload(subido, blob, { contentType: ct, upsert: false });
+      if (error) throw error;
+      Object.assign(fila, { archivo: subido, archivo_nombre: archivo.name.slice(0, 200), archivo_bytes: blob.size });
+    }
+    const orden = previo ? previo.orden : estado.lecciones.reduce((m, x) => Math.max(m, x.orden), 0) + 10;
+    const { error } = previo ? await sb.from('lecciones').update(fila).eq('id', previo.id) : await sb.from('lecciones').insert({ ...fila, orden });
+    if (error) throw error;
+    // Si se reemplazó o se quitó el archivo, se borra el viejo de Storage.
+    if (previo && previo.archivo && previo.archivo !== fila.archivo && (subido || tipo !== 'archivo')) await sb.storage.from('cursos').remove([previo.archivo]);
+    toast(previo ? 'Clase guardada ✓' : 'Clase agregada ✓');
+    limpiarLeccion();
+    cargarLecciones();
+  } catch (ex) {
+    if (subido) await sb.storage.from('cursos').remove([subido]);
+    err.textContent = errorLegible(ex);
+  } finally { btn.disabled = false; btn.textContent = 'Guardar clase'; }
+}
+async function accionLeccion(accion, id) {
+  const l = estado.lecciones.find((x) => x.id === id); if (!l) return;
+  if (accion === 'editar') { editarLeccion(l); return; }
+  if (accion === 'ver') {
+    if (l.tipo !== 'archivo') { window.open(l.url, '_blank', 'noopener'); return; }
+    const w = window.open('', '_blank');
+    const { data, error } = await sb.storage.from('cursos').createSignedUrl(l.archivo, 600);
+    if (error) { if (w) w.close(); toast(errorLegible(error), true); return; }
+    if (w) w.location.href = data.signedUrl; else window.location.href = data.signedUrl;
+    return;
+  }
+  if (accion === 'borrar') {
+    if (!confirm(`¿Borrar la clase “${l.titulo}”?`)) return;
+    const { error } = await sb.from('lecciones').delete().eq('id', id);
+    if (error) { toast(errorLegible(error), true); return; }
+    if (l.archivo) await sb.storage.from('cursos').remove([l.archivo]);
+    toast('Clase borrada'); cargarLecciones(); return;
+  }
+  const paso = Number(accion); const lista = estado.lecciones.slice(); const k = lista.indexOf(l); const j = k + paso;
+  if (j < 0 || j >= lista.length) return;
+  [lista[k], lista[j]] = [lista[j], lista[k]];
+  const res = await Promise.all(lista.map((x, n) => ({ x, orden: (n + 1) * 10 })).filter(({ x, orden }) => x.orden !== orden)
+    .map(({ x, orden }) => sb.from('lecciones').update({ orden }).eq('id', x.id)));
+  const e2 = res.find((r) => r.error); if (e2) toast(errorLegible(e2.error), true);
+  cargarLecciones();
+}
+
+// ------------------------------------------------------------------ ajustes: QR de pago
+function pintarQr() {
+  const qr = estado.privados && estado.privados.qr_pago;
+  const img = $('#qr-vista');
+  img.hidden = !qr; if (qr) img.src = urlStorage(qr);
+  $('#qr-estado').textContent = qr ? '(se muestra a quien se inscribe a un curso)' : '(sin cargar)';
+  $('#qr-quitar').hidden = !qr;
+}
+async function subirQr(archivo) {
+  const tipos = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+  if (!tipos[archivo.type]) { toast('Subí el QR como imagen PNG, JPG o WebP.', true); return; }
+  if (archivo.size > 5 * 1024 * 1024) { toast('La imagen pesa más de 5 MB.', true); return; }
+  const nombre = `qr-${crypto.randomUUID()}.${tipos[archivo.type]}`;
+  const { error } = await sb.storage.from('fotos').upload(nombre, archivo, { contentType: archivo.type, cacheControl: '31536000', upsert: false });
+  if (error) { toast(errorLegible(error), true); return; }
+  const viejo = estado.privados.qr_pago;
+  const r = await sb.from('ajustes_privados').update({ qr_pago: nombre }).eq('id', 1).select().single();
+  if (r.error) { await sb.storage.from('fotos').remove([nombre]); toast(errorLegible(r.error), true); return; }
+  if (viejo) await sb.storage.from('fotos').remove([viejo]);
+  estado.privados = r.data; pintarQr(); toast('QR guardado ✓');
+  $('#qr-archivo').value = '';
+}
+async function quitarQr() {
+  const viejo = estado.privados.qr_pago; if (!viejo || !confirm('¿Quitar el QR de pago?')) return;
+  const r = await sb.from('ajustes_privados').update({ qr_pago: null }).eq('id', 1).select().single();
+  if (r.error) { toast(errorLegible(r.error), true); return; }
+  await sb.storage.from('fotos').remove([viejo]);
+  estado.privados = r.data; pintarQr(); toast('QR quitado');
+}
+
 // ------------------------------------------------------------------ ajustes
 function pintarAjustes() {
   const f = $('#form-ajustes');
@@ -604,6 +965,11 @@ function pintarAjustes() {
   f.whatsapp.value = a.whatsapp; f.politica_sena.value = a.politica_sena; f.politica_horario.value = a.politica_horario;
   f.intervalo_min.value = String(a.intervalo_min); f.anticipacion_horas.value = a.anticipacion_horas; f.dias_reserva_max.value = a.dias_reserva_max;
   f.datos_pago.value = p.datos_pago; f.mensaje_aprobacion.value = p.mensaje_aprobacion; f.mensaje_rechazo.value = p.mensaje_rechazo;
+  const conCursos = 'mensaje_acceso' in p;
+  f.mensaje_acceso.closest('form').querySelector('[for="a-msg-acceso"]').hidden = !conCursos; f.mensaje_acceso.hidden = !conCursos;
+  f.mensaje_acceso.value = p.mensaje_acceso || '';
+  $('.qr-pago').hidden = !conCursos;
+  pintarQr();
   pintarAvisos();
 }
 async function guardarAjustes(e) {
@@ -614,7 +980,8 @@ async function guardarAjustes(e) {
   const [a, p] = await Promise.all([
     sb.from('ajustes').update({ whatsapp: wa, politica_sena: f.politica_sena.value.trim(), politica_horario: f.politica_horario.value.trim(),
       intervalo_min: Number(f.intervalo_min.value), anticipacion_horas: Number(f.anticipacion_horas.value), dias_reserva_max: Number(f.dias_reserva_max.value) }).eq('id', 1).select().single(),
-    sb.from('ajustes_privados').update({ datos_pago: f.datos_pago.value.trim(), mensaje_aprobacion: f.mensaje_aprobacion.value, mensaje_rechazo: f.mensaje_rechazo.value }).eq('id', 1).select().single(),
+    sb.from('ajustes_privados').update({ datos_pago: f.datos_pago.value.trim(), mensaje_aprobacion: f.mensaje_aprobacion.value, mensaje_rechazo: f.mensaje_rechazo.value,
+      ...('mensaje_acceso' in estado.privados ? { mensaje_acceso: f.mensaje_acceso.value } : {}) }).eq('id', 1).select().single(),
   ]);
   if (a.error || p.error) { toast(errorLegible(a.error || p.error), true); return; }
   estado.ajustes = a.data; estado.privados = p.data;
@@ -644,6 +1011,7 @@ async function registrarSW() {
     navigator.serviceWorker.addEventListener('message', (e) => {
       if (e.data?.tipo === 'reserva-nueva') cargarPendientes({ avisar: true });
       if (e.data?.tipo === 'ir-a-citas') elegirTab('citas');
+      if (e.data?.tipo === 'ir-a') elegirTab(e.data.tab === 'cursos' ? 'cursos' : 'citas');
     });
   } catch (err) { console.warn('Service worker no disponible:', err); }
   return avisos.reg;
@@ -724,7 +1092,8 @@ function notificarNuevas(nuevas) {
   if (!document.hidden && document.hasFocus()) return; // en pantalla ya hay sonido + mensaje + insignia
   if (avisos.sub) return; // el push del servidor ya la muestra (evita duplicados)
   for (const r of nuevas.slice(0, 3)) {
-    mostrarNotificacion(`Nueva solicitud: ${r.servicio_nombre}`, `${r.cliente_nombre} · ${textoCuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`, `reserva-${r.id}`);
+    if (r.inscripcion_id) mostrarNotificacion(`Nueva inscripción: ${r.servicio_nombre.replace(/^Inscripción: /, '')}`, `${r.cliente_nombre}\nTocá para ver el pago.`, `reserva-${r.id}`);
+    else mostrarNotificacion(`Nueva solicitud: ${r.servicio_nombre}`, `${r.cliente_nombre} · ${textoCuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`, `reserva-${r.id}`);
   }
   if (nuevas.length > 3) mostrarNotificacion(`${nuevas.length} solicitudes nuevas`, 'Tocá para verlas en el panel.', 'reservas-varias');
 }
@@ -870,6 +1239,23 @@ function prepararEventos() {
     const ok = await mostrarNotificacion('Prueba de aviso ✓', 'Así te va a llegar cada solicitud nueva.', 'prueba');
     toast(ok ? 'Listo: revisá la notificación arriba en la pantalla.' : 'No se pudo mostrar la notificación.', !ok);
   });
+  // Cursos
+  $('#aviso-cursos').addEventListener('click', (e) => { e.preventDefault(); estado.filtroIns = 'pendiente'; $$('[data-filtro-ins]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.filtroIns === 'pendiente'))); elegirTab('cursos'); });
+  $$('[data-filtro-ins]').forEach((b) => b.addEventListener('click', () => {
+    estado.filtroIns = b.dataset.filtroIns; $$('[data-filtro-ins]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); cargarInscripciones();
+  }));
+  $('#lista-inscripciones').addEventListener('click', (e) => { const b = e.target.closest('[data-ins]'); if (b) accionInscripcion(b.dataset.ins, b.dataset.id, b); });
+  $('#form-pago').addEventListener('submit', confirmarPago);
+  $('#btn-nueva-alumna').addEventListener('click', abrirNuevaAlumna);
+  $('#form-alumna').addEventListener('submit', guardarAlumna);
+  for (const d of ['#dlg-pago', '#dlg-alumna']) $(d).addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]') || e.target === e.currentTarget) $(d).close(); });
+  $('#c-curso').addEventListener('change', (e) => { estado.cursoSel = e.target.value; limpiarLeccion(); cargarLecciones(); });
+  $('#form-leccion').addEventListener('change', (e) => { if (e.target.name === 'tipo') pintarTipoLeccion(); });
+  $('#form-leccion').addEventListener('submit', guardarLeccion);
+  $('#lc-cancelar').addEventListener('click', limpiarLeccion);
+  $('#lista-lecciones').addEventListener('click', (e) => { const b = e.target.closest('[data-lc]'); if (b) accionLeccion(b.dataset.lc, b.closest('[data-leccion]').dataset.leccion); });
+  $('#qr-archivo').addEventListener('change', (e) => { const a = e.target.files && e.target.files[0]; if (a) subirQr(a); });
+  $('#qr-quitar').addEventListener('click', quitarQr);
   // Ajustes
   $('#form-ajustes').addEventListener('submit', guardarAjustes);
   $('#form-cambiar-clave').addEventListener('submit', cambiarClave);

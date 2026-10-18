@@ -22,7 +22,7 @@ const manifiesto = leerJSON('img/manifiesto.json');
 const n = catalogo.negocio;
 const URL_SITIO = sitio.url.endsWith('/') ? sitio.url : sitio.url + '/';
 const rutaBase = new URL(URL_SITIO).pathname; // "/" en un sitio de usuario (taniasanabria.github.io)
-const VERSION = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+const VERSION = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, ''); // AAAAMMDDhhmm (UTC): cambia en cada publicación
 
 // --- Validación: toda foto referenciada debe existir (evita imágenes rotas) ---
 const faltantes = new Set();
@@ -136,7 +136,7 @@ for (const [clave, valor] of Object.entries(reemplazos)) {
 // Íconos usados por el HTML, por app.js y por los datos (detalles que se arman al vuelo)
 const usados = new Set([...html.matchAll(/#i-([a-z0-9-]+)/g)].map((m) => m[1]));
 for (const m of leer('js/app.js').matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
-for (const m of leer('js/render.js').matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
+for (const f of ['js/render.js', 'js/inscripcion.js']) for (const m of leer(f).matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
 for (const m of JSON.stringify(catalogo).matchAll(/"icono":"([a-z0-9-]+)"/g)) usados.add(m[1]);
 const sinIcono = [...usados].filter((u) => !simbolos[u]);
 if (sinIcono.length) throw new Error('Íconos inexistentes en tools/iconos.svg: ' + sinIcono.join(', '));
@@ -179,10 +179,11 @@ escribir('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
   <url><loc>${URL_SITIO}</loc><lastmod>${hoy}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
 </urlset>
 `);
-escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio, salvo el panel de administración.
+escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio, salvo el panel de administración y el aula de alumnas.
 User-agent: *
 Allow: /
 Disallow: /admin/
+Disallow: /alumnas/
 
 Sitemap: ${URL_SITIO}sitemap.xml
 `);
@@ -210,6 +211,8 @@ export const SUPABASE = ${JSON.stringify({ url: sb.url || '', anonKey: sb.anonKe
 export const URL_SITIO = ${JSON.stringify(URL_SITIO)};
 // Asistente del sitio: backend opcional con IA (null = solo el motor local, sin costo).
 export const CHAT = ${JSON.stringify({ backend: (sitio.chat && sitio.chat.backend) || null })};
+// Cursos: pasarela de pago con tarjeta (null = todavía no; se paga por transferencia o QR).
+export const PAGOS = ${JSON.stringify({ tarjeta: (sitio.pagos && sitio.pagos.tarjeta) || null })};
 `);
 
 console.log(`Listo: index.html (${(html.length / 1024).toFixed(1)} KB), 404.html, sitemap.xml, robots.txt, site.webmanifest. URL: ${URL_SITIO}`);

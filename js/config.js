@@ -8,3 +8,5 @@ export const SUPABASE = {
 export const URL_SITIO = "https://taniasanabria.github.io/";
 // Asistente del sitio: backend opcional con IA (null = solo el motor local, sin costo).
 export const CHAT = {"backend":null};
+// Cursos: pasarela de pago con tarjeta (null = todavía no; se paga por transferencia o QR).
+export const PAGOS = {"tarjeta":null};

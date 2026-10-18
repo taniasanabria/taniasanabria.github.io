@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1b1610">
+  <meta name="description" content="Aula de alumnas de la Academia Tania Sanabria: clases, videos y materiales de tus cursos.">
+  <title>Aula de alumnas · Tania Sanabria Makeup Studio</title>
+  <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+  <link rel="stylesheet" href="alumnas.css">
+  <!-- supabase-js (MIT), la misma copia local que usa el panel -->
+  <script src="../admin/vendor/supabase.js" defer></script>
+  <script type="module" src="alumnas.js"></script>
+</head>
+<body>
+  <header class="cabecera">
+    <a class="marca" href="../"><img src="../img/logo-96.webp" width="40" height="41" alt=""><span><strong>Tania Sanabria</strong><small>Aula de alumnas</small></span></a>
+    <button type="button" class="btn btn-borde btn-chico" id="btn-salir" hidden>Salir</button>
+  </header>
+
+  <main id="contenido">
+    <p class="cargando" id="vista-cargando">Cargando…</p>
+
+    <!-- Ingreso -->
+    <section class="tarjeta acceso" id="vista-ingreso" hidden aria-labelledby="t-ingreso">
+      <h1 id="t-ingreso">Entrá a tus clases</h1>
+      <p class="suave">Usá el email con el que te inscribiste y el <strong>código de acceso</strong> que te envió Tania por WhatsApp cuando confirmó tu pago.</p>
+      <form id="form-ingreso" novalidate>
+        <label for="i-email">Email</label>
+        <input id="i-email" name="email" type="email" inputmode="email" autocomplete="username" required maxlength="160">
+        <label for="i-codigo">Código de acceso</label>
+        <input id="i-codigo" name="codigo" type="text" autocomplete="current-password" autocapitalize="characters" spellcheck="false" placeholder="Ej: ABCD-2345" required maxlength="12" aria-describedby="i-codigo-ayuda">
+        <p class="ayuda" id="i-codigo-ayuda">8 letras y números, con o sin guion.</p>
+        <p class="error" id="ingreso-error" role="alert"></p>
+        <button type="submit" class="btn btn-principal btn-grande" id="i-entrar">Entrar</button>
+      </form>
+      <p class="suave pie">¿No tenés código? <a id="enlace-wa" href="https://wa.me/595976122979" target="_blank" rel="noopener">Escribile a Tania</a> · <a href="../#academia">Ver cursos</a></p>
+    </section>
+
+    <!-- Mis cursos -->
+    <section id="vista-cursos" hidden aria-labelledby="t-cursos">
+      <h1 id="t-cursos">Mis cursos</h1>
+      <p class="suave" id="hola"></p>
+      <div id="lista-cursos" class="lista-cursos"></div>
+    </section>
+
+    <!-- Un curso -->
+    <section id="vista-curso" hidden aria-labelledby="t-curso">
+      <button type="button" class="btn-volver" id="btn-volver" hidden>‹ Mis cursos</button>
+      <h1 id="t-curso"></h1>
+      <div id="lista-clases"></div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

@@ -14,5 +14,13 @@
   "chat": {
     "_ayuda": "Asistente del sitio. Responde solo con los datos del catálogo (js/chat-motor.js). 'backend' es opcional: URL de una Edge Function con IA que recibe {pregunta, historial} y responde {respuesta}. Se usa solo para preguntas que el motor local no entiende. Dejar null para no usar IA (costo cero).",
     "backend": null
+  },
+  "pagos": {
+    "_ayuda": "Pago con tarjeta para cursos (cuando Tania tenga RUC y contrate uPay o Bancard). Dejar 'tarjeta' en null hasta entonces. Para activarlo: {\"url\": \"https://<proyecto>.supabase.co/functions/v1/pago-iniciar\", \"etiqueta\": \"Pagar con tarjeta\"}. La función recibe {inscripcion, referencia} y responde {url} (la página de pago de la pasarela). Ver supabase/PASOS.md → Pago con tarjeta.",
+    "tarjeta": null
+  },
+  "alumnas": {
+    "_ayuda": "Aula de alumnas: página donde las alumnas con acceso ven las clases de sus cursos (entran con email + código).",
+    "ruta": "alumnas/"
   }
 }

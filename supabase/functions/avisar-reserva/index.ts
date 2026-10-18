@@ -72,11 +72,18 @@ Deno.serve(async (req) => {
     if (!marcadas?.length) return json({ enviado: 0, motivo: 'ya avisada' });
 
     const pendientes = (await rest('reservas?estado=eq.pendiente&select=id')).length;
-    const mensaje = {
-      titulo: `Nueva solicitud: ${r.servicio_nombre}`,
-      cuerpo: `${r.cliente_nombre} · ${cuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`,
-      url: PANEL, tag: `reserva-${id}`, pendientes,
-    };
+    const mensaje = r.inscripcion_id
+      // Inscripción a un curso (supabase/cursos.sql): la reserva es su "espejo".
+      ? {
+        titulo: `Nueva inscripción: ${String(r.servicio_nombre).replace(/^Inscripción: /, '')}`,
+        cuerpo: `${r.cliente_nombre}${r.notas ? ' · ' + String(r.notas).split(' · ').slice(0, 2).join(' · ') : ''}\nTocá para ver el pago.`,
+        url: PANEL.replace('#citas', '#cursos'), tag: `reserva-${id}`, pendientes,
+      }
+      : {
+        titulo: `Nueva solicitud: ${r.servicio_nombre}`,
+        cuerpo: `${r.cliente_nombre} · ${cuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`,
+        url: PANEL, tag: `reserva-${id}`, pendientes,
+      };
     const subs = await rest('push_suscripciones?select=endpoint,p256dh,auth');
     let enviado = 0; const errores: string[] = [];
     await Promise.all(subs.map(async (s: { endpoint: string; p256dh: string; auth: string }) => {

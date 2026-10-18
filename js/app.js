@@ -53,15 +53,17 @@ function alCerrarDialogo(dlg) {
   }
 }
 
+function registrarDialogo(dlg) {
+  dlg.addEventListener('close', () => alCerrarDialogo(dlg));
+  // Cerrar tocando fuera del contenido
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg) dlg.close();
+    if (e.target.closest('[data-cerrar]')) dlg.close();
+  });
+}
+
 function prepararDialogos() {
-  for (const dlg of $$('dialog')) {
-    dlg.addEventListener('close', () => alCerrarDialogo(dlg));
-    // Cerrar tocando fuera del contenido
-    dlg.addEventListener('click', (e) => {
-      if (e.target === dlg) dlg.close();
-      if (e.target.closest('[data-cerrar]')) dlg.close();
-    });
-  }
+  for (const dlg of $$('dialog')) registrarDialogo(dlg);
   window.addEventListener('popstate', () => {
     if (esperandoAtras > 0) { esperandoAtras--; return; }
     const arriba = pila[pila.length - 1];
@@ -83,6 +85,7 @@ function servicioPorId(id) {
 function abrirDetalle(id, origen) {
   const s = servicioPorId(id);
   if (!s) return;
+  if (s.categoria === 'academia') cargarInscripcion().catch(() => {}); // precarga: "Inscribirme" abre al instante
   const dlg = $('#dlg-detalle');
   $('#detalle-contenido').innerHTML = detalleServicio(s, manifiesto);
   dlg.classList.toggle('tema-neon', s.categoria === 'eventos');
@@ -343,6 +346,9 @@ function actualizarServicio() {
   const datos = reservas[$('#r-servicio').value];
   const info = $('#r-servicio-info');
   info.textContent = datos && datos.precio ? `Valor de referencia: ${datos.precio}` : '';
+  if (datos && datos.categoria === 'academia') {
+    info.innerHTML = `${esc(info.textContent)} · <button type="button" class="btn-link" data-reservar="${esc(datos.id)}">Inscribite online y pagá por transferencia o QR</button>`;
+  }
   $('#r-tocado-campo').hidden = !(datos && datos.permiteTocado);
   if ($('#r-tocado-campo').hidden) $('#r-tocado').checked = false;
   $('#r-personas-campo').hidden = !(datos && (datos.esEvento || /^maquillaje-(social|alta)/.test(datos.id)));
@@ -358,7 +364,22 @@ function actualizarServicio() {
   generarHoras();
 }
 
-function abrirReserva(idServicio, origen) {
+// Cursos: "Inscribirme" abre la inscripción online (módulo aparte, se carga al primer uso).
+let inscripcionModulo = null;
+const cargarInscripcion = () => (inscripcionModulo ||= import('./inscripcion.js' + VERSION_JS).catch((e) => { inscripcionModulo = null; throw e; }));
+async function abrirCurso(id, origen) {
+  try {
+    const m = await cargarInscripcion();
+    const ok = await m.abrirInscripcion(id, origen, { catalogo: () => catalogo, abrirDialogo, registrarDialogo, enLinea: () => modoSupabase, aviso });
+    if (ok) return;
+  } catch (err) {
+    console.warn('No se pudo abrir la inscripción; se usa el formulario de reserva.', err);
+  }
+  abrirReserva(id, origen, { forzar: true });
+}
+
+function abrirReserva(idServicio, origen, { forzar = false } = {}) {
+  if (!forzar && reservas[idServicio] && reservas[idServicio].categoria === 'academia') { abrirCurso(idServicio, origen); return; }
   const form = $('#form-reserva');
   form.hidden = false;
   $('#reserva-ok').hidden = true;
@@ -646,6 +667,13 @@ const ENLACES_VIEJOS = {
 function atenderHash() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (!hash) return;
+  // Enlace directo a un servicio o curso (botón "Compartir"): abre su ficha.
+  const directo = hash.match(/^(?:servicio|curso)-(.+)$/);
+  if (directo && servicioPorId(directo[1])) {
+    document.getElementById('servicio-' + directo[1])?.scrollIntoView();
+    if (!$('#dlg-detalle').open) abrirDetalle(directo[1]);
+    return;
+  }
   if (hash in ENLACES_VIEJOS) {
     const destino = ENLACES_VIEJOS[hash];
     if (!destino) return;

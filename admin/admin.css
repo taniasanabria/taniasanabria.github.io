@@ -33,7 +33,7 @@ label > input, label > select { margin-top: .3rem; font-weight: 400; }
 .btn-aprobar { background: var(--verde); color: #fff; flex: 1; min-height: 56px; font-size: 1.08rem; }
 .btn-rechazar { background: #fff; color: var(--rojo); border-color: #e3b5ae; flex: 1; min-height: 56px; font-size: 1.08rem; }
 .btn-pagada { background: var(--azul); color: #fff; }
-.btn-wa { background: #1f8f4e; color: #fff; }
+.btn-wa { background: #17753f; color: #fff; }
 .btn-link { background: none; border: 0; color: var(--oro); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; padding: .8rem; display: block; margin: .4rem auto 0; }
 
 /* Carga e ingreso */
@@ -64,7 +64,7 @@ label > input, label > select { margin-top: .3rem; font-weight: 400; }
 @media (min-width: 560px) { .fila-form { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
 
 /* Barra de pestañas inferior */
-.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(5, 1fr); background: #fff; border-top: 1px solid var(--borde); padding-bottom: env(safe-area-inset-bottom); }
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: grid; grid-template-columns: repeat(6, 1fr); background: #fff; border-top: 1px solid var(--borde); padding-bottom: env(safe-area-inset-bottom); }
 .tabs button { position: relative; display: flex; flex-direction: column; align-items: center; gap: .1rem; padding: .5rem .2rem .55rem; min-height: 62px; border: 0; background: none; font: inherit; font-size: .74rem; font-weight: 600; color: var(--suave); cursor: pointer; }
 .tabs button span[aria-hidden] { font-size: 1.35rem; line-height: 1; }
 .tabs button[aria-selected="true"] { color: var(--tinta); }
@@ -167,3 +167,22 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 .avisos-estado .no::before { content: "⚠️"; }
 .avisos-estado .info::before { content: "ℹ️"; }
 #tarjeta-avisos .acciones { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+/* ---- Cursos ---- */
+.tabs button { font-size: .7rem; }
+@media (max-width: 360px) { .tabs button { font-size: .64rem; padding-inline: .1rem; } }
+.aviso-cursos { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; background: var(--azul-claro); color: var(--azul); border-radius: var(--radio); padding: .75rem 1rem; margin-bottom: 1rem; text-decoration: none; font-weight: 600; }
+.aviso-cursos strong { margin-left: auto; }
+.inscripcion .cita-monto { font-weight: 700; }
+.inscripcion code, .codigo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--marfil-2); padding: .05rem .35rem; border-radius: 6px; letter-spacing: .05em; }
+.etiqueta.acceso-si { background: var(--verde-claro); color: var(--verde); }
+.tipo-leccion { border: 0; padding: 0; margin: .8rem 0 .2rem; display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.tipo-leccion legend { font-weight: 700; margin-bottom: .2rem; }
+.leccion { display: grid; grid-template-columns: 1fr auto; gap: .4rem .6rem; align-items: center; padding: .7rem .8rem; background: var(--marfil); border-radius: 12px; }
+.leccion.oculta { opacity: .6; }
+.leccion-titulo { font-weight: 700; }
+.leccion-meta { font-size: .82rem; color: var(--suave); word-break: break-all; }
+.leccion-acciones { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .35rem; }
+.modulo-admin { font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--oro, #7a5b16); margin: .8rem 0 .1rem; }
+.qr-pago { display: grid; gap: .5rem; margin: .4rem 0 1rem; padding: .8rem; border: 1px dashed #cfc5b6; border-radius: 12px; }
+.qr-pago img { width: 140px; height: 140px; object-fit: contain; background: #fff; border-radius: 8px; border: 1px solid #e6dccb; }

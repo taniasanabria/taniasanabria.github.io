@@ -72,6 +72,7 @@
           <p><strong>🔔 Activá los avisos</strong> para enterarte al instante de cada reserva nueva.</p>
           <button type="button" class="btn btn-principal" data-activar-avisos>Activar avisos</button>
         </div>
+        <a class="aviso-cursos" id="aviso-cursos" href="#cursos" data-ir-tab="cursos" hidden>🎓 <span id="aviso-cursos-texto"></span> <strong>Ver en Cursos ›</strong></a>
         <h3 class="subtitulo">Pendientes de confirmar <span class="pildora" id="n-pendientes">0</span></h3>
         <div id="lista-pendientes" class="lista"></div>
 
@@ -140,6 +141,59 @@
         <div id="f-grilla" class="grilla-fotos"></div>
       </section>
 
+      <!-- Cursos -->
+      <section class="tab" id="tab-cursos" aria-labelledby="t-cursos" hidden>
+        <div class="tab-cabecera">
+          <h2>Cursos</h2>
+          <button type="button" class="btn btn-principal" id="btn-nueva-alumna">＋ Agregar alumna</button>
+        </div>
+        <h3 class="subtitulo">Inscripciones</h3>
+        <div class="segmentado" role="group" aria-label="Filtrar inscripciones">
+          <button type="button" data-filtro-ins="pendiente" aria-pressed="true">Por cobrar <span class="pildora" id="n-ins-pendientes">0</span></button>
+          <button type="button" data-filtro-ins="pagada" aria-pressed="false">Pagadas</button>
+          <button type="button" data-filtro-ins="todas" aria-pressed="false">Todas</button>
+        </div>
+        <div id="lista-inscripciones" class="lista"></div>
+
+        <h3 class="subtitulo">Clases de cada curso</h3>
+        <div class="tarjeta">
+          <label for="c-curso">Curso</label>
+          <select id="c-curso"></select>
+          <p class="suave">Las alumnas con acceso ven estas clases en <a id="enlace-aula" href="../alumnas/" target="_blank" rel="noopener">el aula de alumnas ↗</a>. Videos: subilos a YouTube como <strong>“No listado”</strong> o a Google Drive con “Cualquier persona con el enlace”, y pegá el enlace.</p>
+          <div id="lista-lecciones" class="lista-simple"></div>
+        </div>
+        <form id="form-leccion" class="tarjeta" novalidate>
+          <h3 id="leccion-titulo-form">Agregar clase</h3>
+          <input type="hidden" name="id">
+          <label for="lc-titulo">Título</label>
+          <input id="lc-titulo" name="titulo" maxlength="160" required placeholder="Ej: Clase 1 · Preparación de la piel">
+          <label for="lc-modulo">Módulo (opcional, para agrupar)</label>
+          <input id="lc-modulo" name="modulo" maxlength="120" placeholder="Ej: Módulo 1 · Bases">
+          <label for="lc-descripcion">Descripción (opcional)</label>
+          <textarea id="lc-descripcion" name="descripcion" rows="3" maxlength="4000"></textarea>
+          <fieldset class="tipo-leccion">
+            <legend>Contenido</legend>
+            <label class="check"><input type="radio" name="tipo" value="video" checked> Video (YouTube / Drive)</label>
+            <label class="check"><input type="radio" name="tipo" value="archivo"> PDF o foto</label>
+            <label class="check"><input type="radio" name="tipo" value="enlace"> Otro enlace</label>
+          </fieldset>
+          <div id="lc-campo-url">
+            <label for="lc-url">Enlace</label>
+            <input id="lc-url" name="url" type="url" inputmode="url" maxlength="1000" placeholder="https://youtu.be/…  o  https://drive.google.com/file/d/…">
+          </div>
+          <div id="lc-campo-archivo" hidden>
+            <label class="btn btn-borde btn-subir">📎 Elegir PDF o foto<input type="file" id="lc-archivo" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+            <p class="suave" id="lc-archivo-info">Hasta 25 MB. Solo lo ven las alumnas con acceso.</p>
+          </div>
+          <label class="check"><input type="checkbox" name="activo" checked> Visible para las alumnas</label>
+          <p class="error" id="leccion-error" role="alert"></p>
+          <div class="acciones">
+            <button type="button" class="btn btn-borde" id="lc-cancelar" hidden>Cancelar edición</button>
+            <button type="submit" class="btn btn-principal" id="lc-guardar">Guardar clase</button>
+          </div>
+        </form>
+      </section>
+
       <!-- Servicios -->
       <section class="tab" id="tab-servicios" aria-labelledby="t-servicios" hidden>
         <h2>Servicios y precios</h2>
@@ -156,7 +210,15 @@
           <input type="text" id="a-whatsapp" name="whatsapp" inputmode="numeric" pattern="[0-9]{8,15}" required>
           <label for="a-datos-pago">Datos para el pago (banco, alias, QR…)</label>
           <textarea id="a-datos-pago" name="datos_pago" rows="4" placeholder="Ej: Banco … · Cuenta … · Alias … · A nombre de Tania Sanabria"></textarea>
-          <p class="suave">Se agregan al mensaje de WhatsApp cuando aprobás una cita. No se muestran en el sitio.</p>
+          <p class="suave">Se agregan al mensaje de WhatsApp cuando aprobás una cita, y se le muestran a quien se inscribe a un curso (recién después de inscribirse).</p>
+          <div class="qr-pago">
+            <div><strong>QR de pago</strong> <span class="suave" id="qr-estado">(sin cargar)</span></div>
+            <img id="qr-vista" alt="QR de pago cargado" width="140" height="140" hidden>
+            <div class="acciones">
+              <label class="btn btn-borde btn-chico btn-subir">📷 Subir imagen del QR<input type="file" id="qr-archivo" accept="image/png,image/jpeg,image/webp"></label>
+              <button type="button" class="btn btn-borde btn-chico" id="qr-quitar" hidden>Quitar</button>
+            </div>
+          </div>
           <h3>Textos del sitio</h3>
           <label for="a-politica-sena">Política de seña y pagos</label>
           <textarea id="a-politica-sena" name="politica_sena" rows="4"></textarea>
@@ -168,6 +230,8 @@
           <textarea id="a-msg-ok" name="mensaje_aprobacion" rows="6"></textarea>
           <label for="a-msg-no">Al rechazar una cita</label>
           <textarea id="a-msg-no" name="mensaje_rechazo" rows="4"></textarea>
+          <label for="a-msg-acceso">Al dar acceso a un curso <span class="suave">({nombre} {curso} {enlace} {email} {codigo})</span></label>
+          <textarea id="a-msg-acceso" name="mensaje_acceso" rows="6"></textarea>
           <h3>Agenda</h3>
           <div class="fila-form">
             <label>Turnos cada
@@ -203,6 +267,7 @@
       <button type="button" role="tab" id="t-citas" data-tab="citas" aria-selected="true"><span aria-hidden="true">📅</span>Citas<span class="insignia" id="insignia" hidden>0</span></button>
       <button type="button" role="tab" id="t-horarios" data-tab="horarios" aria-selected="false"><span aria-hidden="true">🕒</span>Horarios</button>
       <button type="button" role="tab" id="t-fotos" data-tab="fotos" aria-selected="false"><span aria-hidden="true">📷</span>Fotos</button>
+      <button type="button" role="tab" id="t-cursos" data-tab="cursos" aria-selected="false"><span aria-hidden="true">🎓</span>Cursos<span class="insignia" id="insignia-cursos" hidden>0</span></button>
       <button type="button" role="tab" id="t-servicios" data-tab="servicios" aria-selected="false"><span aria-hidden="true">💄</span>Servicios</button>
       <button type="button" role="tab" id="t-ajustes" data-tab="ajustes" aria-selected="false"><span aria-hidden="true">⚙️</span>Ajustes</button>
     </nav>
@@ -237,6 +302,47 @@
       <div class="acciones">
         <button type="button" class="btn btn-borde" value="cancelar" data-cerrar>Cancelar</button>
         <button type="submit" class="btn btn-principal" value="guardar">Guardar cita</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Registrar pago de un curso ===== -->
+  <dialog id="dlg-pago" aria-labelledby="dlg-pago-titulo">
+    <form id="form-pago" method="dialog" novalidate>
+      <h2 id="dlg-pago-titulo">Registrar pago</h2>
+      <p id="pago-resumen" class="suave"></p>
+      <label for="p-metodo">¿Cómo pagó?</label>
+      <select id="p-metodo" name="metodo"><option value="transferencia">Transferencia</option><option value="qr">QR</option><option value="efectivo">Efectivo</option><option value="otro">Otro</option></select>
+      <label for="p-ref">Nro. de comprobante (opcional)</label>
+      <input id="p-ref" name="ref" maxlength="200" autocomplete="off">
+      <label class="check"><input type="checkbox" name="acceso" checked> Darle acceso a las clases ahora (se abre WhatsApp con su código)</label>
+      <p class="error" id="pago-error" role="alert"></p>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-principal">💰 Confirmar pago</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Agregar alumna a mano ===== -->
+  <dialog id="dlg-alumna" aria-labelledby="dlg-alumna-titulo">
+    <form id="form-alumna" method="dialog" novalidate>
+      <h2 id="dlg-alumna-titulo">Agregar alumna</h2>
+      <p class="suave">Para alumnas que se inscribieron por WhatsApp o en el Studio.</p>
+      <label for="al-curso">Curso</label>
+      <select id="al-curso" name="curso" required></select>
+      <label for="al-nombre">Nombre y apellido</label>
+      <input id="al-nombre" name="nombre" autocomplete="off" required maxlength="120">
+      <label for="al-telefono">Teléfono / WhatsApp</label>
+      <input id="al-telefono" name="telefono" type="tel" inputmode="tel" autocomplete="off" required maxlength="30">
+      <label for="al-email">Email (con este entra al aula)</label>
+      <input id="al-email" name="email" type="email" inputmode="email" autocomplete="off" required maxlength="160">
+      <label class="check"><input type="checkbox" name="pagada" checked> Ya pagó</label>
+      <label class="check"><input type="checkbox" name="acceso" checked> Darle acceso a las clases ahora</label>
+      <p class="error" id="alumna-error" role="alert"></p>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-principal">Guardar</button>
       </div>
     </form>
   </dialog>

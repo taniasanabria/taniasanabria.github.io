@@ -321,6 +321,9 @@ export function responder(textoOriginal, catalogo, estado = {}) {
 
   // 3. Reservar
   if (quiere.reservar && !quiere.cancelar) {
+    if (s && s.categoria === 'academia') {
+      return fin({ texto: `¡Genial! 🥰 Te abro la **inscripción online** de **${s.nombre}**. Completás nombre, teléfono y email, y al instante ves el total a pagar (curso + matrícula) y los datos para transferencia o QR. Después le mandás el comprobante a Tania por WhatsApp y te habilita las clases.`, chips: [...chipsReserva(s), chipServicio(s, 'incluye', 'Ver detalles')] });
+    }
     if (s) {
       const extra = s.categoria === 'eventos' || s.usaTurno === false
         ? 'Elegís la fecha que preferís y Tania te confirma.'

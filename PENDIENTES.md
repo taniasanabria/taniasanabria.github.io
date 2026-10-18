@@ -45,6 +45,18 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
   - Si conviene registrar las preguntas que el asistente no supo responder, para ir mejorándolo. Hoy no se guarda nada.
 - Cuando Tania agregue servicios nuevos, el asistente los encuentra por el nombre. Para sinónimos extra (por ejemplo "boda" → Novias), editar `SINONIMOS` en `js/chat-motor.js`.
 
+## Cursos online (17/10/2026)
+- ✅ Ficha de cada curso (modalidad, inversión con matrícula, total, programa), **Inscribirme online**, pantalla de pago (transferencia / QR + referencia + WhatsApp del comprobante), pestaña **Cursos** en el panel (cobros, acceso, clases con videos/PDF/fotos) y **aula de alumnas** en `/alumnas/`.
+- **Falta (dashboard de Supabase, una vez):** ejecutar `supabase/cursos.sql`, crear el hook *Before User Created*, y recién después activar los registros con "Confirm email" apagado. Ver `supabase/PASOS.md → Cursos online`.
+- **Tania:** cargar en Ajustes los datos de pago y (opcional) la imagen del QR; cargar las clases de cada curso; revisar en Servicios la *Modalidad* y el *Contenido* de cada curso.
+- **Para decidir:**
+  - **Monto de la inscripción:** hoy se pide el total (curso + matrícula; en cursos mensuales, 1.ª cuota + matrícula). ¿Se prefiere solo una seña para reservar el lugar?
+  - **Datos de pago visibles** para quien se inscribe (solo después de inscribirse, nunca en la página). ¿OK?
+  - **Acceso con código por WhatsApp** (gratis, sin correo). El enlace mágico por email necesita un SMTP propio (p. ej. Gmail con contraseña de aplicación).
+  - Videos en YouTube "No listado"/Drive: quien tenga el enlace puede verlo. Para videos más protegidos haría falta un servicio pago (Vimeo, Bunny Stream).
+  - **Pago con tarjeta:** cuando esté el RUC y uPay o Bancard, se enchufa sin tocar el resto (ver PASOS.md).
+  - Cupos por curso y fechas de inicio: hoy no hay límite de inscriptas.
+
 ## Certificados
 7. Las dos imágenes de "certificados" del sitio viejo eran **la misma plantilla vacía, repetida**. Se ocultaron. Hacen falta fotos o escaneos de los certificados reales (`data/catalogo.json` → `certificados`).
 
