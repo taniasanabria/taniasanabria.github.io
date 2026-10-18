@@ -8,6 +8,7 @@
  *   chips: [{ etiqueta, tipo: 'preguntar'|'reservar'|'whatsapp'|'enlace', valor }]
  *   estado: objeto que el motor actualiza entre mensajes ({ ultimoServicio, fallos }).
  */
+import { opcionesCurso, formatoGs } from './render.js';
 
 // ------------------------------------------------------------------ texto
 export const normalizar = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -159,8 +160,20 @@ function detalle(s, regex) {
   const d = (s.detalles || []).concat(s.normas || []).find((x) => x.etiqueta && regex.test(normalizar(x.etiqueta)));
   return d ? sinPunto(d.texto) : '';
 }
-function duracionDe(s) { return sinPunto(s.duracion || detalle(s, /duracion|carga horaria|tiempo/) || (s.categoria === 'academia' ? s.subtitulo : '')); }
+function duracionDe(s) { return sinPunto(s.duracion || detalle(s, /duracion|carga horaria|tiempo/) || (s.categoria === 'academia' ? s.modalidad || s.subtitulo : '')); }
+// Cursos: al inscribirse se paga SOLO la matrícula; el curso se abona aparte, durante el curso.
+function lineaCurso(o) {
+  return `${o.matricula ? `matrícula **${formatoGs(o.matricula)}** para inscribirte` : '**sin matrícula** para inscribirte'}; el curso (${o.precioVisible || 'a confirmar'}) se abona aparte, durante el curso`;
+}
+function precioCurso(s) {
+  const ops = opcionesCurso(s);
+  if (ops.length > 1) return ops.map((o) => `**${o.etiqueta}:** ${lineaCurso(o)}.`).join('\n');
+  const o = ops[0];
+  return (o.matricula ? `Para inscribirte pagás solo la matrícula: **${formatoGs(o.matricula)}**.` : 'Este curso **no tiene matrícula**: te inscribís sin pagar y Tania te confirma el lugar.')
+    + `\nEl curso (**${o.precioVisible || 'a confirmar'}**) se abona aparte, durante el curso, directamente a Tania.`;
+}
 function precioDe(s) {
+  if (s.categoria === 'academia') return precioCurso(s);
   if (s.variantes && s.variantes.length) {
     return s.variantes.map((v) => `**${v.etiqueta}:** ${v.precioReserva || v.precio}${v.sena ? ` · seña ${v.sena}` : ''}`).join('\n');
   }
@@ -170,6 +183,7 @@ function precioDe(s) {
   return `**${s.precio}**${pr ? ` (${pr})` : ''}`;
 }
 function senaDe(s) {
+  if (s.categoria === 'academia') return '';
   if (s.variantes && s.variantes.length) return '';
   return s.sena ? `Seña para reservar: **${s.sena}** (se descuenta del total).` : 'La seña de este servicio te la confirma Tania.';
 }
@@ -181,7 +195,7 @@ function chipsReserva(s) {
 function fichaServicio(s, { foco } = {}) {
   const partes = [`**${s.nombre}**`];
   if (s.resumen && foco !== 'precio') partes.push(sinPunto(s.resumen) + '.');
-  partes.push((s.variantes ? 'Opciones:\n' : 'Precio: ') + precioDe(s));
+  partes.push(s.categoria === 'academia' ? precioCurso(s) : (s.variantes ? 'Opciones:\n' : 'Precio: ') + precioDe(s));
   const sena = senaDe(s); if (sena) partes.push(sena);
   const dur = duracionDe(s); if (dur) partes.push(`Duración: ${dur}.`);
   return partes.join('\n');
@@ -215,7 +229,10 @@ function respuestaCategoria(catalogo, cat, modo) {
   if (!servs.length) return null;
   const encabezado = modo === 'reservar' ? `¡Dale! ¿Cuál de ${cat.esCurso ? 'estos cursos' : 'estos servicios'} te interesa? Te abro el formulario ya listo.` : `**${cat.titulo}**:`;
   return {
-    texto: encabezado + '\n' + lista(servs.map((s) => `${s.nombre}: ${s.variantes ? s.variantes.map((v) => v.precio).join(' / ') : (s.precio || 'a confirmar')}`)),
+    texto: encabezado + '\n' + lista(servs.map((s) => (s.categoria === 'academia'
+      ? `${s.nombre}: ${opcionesCurso(s).map((o) => `${o.etiqueta ? o.etiqueta + ' ' : ''}${o.matricula ? 'matrícula ' + formatoGs(o.matricula) : 'sin matrícula'} (curso ${o.precioVisible || 'a confirmar'}, aparte)`).join(' / ')}`
+      : `${s.nombre}: ${s.variantes ? s.variantes.map((v) => v.precio).join(' / ') : (s.precio || 'a confirmar')}`)))
+      + (cat.id === 'academia' ? '\nAl inscribirte pagás solo la matrícula; el curso se abona aparte, durante el curso.' : ''),
     chips: servs.slice(0, 8).map((s) => (modo === 'reservar' && !s.variantes
       ? chip(s.nombre, 'reservar', s.id)
       : chipServicio(s, modo === 'reservar' ? 'reservar' : 'info'))),
@@ -322,7 +339,7 @@ export function responder(textoOriginal, catalogo, estado = {}) {
   // 3. Reservar
   if (quiere.reservar && !quiere.cancelar) {
     if (s && s.categoria === 'academia') {
-      return fin({ texto: `¡Genial! 🥰 Te abro la **inscripción online** de **${s.nombre}**. Completás nombre, teléfono y email, y al instante ves el total a pagar (curso + matrícula) y los datos para transferencia o QR. Después le mandás el comprobante a Tania por WhatsApp y te habilita las clases.`, chips: [...chipsReserva(s), chipServicio(s, 'incluye', 'Ver detalles')] });
+      return fin({ texto: `¡Genial! 🥰 Te abro la **inscripción online** de **${s.nombre}**. Completás nombre, teléfono y email y al instante ves ${opcionesCurso(s).some((o) => o.matricula) ? 'la **matrícula** a pagar y los datos para transferencia o QR. Le mandás el comprobante a Tania por WhatsApp y te habilita las clases' : 'que no hay matrícula: Tania te confirma el lugar por WhatsApp'}. El curso se abona aparte, durante el curso.${quiere.precio ? '\n' + precioCurso(s) : ''}`, chips: [...chipsReserva(s), chipServicio(s, 'incluye', 'Ver detalles')] });
     }
     if (s) {
       const extra = s.categoria === 'eventos' || s.usaTurno === false
@@ -347,6 +364,10 @@ export function responder(textoOriginal, catalogo, estado = {}) {
 
   // 6. Seña / pagos
   if (quiere.sena || quiere.pago) {
+    if (s && s.categoria === 'academia') return fin({ texto: `**${s.nombre}**\n${precioCurso(s)}${opcionesCurso(s).some((o) => o.matricula) ? '\nLa matrícula se paga por transferencia o QR: los datos te aparecen al confirmar la inscripción.' : ''}`, chips: chipsReserva(s) });
+    if (!s && quiere.cursos) {
+      return fin({ texto: 'En los cursos, al inscribirte pagás **solo la matrícula** por transferencia o QR (los datos te aparecen al confirmar la inscripción). El curso se abona aparte, durante el curso, directamente a Tania.', chips: [chip('Ver matrícula de cada curso', 'preguntar', 'matrícula de los cursos'), chip('🎓 Ver cursos', 'preguntar', '#cat:academia:info')] });
+    }
     if (s && quiere.sena && !quiere.pago) return fin({ texto: `${s.nombre}: ${senaDe(s) || 'opciones con seña:\n' + precioDe(s)}`, chips: chipsReserva(s) });
     const pago = neg.pago || {};
     const otro = tieneAlguna(consulta, ['tarjeta*', 'efectivo', 'debito', 'credito', 'cuotas', 'billetera', 'giro']);
@@ -361,8 +382,8 @@ export function responder(textoOriginal, catalogo, estado = {}) {
   if (quiere.cursos && !s) {
     const cursos = serviciosDeCategoria(catalogo, 'academia');
     if (quiere.matricula) {
-      const lineas = cursos.flatMap((c) => (c.variantes ? c.variantes.map((v) => `${v.nombreReserva || v.etiqueta}: ${v.precioReserva || v.precio}`) : [`${c.nombre}: ${c.precioReserva || c.precio}`]));
-      return fin({ texto: 'Esto es lo que figura para cada curso (con o sin matrícula):\n' + lista(lineas), chips: cursos.map((c) => chipServicio(c, 'info')) });
+      const lineas = cursos.flatMap((c) => opcionesCurso(c).map((o) => `${o.etiqueta ? o.nombre : c.nombre}: ${o.matricula ? 'matrícula ' + formatoGs(o.matricula) : 'sin matrícula'} (el curso, ${o.precioVisible || 'a confirmar'}, se abona aparte)`));
+      return fin({ texto: 'Al inscribirte pagás **solo la matrícula**; el curso se abona aparte, durante el curso:\n' + lista(lineas), chips: cursos.map((c) => chipServicio(c, 'info')) });
     }
     if (residuo.length) {
       const hallados = buscarEnTextos(residuo, cursos);

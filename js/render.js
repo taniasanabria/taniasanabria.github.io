@@ -56,26 +56,33 @@ export function fotosDisponibles(lista, manifiesto) {
 function filaMeta(s) {
   const partes = [];
   if (s.duracion) partes.push(`<span>${icono('clock')}${esc(s.duracion)}</span>`);
-  if (s.sena) partes.push(`<span>${icono('hand-holding-dollar')}Seña ${esc(s.sena)}</span>`);
+  if (s.categoria === 'academia') partes.push(`<span>${icono('hand-holding-dollar')}${esc(textoMatricula(s))}</span>`);
+  else if (s.sena) partes.push(`<span>${icono('hand-holding-dollar')}Seña ${esc(s.sena)}</span>`);
   return partes.length ? `<p class="tarjeta-meta">${partes.join('')}</p>` : '';
 }
 
 /** Tarjeta de servicio o curso para la grilla de una categoría. */
 export function tarjetaServicio(s, manifiesto) {
   const fotos = fotosDisponibles(s.fotos, manifiesto);
-  const media = fotos.length
-    ? imagen(fotos[0], manifiesto, { alt: `${s.nombre}: trabajo de Tania Sanabria`, sizes: '(min-width: 1100px) 340px, (min-width: 700px) 45vw, 92vw', anchoMax: 960 })
-    : marcador();
-  const contador = fotos.length > 1 ? `<span class="tarjeta-contador">${icono('images')}${fotos.length} fotos</span>` : '';
+  const curso = s.categoria === 'academia';
+  const tamano = '(min-width: 1100px) 340px, (min-width: 700px) 45vw, 92vw';
+  const flyer = curso ? flyerCurso(s, manifiesto, { sizes: tamano, anchoMax: 960 }) : '';
+  const media = flyer
+    ? `<span class="flyer-fondo" aria-hidden="true">${imagen(s.flyer, manifiesto, { alt: '', sizes: '160px', anchoMax: 480 })}</span>${flyer}`
+    : fotos.length
+      ? imagen(fotos[0], manifiesto, { alt: `${s.nombre}: trabajo de Tania Sanabria`, sizes: tamano, anchoMax: 960 })
+      : marcador();
+  const contador = !flyer && fotos.length > 1 ? `<span class="tarjeta-contador">${icono('images')}${fotos.length} fotos</span>` : '';
   const precio = s.variantes ? s.variantes.map((v) => `${esc(v.precio)}`).join(' · ') : esc(s.precio);
+  const nota = curso ? ' <small>· el curso</small>' : s.precioNota ? ` <small>${esc(s.precioNota)}</small>` : '';
   return `
 <article class="tarjeta" id="servicio-${esc(s.id)}">
-  <button type="button" class="tarjeta-media" data-detalle="${esc(s.id)}"><span class="solo-lector">Ver detalles de ${esc(s.nombre)}</span>${media}${contador}</button>
+  <button type="button" class="tarjeta-media${flyer ? ' con-flyer' : ''}" data-detalle="${esc(s.id)}"><span class="solo-lector">Ver detalles de ${esc(s.nombre)}</span>${media}${contador}</button>
   <div class="tarjeta-cuerpo">
     <h3 class="tarjeta-titulo">${esc(s.nombre)}</h3>
     <p class="tarjeta-resumen">${esc(s.resumen)}</p>
     ${filaMeta(s)}
-    <p class="tarjeta-precio">${precio}${s.precioNota ? ` <small>${esc(s.precioNota)}</small>` : ''}</p>
+    <p class="tarjeta-precio">${precio}${nota}</p>
     <div class="tarjeta-acciones">
       <button type="button" class="btn btn-primario" data-reservar="${esc(s.variantes ? s.variantes[0].id : s.id)}">${esc(s.cta || 'Reservar')}</button>
       <button type="button" class="btn btn-texto" data-detalle="${esc(s.id)}">Ver detalles ${icono('chevron-right')}</button>
@@ -112,42 +119,66 @@ const aNumero = (m) => (m ? Number(m[1].replace(/\./g, '')) : null);
 export const formatoGs = (n) => 'Gs. ' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 /**
- * Monto de inscripción a partir del texto de precio del curso (misma regla que public._monto_curso en
- * supabase/cursos.sql). "Gs. 450.000 mensual + Matrícula Gs. 100.000" → { curso: 450000, matricula: 100000, total: 550000, mensual: true }
+ * Matrícula de un curso o de una opción (Gs.; null = sin matrícula). Misma regla que
+ * public._matricula_de en supabase/cursos.sql: número en `matricula`, o el número del texto `sena`.
+ * Al inscribirse se paga SOLO la matrícula; el curso se abona aparte, durante el curso.
  */
-export function montoCurso(texto) {
-  const t = String(texto || '');
-  const curso = aNumero(t.match(new RegExp(NUM)));
-  const matricula = aNumero(t.match(new RegExp('matr[ií]cula[^0-9(]*gs\\.?\\s*' + NUM, 'i')));
-  let total = aNumero(t.match(new RegExp('total[^0-9]*gs\\.?\\s*' + NUM, 'i')));
-  if (total === null && curso !== null) total = curso + (matricula || 0);
-  return { curso, matricula, total, mensual: /(mensual|\/\s*mes|por mes)/i.test(t) };
+export function matriculaDe(o) {
+  if (!o) return null;
+  if (typeof o.matricula === 'number') return o.matricula > 0 ? o.matricula : null;
+  const n = aNumero(String(o.sena || '').match(new RegExp(NUM)));
+  return n > 0 ? n : null;
 }
 
 /** Opciones de inscripción de un curso: una por variante, o el curso mismo. */
 export function opcionesCurso(s) {
-  return s.variantes
-    ? s.variantes.map((v) => ({ id: v.id, etiqueta: v.etiqueta, nombre: v.nombreReserva || `${s.nombre}: ${v.etiqueta}`, precioTexto: v.precioReserva || v.precio, precioVisible: v.precio }))
-    : [{ id: s.id, etiqueta: '', nombre: s.nombreReserva || s.nombre, precioTexto: s.precioReserva || s.precio, precioVisible: s.precio }];
+  const op = (o, datos) => {
+    const precio = String(o.precio || '').trim();
+    return { ...datos, precioVisible: precio, matricula: matriculaDe(o), cursoGs: aNumero(precio.match(new RegExp(NUM))), mensual: /(mensual|\/\s*mes|por mes)/i.test(precio) };
+  };
+  return s.variantes && s.variantes.length
+    ? s.variantes.map((v) => op(v, { id: v.id, etiqueta: v.etiqueta, nombre: v.nombreReserva || `${s.nombre}: ${v.etiqueta}` }))
+    : [op(s, { id: s.id, etiqueta: '', nombre: s.nombreReserva || s.nombre })];
 }
 
-/** Ficha del curso: modalidad e inversión (precio, matrícula y lo que se paga al inscribirse). */
+/** "El curso (Gs. 350.000) se abona aparte…" para una opción de opcionesCurso(). */
+export function cursoAparte(o) {
+  return o.precioVisible ? `El curso (${o.precioVisible}) se abona aparte, durante el curso, directamente a Tania.` : 'El valor del curso se abona aparte, durante el curso, directamente a Tania.';
+}
+
+/** Matrícula para mostrar en la tarjeta: "Matrícula Gs. 100.000", "Sin matrícula" o la menor de las opciones. */
+export function textoMatricula(s) {
+  const ms = opcionesCurso(s).map((o) => o.matricula);
+  const con = ms.filter(Boolean);
+  if (!con.length) return 'Sin matrícula';
+  const min = Math.min(...con);
+  return con.length === ms.length && con.every((m) => m === min) ? `Matrícula ${formatoGs(min)}` : `Matrícula desde ${formatoGs(min)}`;
+}
+
+/** Ficha del curso: modalidad, lo que se paga al inscribirse (solo matrícula) y el valor del curso (aparte). */
 export function fichaCurso(s) {
   const filas = [];
   const modalidad = s.modalidad || s.subtitulo;
   if (modalidad) filas.push(['Modalidad', esc(modalidad)]);
-  for (const o of opcionesCurso(s)) {
-    const m = montoCurso(o.precioTexto);
-    const partes = [`<strong>${esc(o.precioVisible)}</strong>`];
-    if (m.matricula) partes.push(`+ matrícula ${formatoGs(m.matricula)}`);
-    else if (/sin matr[ií]cula/i.test(o.precioTexto)) partes.push('· sin matrícula');
-    else if (/matr[ií]cula/i.test(o.precioTexto)) partes.push('· matrícula incluida');
-    const total = m.total && (m.total !== m.curso || o.etiqueta)
-      ? `<br><small>${m.mensual ? 'Para inscribirte (1.ª cuota + matrícula)' : 'Total a pagar'}: <strong>${formatoGs(m.total)}</strong></small>` : '';
-    filas.push([o.etiqueta ? esc(o.etiqueta) : 'Inversión', partes.join(' ') + total]);
+  const ops = opcionesCurso(s);
+  for (const o of ops) {
+    const inscripcion = o.matricula
+      ? `Matrícula <strong>${formatoGs(o.matricula)}</strong> para inscribirte`
+      : '<strong>Sin matrícula</strong>: te inscribís sin pagar y Tania te confirma el lugar';
+    const curso = o.precioVisible ? `<br><small>Curso: <strong>${esc(o.precioVisible)}</strong> · se abona aparte, durante el curso</small>` : '';
+    filas.push([o.etiqueta ? esc(o.etiqueta) : 'Inscripción', inscripcion + curso]);
   }
-  filas.push(['Pago', 'Transferencia o QR. Tu lugar se confirma al recibir el comprobante.']);
+  filas.push(['Pago', ops.some((o) => o.matricula)
+    ? 'La matrícula se paga por transferencia o QR: los datos aparecen al confirmar tu inscripción. El curso se abona aparte, durante el curso, directamente a Tania.'
+    : 'No pagás nada para inscribirte. El curso se abona aparte, directamente a Tania.']);
   return `<dl class="ficha-curso">${filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+}
+
+/** Flyer del curso (imagen completa, sin recortar). `clave` es la entrada del manifiesto. */
+export function flyerCurso(s, manifiesto, { sizes = '(min-width: 700px) 560px, 92vw', anchoMax } = {}) {
+  const info = s.flyer && manifiesto && manifiesto[s.flyer];
+  if (!info) return '';
+  return imagen(s.flyer, manifiesto, { alt: `Flyer: ${s.nombre}`, sizes, clase: 'flyer', anchoMax });
 }
 
 /** Contenido del cuadro de detalle de un servicio. */
@@ -173,14 +204,17 @@ export function detalleServicio(s, manifiesto) {
     ? s.variantes
         .map((v) => `<div class="pie-opcion"><div><span class="pie-etiqueta">${esc(v.etiqueta)}</span><span class="pie-precio">${esc(v.precio)}</span></div><button type="button" class="btn btn-primario" data-reservar="${esc(v.id)}">${esc(s.cta || 'Reservar')}</button></div>`)
         .join('')
-    : `<div class="pie-opcion"><div><span class="pie-etiqueta">${s.sena ? `Seña ${esc(s.sena)}` : 'Valor de referencia'}</span><span class="pie-precio">${esc(s.precio)}${s.precioNota ? ` <small>${esc(s.precioNota)}</small>` : ''}</span></div><button type="button" class="btn btn-primario" data-reservar="${esc(s.id)}">${esc(s.cta || 'Reservar')}</button></div>`;
+    : `<div class="pie-opcion"><div><span class="pie-etiqueta">${s.categoria === 'academia' ? esc(textoMatricula(s)) : s.sena ? `Seña ${esc(s.sena)}` : 'Valor de referencia'}</span><span class="pie-precio">${esc(s.precio)}${s.categoria === 'academia' ? ' <small>el curso, aparte</small>' : s.precioNota ? ` <small>${esc(s.precioNota)}</small>` : ''}</span></div><button type="button" class="btn btn-primario" data-reservar="${esc(s.id)}">${esc(s.cta || 'Reservar')}</button></div>`;
 
   const curso = s.categoria === 'academia';
+  const flyer = curso ? flyerCurso(s, manifiesto) : '';
+  const flyerHtml = flyer ? `<figure class="flyer-detalle"><a href="${esc(rutaFoto(s.flyer, manifiesto[s.flyer].anchos[manifiesto[s.flyer].anchos.length - 1], manifiesto[s.flyer]))}" target="_blank" rel="noopener" aria-label="Ver el flyer de ${esc(s.nombre)} en grande">${flyer}</a></figure>` : '';
   return `
 <h2 class="dialogo-titulo" id="detalle-titulo">${esc(s.tituloDetalle || s.nombre)}</h2>
 ${s.subtitulo && !curso ? `<p class="dialogo-subtitulo">${esc(s.subtitulo)}</p>` : `<p class="dialogo-subtitulo">${esc(s.resumen)}</p>`}
+${flyerHtml}
 ${curso ? fichaCurso(s) : ''}
-${galeria}
+${flyer && !fotos.length ? '' : galeria}
 ${complemento}
 ${detalles}
 ${secciones}

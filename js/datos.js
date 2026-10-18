@@ -83,6 +83,13 @@ export async function cargarDesdeSupabase(base, manifiestoBase) {
     manifiesto[clave] = { anchos: f.anchos, w: f.ancho, h: f.alto, url: urlFotoStorage(f.ruta), ext: f.formato || 'webp', alt: f.alt };
     return clave;
   };
+  // Flyer de un curso (servicios.extra.flyer): imágenes optimizadas en el bucket público "fotos".
+  const claveFlyer = (id, f) => {
+    if (!f || !/^flyer-[0-9a-f-]{36}$/.test(f.ruta || '') || !Array.isArray(f.anchos) || !f.anchos.length) return undefined;
+    const clave = 'flyer:' + id;
+    manifiesto[clave] = { anchos: f.anchos, w: f.ancho || 1000, h: f.alto || 1250, url: urlFotoStorage(f.ruta), ext: f.formato === 'jpg' ? 'jpg' : 'webp', alt: '' };
+    return clave;
+  };
   const fotosDe = (campo, id) => fotos.filter((f) => f[campo] === id).map(claveFoto).filter(Boolean);
 
   const lista = servicios.map((r) => {
@@ -100,6 +107,7 @@ export async function cargarDesdeSupabase(base, manifiestoBase) {
       duracionMin: r.duracion_min,
       usaTurno: r.usa_turno,
       fotos: fotosDe('servicio_id', r.id),
+      ...(r.categoria === 'academia' ? { matricula: r.sena_gs || 0, flyer: claveFlyer(r.id, extra.flyer) } : {}),
     };
   });
   const galerias = albumes.map((a) => ({ id: a.id, titulo: a.titulo, fotos: fotosDe('album_id', a.id) }));

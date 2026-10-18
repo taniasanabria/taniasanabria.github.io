@@ -149,11 +149,18 @@
         </div>
         <h3 class="subtitulo">Inscripciones</h3>
         <div class="segmentado" role="group" aria-label="Filtrar inscripciones">
-          <button type="button" data-filtro-ins="pendiente" aria-pressed="true">Por cobrar <span class="pildora" id="n-ins-pendientes">0</span></button>
-          <button type="button" data-filtro-ins="pagada" aria-pressed="false">Pagadas</button>
+          <button type="button" data-filtro-ins="pendiente" aria-pressed="true">Pendientes <span class="pildora" id="n-ins-pendientes">0</span></button>
+          <button type="button" data-filtro-ins="pagada" aria-pressed="false">Confirmadas</button>
           <button type="button" data-filtro-ins="todas" aria-pressed="false">Todas</button>
         </div>
         <div id="lista-inscripciones" class="lista"></div>
+        <p class="suave">Al inscribirse se paga <strong>solo la matrícula</strong>. El curso se abona aparte, durante el curso.</p>
+
+        <div class="tab-cabecera">
+          <h3 class="subtitulo">Mis cursos</h3>
+          <button type="button" class="btn btn-borde" id="btn-nuevo-curso">＋ Nuevo curso</button>
+        </div>
+        <div id="lista-cursos-admin" class="lista-simple"></div>
 
         <h3 class="subtitulo">Clases de cada curso</h3>
         <div class="tarjeta">
@@ -197,7 +204,7 @@
       <!-- Servicios -->
       <section class="tab" id="tab-servicios" aria-labelledby="t-servicios" hidden>
         <h2>Servicios y precios</h2>
-        <p class="suave">Tocá un servicio para cambiar el precio, la seña o la descripción. Los cambios se ven en el sitio al instante.</p>
+        <p class="suave">Tocá un servicio para cambiar el precio, la seña o la descripción. Los cambios se ven en el sitio al instante. Los <strong>cursos</strong> se crean y editan en la pestaña <a href="#cursos" data-ir-cursos>🎓 Cursos</a>.</p>
         <div id="lista-servicios"></div>
       </section>
 
@@ -309,9 +316,9 @@
   <!-- ===== Registrar pago de un curso ===== -->
   <dialog id="dlg-pago" aria-labelledby="dlg-pago-titulo">
     <form id="form-pago" method="dialog" novalidate>
-      <h2 id="dlg-pago-titulo">Registrar pago</h2>
+      <h2 id="dlg-pago-titulo">Matrícula pagada</h2>
       <p id="pago-resumen" class="suave"></p>
-      <label for="p-metodo">¿Cómo pagó?</label>
+      <label for="p-metodo">¿Cómo pagó la matrícula?</label>
       <select id="p-metodo" name="metodo"><option value="transferencia">Transferencia</option><option value="qr">QR</option><option value="efectivo">Efectivo</option><option value="otro">Otro</option></select>
       <label for="p-ref">Nro. de comprobante (opcional)</label>
       <input id="p-ref" name="ref" maxlength="200" autocomplete="off">
@@ -319,7 +326,7 @@
       <p class="error" id="pago-error" role="alert"></p>
       <div class="acciones">
         <button type="button" class="btn btn-borde" data-cerrar>Cancelar</button>
-        <button type="submit" class="btn btn-principal">💰 Confirmar pago</button>
+        <button type="submit" class="btn btn-principal">💰 Confirmar matrícula</button>
       </div>
     </form>
   </dialog>
@@ -337,12 +344,71 @@
       <input id="al-telefono" name="telefono" type="tel" inputmode="tel" autocomplete="off" required maxlength="30">
       <label for="al-email">Email (con este entra al aula)</label>
       <input id="al-email" name="email" type="email" inputmode="email" autocomplete="off" required maxlength="160">
-      <label class="check"><input type="checkbox" name="pagada" checked> Ya pagó</label>
+      <label class="check"><input type="checkbox" name="pagada" checked> Ya pagó la matrícula (o el curso no tiene)</label>
       <label class="check"><input type="checkbox" name="acceso" checked> Darle acceso a las clases ahora</label>
       <p class="error" id="alumna-error" role="alert"></p>
       <div class="acciones">
         <button type="button" class="btn btn-borde" data-cerrar>Cancelar</button>
         <button type="submit" class="btn btn-principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Crear / editar curso ===== -->
+  <dialog id="dlg-curso" class="dlg-ancho" aria-labelledby="dlg-curso-titulo">
+    <form id="form-curso" method="dialog" novalidate>
+      <h2 id="dlg-curso-titulo">Nuevo curso</h2>
+      <label for="cu-nombre">Nombre del curso</label>
+      <input id="cu-nombre" name="nombre" required maxlength="120" placeholder="Ej: Maquillaje Social Express">
+      <label for="cu-descripcion">Descripción corta (se ve en la tarjeta)</label>
+      <textarea id="cu-descripcion" name="descripcion" rows="2" maxlength="400" placeholder="Ej: Aprendé a maquillarte para eventos en una sola jornada."></textarea>
+
+      <fieldset class="flyer-campo">
+        <legend>Flyer</legend>
+        <div class="flyer-vista" id="cu-flyer-vista" hidden><img id="cu-flyer-img" alt="Vista previa del flyer"></div>
+        <p class="suave" id="cu-flyer-info">Se muestra completo en la tarjeta y en la página del curso. Ideal vertical (4:5) o cuadrado; se optimiza solo.</p>
+        <div class="acciones izq">
+          <label class="btn btn-borde btn-subir">📷 <span id="cu-flyer-texto">Subir flyer</span><input type="file" id="cu-flyer" accept="image/jpeg,image/png,image/webp"></label>
+          <button type="button" class="btn btn-borde" id="cu-flyer-quitar" hidden>Quitar flyer</button>
+        </div>
+      </fieldset>
+
+      <div class="dos-col">
+        <div>
+          <label for="cu-matricula">Matrícula en Gs. (se paga al inscribirse)</label>
+          <input id="cu-matricula" name="matricula" inputmode="numeric" placeholder="Ej: 100000 · vacío = sin matrícula">
+        </div>
+        <div>
+          <label for="cu-precio">Precio del curso (se abona aparte)</label>
+          <input id="cu-precio" name="precio" maxlength="80" placeholder="Ej: Gs. 450.000 / mes">
+        </div>
+      </div>
+      <label for="cu-modalidad">Modalidad</label>
+      <input id="cu-modalidad" name="modalidad" maxlength="200" placeholder="Ej: Presencial, 1 clase semanal + material online">
+      <label for="cu-duracion">Duración (opcional)</label>
+      <input id="cu-duracion" name="duracion" maxlength="120" placeholder="Ej: 3 meses">
+
+      <fieldset class="opciones-curso">
+        <legend>Opciones (opcional)</legend>
+        <p class="suave">Si el curso tiene modalidades con distinto precio (ej. Regular / Masterclass), cargalas acá; la alumna elige una al inscribirse.</p>
+        <div id="cu-opciones"></div>
+        <button type="button" class="btn btn-borde btn-chico" id="cu-agregar-opcion">＋ Agregar opción</button>
+      </fieldset>
+
+      <label for="cu-contenido-titulo">Título del contenido</label>
+      <input id="cu-contenido-titulo" name="contenido_titulo" maxlength="80" placeholder="Contenido del curso">
+      <label for="cu-contenido">Contenido (un tema por línea; una línea que empieza con # es un subtítulo)</label>
+      <textarea id="cu-contenido" name="contenido" rows="6" maxlength="6000" placeholder="# Módulo 1&#10;Preparación de la piel&#10;Corrección y base"></textarea>
+      <label for="cu-destacados">Destacados (opcional, uno por línea)</label>
+      <textarea id="cu-destacados" name="destacados" rows="3" maxlength="2000" placeholder="Ej: Todos los productos incluidos"></textarea>
+      <label for="cu-nombre-ins">Nombre en la inscripción (opcional)</label>
+      <input id="cu-nombre-ins" name="nombre_inscripcion" maxlength="160" placeholder="Ej: Curso Maquillaje Social Express">
+      <label class="check"><input type="checkbox" name="activo" checked> Mostrar en el sitio</label>
+      <p class="error" id="curso-error" role="alert"></p>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde btn-borrar" id="cu-borrar" hidden>🗑 Eliminar</button>
+        <button type="button" class="btn btn-borde" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-principal" id="cu-guardar">Guardar curso</button>
       </div>
     </form>
   </dialog>

@@ -5,7 +5,7 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 ## Resuelto (respuestas de Tania, 17/10/2026)
 - ✅ **Dirección:** "Las Residentas 460 esq. 8 de Diciembre". Aplicada en el pie, en la sección de contacto y en el JSON-LD.
 - ✅ **Domingos y fuera de horario:** solo con turno previo y con costo adicional. El formulario los permite y muestra un aviso claro, la nota queda en el mensaje de WhatsApp y la regla figura en las políticas y en el pie.
-- ✅ **Fotografía Beauty:** Gs. 350.000 + Matrícula Gs. 100.000 (total Gs. 450.000). Ahora coinciden la tarjeta, el detalle, el formulario y el mensaje.
+- ✅ **Fotografía Beauty:** Matrícula Gs. 100.000 para inscribirse; el curso (Gs. 350.000) se abona aparte, durante el curso. Coinciden la tarjeta, el detalle, el formulario y el mensaje.
 - ✅ **Pagos:** desde la web se puede elegir abonar el total o solo la seña. El saldo se paga por transferencia o QR directamente a Tania. Todavía no hay cobro en línea; los campos quedaron listos en `negocio.pago` (`opciones: ["total","seña"]`, `enLinea: false`, `proveedor: null`).
 
 ## Datos del negocio (pendientes)
@@ -46,13 +46,18 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - Cuando Tania agregue servicios nuevos, el asistente los encuentra por el nombre. Para sinónimos extra (por ejemplo "boda" → Novias), editar `SINONIMOS` en `js/chat-motor.js`.
 
 ## Cursos online (17/10/2026)
-- ✅ Ficha de cada curso (modalidad, inversión con matrícula, total, programa), **Inscribirme online**, pantalla de pago (transferencia / QR + referencia + WhatsApp del comprobante), pestaña **Cursos** en el panel (cobros, acceso, clases con videos/PDF/fotos) y **aula de alumnas** en `/alumnas/`.
-- **Falta (dashboard de Supabase, una vez):** ejecutar `supabase/cursos.sql`, crear el hook *Before User Created*, y recién después activar los registros con "Confirm email" apagado. Ver `supabase/PASOS.md → Cursos online`.
-- **Tania:** cargar en Ajustes los datos de pago y (opcional) la imagen del QR; cargar las clases de cada curso; revisar en Servicios la *Modalidad* y el *Contenido* de cada curso.
+- ✅ Ficha de cada curso (modalidad, matrícula para inscribirse, precio del curso aparte, programa, flyer), **Inscribirme online**, pantalla de pago (transferencia / QR + referencia + WhatsApp del comprobante), pestaña **Cursos** en el panel (cobros, acceso, clases con videos/PDF/fotos) y **aula de alumnas** en `/alumnas/`.
+- ✅ **Supabase instalado (17/10/2026):** `cursos.sql`, hook *Before User Created*, registros con "Confirm email" apagado, `avisar-reserva` redesplegada; un registro cualquiera se rechaza (403).
+- **Falta (una vez):** correr `supabase/cursos-matricula.sql` en el SQL Editor (ver `supabase/PASOS.md`). Hasta entonces el servidor sigue cobrando curso + matrícula al inscribirse.
+- ✅ **Decisiones de Harold (17/10/2026):**
+  - **Para inscribirse se paga solo la matrícula.** El curso se abona aparte, durante el curso, directo a Tania (transferencia o QR). La ficha, el formulario, la pantalla de pago, el asistente y el panel lo dicen así. En el panel, **💰 Matrícula pagada** da acceso a las clases.
+  - **Curso sin matrícula** (hoy, la Masterclass VIP): la inscripción se registra sin pago, sin datos bancarios ni QR, y Tania la confirma (**✓ Confirmar inscripción** en el panel → acceso + WhatsApp con el código).
+  - **Datos de pago y QR:** solo en la pantalla que aparece después de confirmar la inscripción, y solo si hay matrícula. Nunca en las páginas públicas.
+  - **Acceso con código por WhatsApp** (gratis, sin correo).
+  - **Tania carga los cursos** desde el panel (Cursos → Mis cursos): nombre, flyer, descripción, matrícula, precio, modalidad, opciones y contenido.
+- **Revisar precio de Automaquillaje:** dice "Gs. 600.000" y su texto aclara que *incluye* la matrícula. Como ahora la matrícula se paga aparte, la web muestra "matrícula Gs. 100.000 + curso Gs. 600.000". Si el curso en sí cuesta Gs. 500.000, corregirlo en el panel (no se cambió ningún dato).
+- **Tania:** cargar en Ajustes los datos de pago y (opcional) la imagen del QR; subir el flyer de cada curso; cargar las clases.
 - **Para decidir:**
-  - **Monto de la inscripción:** hoy se pide el total (curso + matrícula; en cursos mensuales, 1.ª cuota + matrícula). ¿Se prefiere solo una seña para reservar el lugar?
-  - **Datos de pago visibles** para quien se inscribe (solo después de inscribirse, nunca en la página). ¿OK?
-  - **Acceso con código por WhatsApp** (gratis, sin correo). El enlace mágico por email necesita un SMTP propio (p. ej. Gmail con contraseña de aplicación).
   - Videos en YouTube "No listado"/Drive: quien tenga el enlace puede verlo. Para videos más protegidos haría falta un servicio pago (Vimeo, Bunny Stream).
   - **Pago con tarjeta:** cuando esté el RUC y uPay o Bancard, se enchufa sin tocar el resto (ver PASOS.md).
   - Cupos por curso y fechas de inicio: hoy no hay límite de inscriptas.

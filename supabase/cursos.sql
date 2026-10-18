@@ -1,5 +1,5 @@
 -- =====================================================================
--- Cursos online: inscripciones, pago (transferencia/QR hoy; tarjeta después),
+-- Cursos online: inscripciones (se paga solo la matrícula: transferencia/QR hoy; tarjeta después),
 -- alumnas con código de acceso y clases protegidas por RLS.
 -- Se ejecuta DESPUÉS de schema.sql y avisos.sql. Es IDEMPOTENTE (se puede volver a correr).
 --
@@ -186,6 +186,22 @@ create trigger inscripciones_espejo after update of estado on public.inscripcion
 -- ---------------------------------------------------------------------
 -- 4. Inscripción pública (RPC)
 -- ---------------------------------------------------------------------
+-- Matrícula de un curso o de una de sus opciones (Gs.; null = sin matrícula).
+-- Curso: servicios.sena_gs (en el panel se llama "Matrícula"). Opción: variantes[].matricula (número)
+-- o, en datos viejos, el número de variantes[].sena ("Gs. 100.000"). Misma regla que js/render.js → matriculaDe().
+create or replace function public._matricula_de(s public.servicios, v jsonb)
+returns bigint language plpgsql immutable set search_path = public, pg_temp
+as $$
+begin
+  if v is not null then
+    if jsonb_typeof(v -> 'matricula') = 'number' then return nullif(greatest((v ->> 'matricula')::numeric, 0)::bigint, 0); end if;
+    return nullif(replace((regexp_match(coalesce(v ->> 'sena', ''), '(\d{1,3}(?:\.\d{3})+|\d+)'))[1], '.', '')::bigint, 0);
+  end if;
+  return nullif(s.sena_gs, 0);
+end $$;
+
+-- Inscripción: al inscribirse se paga SOLO la matrícula (transferencia o QR). El curso se abona aparte,
+-- durante el curso, directamente a Tania. Sin matrícula: se inscribe sin pagar y Tania confirma el lugar.
 create or replace function public._crear_inscripcion(p_curso text, p_nombre text, p_telefono text, p_email text, p_notas text default null)
 returns jsonb
 language plpgsql volatile security definer
@@ -199,7 +215,7 @@ declare
   v_dig text := regexp_replace(coalesce(p_telefono, ''), '\D', '', 'g');
   v_email text := lower(btrim(coalesce(p_email, '')));
   v_notas text := nullif(btrim(coalesce(p_notas, '')), '');
-  v_curso text; v_precio text; v_monto jsonb; v_id uuid; v_ref text;
+  v_curso text; v_precio text; v_mat bigint; v_curso_gs bigint; v_id uuid; v_ref text; v_ref_precio text;
   p public.ajustes_privados;
 begin
   if length(v_nombre) < 3 or length(v_nombre) > 120 then raise exception 'NOMBRE_INVALIDO' using errcode = 'P0001'; end if;
@@ -224,29 +240,32 @@ begin
   end if;
 
   v_curso := coalesce(v_var ->> 'nombreReserva', s.extra ->> 'nombreReserva', s.nombre);
-  v_precio := coalesce(v_var ->> 'precioReserva', v_var ->> 'precio', s.precio_reserva_texto, s.precio_texto);
-  v_monto := public._monto_curso(v_precio);
+  v_precio := nullif(btrim(coalesce(case when v_var is not null then v_var ->> 'precio' else s.precio_texto end, '')), '');
+  v_curso_gs := replace((regexp_match(coalesce(v_precio, ''), '(\d{1,3}(?:\.\d{3})+|\d+)'))[1], '.', '')::bigint;
+  v_mat := public._matricula_de(s, v_var);
+  v_ref_precio := left(concat_ws(' · ', 'Curso: ' || v_precio, coalesce('Matrícula: ' || public._gs(v_mat), 'Sin matrícula')), 300);
 
   insert into public.inscripciones (servicio_id, variante_id, curso_nombre, precio_ref, monto_gs,
                                     cliente_nombre, cliente_telefono, cliente_email, notas, origen)
-  values (s.id, case when v_var is not null then p_curso end, v_curso, v_precio, (v_monto ->> 'total')::bigint,
+  values (s.id, case when v_var is not null then p_curso end, v_curso, v_ref_precio, coalesce(v_mat, 0),
           v_nombre, v_tel, v_email, v_notas, 'web')
   returning id, referencia into v_id, v_ref;
 
   -- Reserva espejo: dispara el aviso push ya instalado (trigger avisar_reserva → Edge Function).
   insert into public.reservas (servicio_id, variante_id, servicio_nombre, precio_ref, bloquea, cliente_nombre,
                                cliente_telefono, cliente_email, notas, pago, estado, origen, inscripcion_id)
-  values (s.id, case when v_var is not null then p_curso end, 'Inscripción: ' || v_curso, v_precio, false, v_nombre,
-          v_tel, v_email, 'Ref. ' || v_ref || coalesce(' · a pagar ' || public._gs((v_monto ->> 'total')::bigint), '')
+  values (s.id, case when v_var is not null then p_curso end, 'Inscripción: ' || v_curso, v_ref_precio, false, v_nombre,
+          v_tel, v_email, 'Ref. ' || v_ref || coalesce(' · matrícula ' || public._gs(v_mat), ' · sin matrícula (confirmar)')
                           || coalesce(' · ' || v_notas, ''), 'total', 'pendiente', 'web', v_id);
 
   select * into p from public.ajustes_privados where id = 1;
   return jsonb_build_object(
     'ok', true, 'id', v_id, 'referencia', v_ref, 'curso', v_curso, 'precio', v_precio,
-    'monto_gs', (v_monto ->> 'total')::bigint, 'matricula_gs', (v_monto ->> 'matricula')::bigint,
-    'curso_gs', (v_monto ->> 'curso')::bigint, 'mensual', (v_monto ->> 'mensual')::boolean,
-    -- Los datos de pago se entregan recién después de inscribirse (no se publican en el sitio).
-    'datos_pago', coalesce(p.datos_pago, ''), 'qr_pago', p.qr_pago);
+    'monto_gs', coalesce(v_mat, 0), 'matricula_gs', v_mat, 'curso_gs', v_curso_gs,
+    'mensual', coalesce(v_precio, '') ~* '(mensual|/\s*mes|por mes)', 'sin_matricula', v_mat is null,
+    -- Los datos de pago se entregan recién después de inscribirse, y solo si hay matrícula que pagar.
+    'datos_pago', case when v_mat is not null then coalesce(p.datos_pago, '') end,
+    'qr_pago', case when v_mat is not null then p.qr_pago end);
 end $$;
 
 create or replace function public.crear_inscripcion(p_curso text, p_nombre text, p_telefono text, p_email text, p_notas text default null)
@@ -421,7 +440,7 @@ create policy lecciones_admin on public.lecciones for all to authenticated using
 drop policy if exists lecciones_alumna on public.lecciones;
 create policy lecciones_alumna on public.lecciones for select to authenticated using (activo and public.tiene_acceso(servicio_id));
 
-revoke all on function public._aleatorio(int), public._referencia_nueva(), public._monto_curso(text), public._gs(bigint),
+revoke all on function public._aleatorio(int), public._referencia_nueva(), public._monto_curso(text), public._gs(bigint), public._matricula_de(public.servicios, jsonb),
                        public.tiene_acceso(text), public.puede_ver_archivo(text), public._inscripciones_sync(), public._inscripciones_espejo(),
                        public._crear_inscripcion(text, text, text, text, text), public.crear_inscripcion(text, text, text, text, text),
                        public._asegurar_alumno(text), public._registrar_pago(uuid, text, text, boolean, bigint),
@@ -461,6 +480,6 @@ create policy cursos_storage_admin_borrar on storage.objects for delete to authe
   using (bucket_id = 'cursos' and public.es_admin());
 
 select 'Cursos listos' as resultado,
-       public._monto_curso('Gs. 350.000 + Matrícula Gs. 100.000 (total Gs. 450.000)') ->> 'total' = '450000' as monto_ok,
+       public._matricula_de(null::public.servicios, '{"sena": "Gs. 100.000"}'::jsonb) = 100000 as monto_ok,
        to_regclass('auth.users') is not null as auth_ok,
        exists (select 1 from pg_trigger where tgname = 'vincular_alumno') as vinculo_ok;

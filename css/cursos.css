@@ -22,3 +22,6 @@
 .ins-pasos { padding-left: 1.2rem; margin: 0 0 1.1rem; display: grid; gap: .45rem; font-size: .93rem; color: var(--texto); }
 .ins-pasos a { color: var(--oro); }
 .ins-ok .btn { margin-top: .6rem; }
+.ins-monto small { display: block; margin-top: .25rem; color: #e9dcc0; font-size: .82rem; line-height: 1.4; }
+.ins-aparte { display: flex; gap: .5rem; align-items: flex-start; font-size: .9rem; background: var(--marfil-2); border-radius: 12px; padding: .7rem .9rem; margin: 0 0 1rem; }
+.ins-aparte .ic { flex: none; margin-top: .15rem; color: var(--oro); }

@@ -229,7 +229,7 @@ async function cargarPendientes({ avisar = false } = {}) {
   const insC = $('#insignia-cursos');
   insC.hidden = nc === 0; insC.textContent = nc;
   $('#aviso-cursos').hidden = nc === 0;
-  $('#aviso-cursos-texto').textContent = nc === 1 ? '1 inscripción a un curso espera tu confirmación de pago.' : `${nc} inscripciones a cursos esperan tu confirmación de pago.`;
+  $('#aviso-cursos-texto').textContent = nc === 1 ? '1 inscripción a un curso espera tu confirmación (matrícula).' : `${nc} inscripciones a cursos esperan tu confirmación (matrícula).`;
   document.title = (total ? `(${total}) ` : '') + 'Panel de Tania · Tania Sanabria Makeup Studio';
   ponerInsigniaApp(total);
   $('#lista-pendientes').innerHTML = n
@@ -546,7 +546,7 @@ async function cambiarDestinoFoto(id, destino) {
 // ------------------------------------------------------------------ servicios
 function pintarServicios() {
   const abiertos = new Set($$('#lista-servicios details[open]').map((d) => d.dataset.servicio));
-  $('#lista-servicios').innerHTML = Object.entries(CATEGORIAS).map(([cat, titulo]) => {
+  $('#lista-servicios').innerHTML = Object.entries(CATEGORIAS).filter(([cat]) => cat !== 'academia').map(([cat, titulo]) => {
     const lista = estado.servicios.filter((s) => s.categoria === cat);
     return `<h3 class="categoria-titulo">${esc(titulo)}</h3>` + lista.map((s, i) => {
       const variantes = (s.extra && s.extra.variantes) || [];
@@ -618,6 +618,234 @@ async function ordenarServicio(id, paso) {
   pintarServicios();
 }
 
+// ------------------------------------------------------------------ cursos: crear / editar / eliminar
+const URL_FOTOS = `${SUPABASE.url}/storage/v1/object/public/fotos/`;
+const numeroGs = (t) => { const d = String(t ?? '').replace(/\D/g, ''); return d ? Number(d) : null; };
+const slug = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'curso';
+const urlFlyer = (f, ancho) => (f && f.ruta ? `${URL_FOTOS}${f.ruta}-${ancho || f.anchos[0]}.${f.formato === 'jpg' ? 'jpg' : 'webp'}` : '');
+const archivosFlyer = (f) => (f && f.ruta ? f.anchos.map((w) => `${f.ruta}-${w}.${f.formato === 'jpg' ? 'jpg' : 'webp'}`) : []);
+const matriculaOpcion = (v) => (typeof v.matricula === 'number' ? (v.matricula > 0 ? v.matricula : null) : numeroGs(String(v.sena || '').match(/\d{1,3}(?:\.\d{3})+|\d+/)?.[0]));
+
+function pintarCursosAdmin() {
+  const lista = cursos();
+  $('#lista-cursos-admin').innerHTML = lista.length ? lista.map((c, i) => {
+    const ex = c.extra || {};
+    const ops = (ex.variantes || []).length ? ex.variantes.map((v) => ({ etiqueta: v.etiqueta, precio: v.precio, mat: matriculaOpcion(v) })) : [{ etiqueta: '', precio: c.precio_texto, mat: c.sena_gs || null }];
+    const datos = ops.map((o) => `${o.etiqueta ? esc(o.etiqueta) + ': ' : ''}${o.mat ? 'matrícula ' + gs(o.mat) : 'sin matrícula'}${o.precio ? ' · curso ' + esc(o.precio) : ''}`).join('<br>');
+    const mini = ex.flyer && ex.flyer.ruta ? `<img class="miniatura" src="${esc(urlFlyer(ex.flyer, ex.flyer.anchos[0]))}" alt="" loading="lazy">` : '<span class="miniatura" aria-hidden="true">🎓</span>';
+    return `<div class="curso-admin${c.activo ? '' : ' inactivo'}" data-curso-admin="${esc(c.id)}">${mini}
+      <div><div class="curso-nombre">${esc(c.nombre)}${c.activo ? '' : ' · <em>oculto</em>'}</div><div class="curso-datos">${datos}</div></div>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde btn-chico" data-cu="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${esc(c.nombre)}">↑</button>
+        <button type="button" class="btn btn-borde btn-chico" data-cu="1" ${i === lista.length - 1 ? 'disabled' : ''} aria-label="Bajar ${esc(c.nombre)}">↓</button>
+        <button type="button" class="btn btn-principal btn-chico" data-cu="editar">Editar</button>
+      </div></div>`;
+  }).join('') : '<p class="vacio">Todavía no hay cursos. Tocá “＋ Nuevo curso”.</p>';
+}
+
+// Estado del editor: flyer nuevo subido (todavía sin guardar) y flyer original.
+let edCurso = null;
+function filaOpcion(v = {}) {
+  const k = crypto.randomUUID().slice(0, 8);
+  const mat = matriculaOpcion(v);
+  return `<div class="opcion-curso" data-opcion="${esc(v.id || '')}">
+    <label class="ancho">Nombre de la opción <input name="op-etiqueta" maxlength="80" value="${esc(v.etiqueta || '')}" placeholder="Ej: Regular (3 meses)" aria-describedby="op-${k}"></label>
+    <label>Matrícula (Gs.) <input name="op-matricula" inputmode="numeric" value="${mat ?? ''}" placeholder="vacío = sin matrícula"></label>
+    <label>Precio del curso <input name="op-precio" maxlength="80" value="${esc(v.precio || '')}" placeholder="Ej: Gs. 500.000 / mes"></label>
+    <button type="button" class="btn btn-borde btn-chico ancho" data-quitar-opcion id="op-${k}">Quitar esta opción</button>
+  </div>`;
+}
+function contenidoATexto(ex) {
+  if ((ex.secciones || []).length && !(ex.detalles || []).length) return ex.secciones.map((s) => `# ${s.titulo}\n${(s.items || []).join('\n')}`).join('\n');
+  return (ex.detalles || []).map((d) => (d.etiqueta ? `${d.etiqueta}: ${d.texto}` : d.texto)).join('\n');
+}
+function textoAContenido(texto, previos = []) {
+  const linea = (d) => (d.etiqueta ? `${d.etiqueta}: ${d.texto}` : d.texto);
+  const lineas = texto.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 80);
+  if (lineas.some((l) => l.startsWith('#'))) {
+    const secciones = [];
+    for (const l of lineas) {
+      if (l.startsWith('#')) secciones.push({ titulo: l.replace(/^#+\s*/, '').slice(0, 120), items: [] });
+      else { if (!secciones.length) secciones.push({ titulo: 'Contenido', items: [] }); secciones[secciones.length - 1].items.push(l.slice(0, 300)); }
+    }
+    return { secciones: secciones.filter((s) => s.titulo || s.items.length), detalles: [] };
+  }
+  // Se conservan el ícono y la etiqueta de los temas que no cambiaron.
+  return { secciones: [], detalles: lineas.map((texto) => previos.find((d) => linea(d) === texto) || { icono: 'check', texto: texto.slice(0, 300) }) };
+}
+function pintarFlyerEditor() {
+  const f = edCurso.flyer;
+  $('#cu-flyer-vista').hidden = !f; $('#cu-flyer-quitar').hidden = !f;
+  $('#cu-flyer-texto').textContent = f ? 'Cambiar flyer' : 'Subir flyer';
+  if (f) $('#cu-flyer-img').src = urlFlyer(f, f.anchos[Math.min(1, f.anchos.length - 1)]);
+}
+function abrirEditorCurso(id) {
+  const c = id ? estado.servicios.find((s) => s.id === id) : null;
+  const ex = (c && c.extra) || {};
+  edCurso = { id: c ? c.id : null, original: ex.flyer || null, flyer: ex.flyer || null, subidos: [] };
+  const f = $('#form-curso'); f.reset(); $('#curso-error').textContent = '';
+  $('#dlg-curso-titulo').textContent = c ? 'Editar curso' : 'Nuevo curso';
+  $('#cu-borrar').hidden = !c;
+  f.nombre.value = c ? c.nombre : '';
+  f.descripcion.value = c ? c.descripcion : '';
+  f.matricula.value = c && c.sena_gs ? c.sena_gs : '';
+  f.precio.value = c ? c.precio_texto : '';
+  f.modalidad.value = ex.modalidad || ex.subtitulo || '';
+  f.duracion.value = (c && c.duracion_texto) || '';
+  f.contenido_titulo.value = ex.detallesTitulo || '';
+  f.contenido.value = contenidoATexto(ex);
+  f.destacados.value = (ex.beneficios || []).map((b) => b.texto).join('\n');
+  f.nombre_inscripcion.value = ex.nombreReserva || '';
+  f.activo.checked = c ? c.activo : true;
+  $('#cu-opciones').innerHTML = (ex.variantes || []).map((v) => filaOpcion(v)).join('');
+  pintarFlyerEditor();
+  $('#dlg-curso').showModal();
+  $('#form-curso').scrollTop = 0;
+}
+
+async function subirFlyer(archivo) {
+  if (!/^image\/(jpeg|png|webp)$/.test(archivo.type)) { toast('El flyer tiene que ser una imagen JPG, PNG o WEBP.', true); return; }
+  const info = $('#cu-flyer-info'); const antes = info.textContent;
+  info.textContent = '⏳ Optimizando el flyer…'; $('#cu-guardar').disabled = true;
+  try {
+    const { salidas, formato, ancho, alto } = await optimizar(archivo);
+    const ruta = 'flyer-' + crypto.randomUUID();
+    info.textContent = '⏳ Subiendo…';
+    for (const s of salidas) {
+      const { error } = await sb.storage.from('fotos').upload(`${ruta}-${s.w}.${formato}`, s.blob, { contentType: formato === 'webp' ? 'image/webp' : 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error) throw error;
+    }
+    const nuevo = { ruta, anchos: salidas.map((s) => s.w), formato, ancho, alto };
+    edCurso.subidos.push(nuevo);
+    edCurso.flyer = nuevo;
+    const kb = Math.round(salidas.reduce((t, s) => t + s.blob.size, 0) / 1024);
+    info.textContent = `✓ Flyer listo (${Math.round(archivo.size / 1024)} KB → ${kb} KB en ${salidas.length} tamaños). Tocá “Guardar curso”.`;
+    pintarFlyerEditor();
+  } catch (err) {
+    info.textContent = antes; toast(errorLegible(err), true);
+  } finally { $('#cu-guardar').disabled = false; $('#cu-flyer').value = ''; }
+}
+// Borra del Storage los flyers que quedaron sin usar (si se canceló o se reemplazó).
+async function limpiarFlyers(lista) {
+  const archivos = lista.flatMap(archivosFlyer);
+  if (archivos.length) await sb.storage.from('fotos').remove(archivos);
+}
+async function cerrarEditorCurso() {
+  if (!edCurso) return;
+  const sinUsar = edCurso.subidos; edCurso = null;
+  $('#dlg-curso').close();
+  await limpiarFlyers(sinUsar);
+}
+
+function idLibre(base) {
+  const usados = new Set(estado.servicios.flatMap((s) => [s.id, ...((s.extra && s.extra.variantes) || []).map((v) => v.id)]));
+  let id = base; let n = 2;
+  while (usados.has(id)) id = `${base}-${n++}`;
+  usados.add(id);
+  return id;
+}
+
+async function guardarCurso(e) {
+  e.preventDefault();
+  const f = e.target; const err = $('#curso-error'); err.textContent = '';
+  const c = edCurso.id ? estado.servicios.find((s) => s.id === edCurso.id) : null;
+  const nombre = f.nombre.value.trim();
+  if (nombre.length < 2) { err.textContent = 'Escribí el nombre del curso.'; f.nombre.focus(); return; }
+  const matricula = numeroGs(f.matricula.value);
+  const precio = f.precio.value.trim();
+  const ex = { ...((c && c.extra) || {}) };
+  // Textos viejos de precio ("curso + matrícula"): ya no se usan en los cursos.
+  for (const k of ['precioReserva', 'precioNota', 'precioTotal', 'subtitulo']) delete ex[k];
+  const id = c ? c.id : idLibre('curso-' + slug(nombre).replace(/^(curso|cursos)-/, ''));
+  const filas = $$('#cu-opciones .opcion-curso');
+  const variantes = [];
+  for (const fila of filas) {
+    const etiqueta = fila.querySelector('[name="op-etiqueta"]').value.trim();
+    const pr = fila.querySelector('[name="op-precio"]').value.trim();
+    const mat = numeroGs(fila.querySelector('[name="op-matricula"]').value);
+    if (!etiqueta && !pr && !mat) continue;
+    if (!etiqueta) { err.textContent = 'Cada opción necesita un nombre.'; fila.querySelector('[name="op-etiqueta"]').focus(); return; }
+    const previa = ((c && c.extra && c.extra.variantes) || []).find((v) => v.id === fila.dataset.opcion) || {};
+    const { precioReserva, ...resto } = previa;
+    variantes.push({ ...resto, id: previa.id || idLibre(`${id}-${slug(etiqueta)}`), etiqueta, precio: pr, matricula: mat || 0, sena: mat ? gs(mat) : '',
+      nombreReserva: previa.nombreReserva && previa.etiqueta === etiqueta ? previa.nombreReserva : `${nombre}: ${etiqueta}`, accion: previa.accion || 'inscribirme a este curso' });
+  }
+  if (variantes.length === 1) { err.textContent = 'Con una sola opción no hace falta: cargá la matrícula y el precio arriba, o agregá una segunda opción.'; return; }
+  if (variantes.length) ex.variantes = variantes; else delete ex.variantes;
+  const contenido = textoAContenido(f.contenido.value, ex.detalles || []);
+  if (contenido.secciones.length) ex.secciones = contenido.secciones; else delete ex.secciones;
+  ex.detalles = contenido.detalles;
+  ex.detallesTitulo = f.contenido_titulo.value.trim() || 'Contenido del curso';
+  const destacados = f.destacados.value.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 12);
+  const previosB = ex.beneficios || [];
+  ex.beneficios = destacados.map((texto) => ({ icono: (previosB.find((b) => b.texto === texto) || {}).icono || 'check', texto: texto.slice(0, 300) }));
+  if (!ex.beneficios.length) delete ex.beneficios;
+  const modalidad = f.modalidad.value.trim();
+  if (modalidad) ex.modalidad = modalidad; else delete ex.modalidad;
+  ex.nombreReserva = f.nombre_inscripcion.value.trim() || (c && ex.nombreReserva && ex.nombreReserva !== c.nombre ? ex.nombreReserva : nombre);
+  ex.cta = ex.cta || 'Inscribirme';
+  ex.accion = ex.accion || 'inscribirme a este curso';
+  if (edCurso.flyer) ex.flyer = edCurso.flyer; else delete ex.flyer;
+  const m = precio.match(/\d{1,3}(?:\.\d{3})+|\d+/);
+  const fila = {
+    nombre, descripcion: f.descripcion.value.trim(), precio_texto: precio, precio_reserva_texto: null,
+    precio_gs: m ? Number(m[0].replace(/\./g, '')) : null, sena_gs: variantes.length ? null : matricula,
+    duracion_texto: f.duracion.value.trim() || null, usa_turno: false, activo: f.activo.checked, extra: ex,
+  };
+  const btn = $('#cu-guardar'); btn.disabled = true;
+  const r = c
+    ? await sb.from('servicios').update(fila).eq('id', c.id).select().single()
+    : await sb.from('servicios').insert({ ...fila, id, categoria: 'academia', duracion_min: 60, orden: Math.max(0, ...estado.servicios.map((s) => s.orden)) + 10 }).select().single();
+  btn.disabled = false;
+  if (r.error) { err.textContent = errorLegible(r.error); return; }
+  if (c) Object.assign(c, r.data); else estado.servicios.push(r.data);
+  estado.servicios.sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
+  // Flyers que ya no se usan: los subidos y descartados, y el original si se cambió o se quitó.
+  const sinUsar = edCurso.subidos.filter((x) => x !== edCurso.flyer);
+  if (edCurso.original && edCurso.original.ruta !== (edCurso.flyer && edCurso.flyer.ruta)) sinUsar.push(edCurso.original);
+  edCurso = null; $('#dlg-curso').close();
+  await limpiarFlyers(sinUsar);
+  toast(c ? 'Curso guardado ✓' : 'Curso creado ✓ Ya se ve en el sitio.');
+  if (!c) estado.cursoSel = r.data.id;
+  pintarCursosAdmin(); cargarCursos();
+}
+
+async function borrarCurso() {
+  const c = estado.servicios.find((s) => s.id === edCurso.id); if (!c) return;
+  const { count } = await sb.from('inscripciones').select('id', { count: 'exact', head: true }).eq('servicio_id', c.id);
+  const aviso = count ? `\n\nTiene ${count} inscripción(es): se conservan en la lista, pero sin curso. Si solo querés que no se vea, mejor destildá “Mostrar en el sitio”.` : '';
+  if (!confirm(`¿Eliminar el curso “${c.nombre}” con su flyer, sus fotos y sus clases? No se puede deshacer.${aviso}`)) return;
+  const [fo, le] = await Promise.all([
+    sb.from('fotos').select('id,ruta,anchos,formato,origen').eq('servicio_id', c.id),
+    sb.from('lecciones').select('archivo').eq('servicio_id', c.id).not('archivo', 'is', null),
+  ]);
+  const { error } = await sb.from('servicios').delete().eq('id', c.id);
+  if (error) { toast(errorLegible(error), true); return; }
+  // Archivos: flyer, fotos propias (si ninguna otra entrada las usa) y materiales de las clases.
+  const fotosArch = [];
+  for (const x of (fo.data || []).filter((x) => x.origen === 'storage')) {
+    const { data: usos } = await sb.from('fotos').select('id').eq('ruta', x.ruta);
+    if (!usos || !usos.length) fotosArch.push(...x.anchos.map((w) => `${x.ruta}-${w}.${x.formato || 'webp'}`));
+  }
+  const flyers = [c.extra && c.extra.flyer, ...edCurso.subidos].filter(Boolean);
+  await Promise.all([
+    limpiarFlyers(flyers),
+    fotosArch.length ? sb.storage.from('fotos').remove(fotosArch) : null,
+    (le.data || []).length ? sb.storage.from('cursos').remove(le.data.map((l) => l.archivo)) : null,
+  ]);
+  estado.servicios = estado.servicios.filter((s) => s.id !== c.id);
+  edCurso = null; $('#dlg-curso').close();
+  toast('Curso eliminado');
+  pintarCursosAdmin(); cargarCursos();
+}
+
+async function ordenarCurso(id, paso) {
+  const lista = cursos(); const i = lista.findIndex((x) => x.id === id); const j = i + paso;
+  if (i < 0 || j < 0 || j >= lista.length) return;
+  await ordenarServicio(id, paso);
+  pintarCursosAdmin();
+}
+
 // ------------------------------------------------------------------ cursos: inscripciones
 const cacheIns = new Map();
 const cursos = () => estado.servicios.filter((s) => s.categoria === 'academia');
@@ -632,13 +860,14 @@ function rellenarAcceso(plantilla, i, codigo) {
 }
 
 function tarjetaInscripcion(i, codigos) {
-  const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${i.estado === 'pendiente' ? 'Por cobrar' : i.estado === 'pagada' ? 'Pagada' : 'Cancelada'}</span>`];
+  const conMat = i.monto_gs > 0;
+  const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${i.estado === 'pendiente' ? (conMat ? 'Matrícula por cobrar' : 'Por confirmar') : i.estado === 'pagada' ? (conMat ? 'Matrícula pagada' : 'Confirmada') : 'Cancelada'}</span>`];
   if (i.acceso) et.push('<span class="etiqueta acceso-si">🔓 Con acceso</span>');
   else if (i.estado !== 'cancelada') et.push('<span class="etiqueta">🔒 Sin acceso</span>');
   if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
   et.push(`<span class="etiqueta">${i.origen === 'web' ? 'Desde la web' : 'Cargada a mano'}</span>`);
   let acc = '';
-  if (i.estado === 'pendiente') acc = `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Registrar pago</button>
+  if (i.estado === 'pendiente') acc = `${conMat ? `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Matrícula pagada</button>` : `<button type="button" class="btn btn-aprobar" data-ins="confirmar" data-id="${i.id}">✓ Confirmar inscripción</button>`}
       <button type="button" class="btn btn-wa" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>
       <button type="button" class="btn btn-borde" data-ins="cancelar" data-id="${i.id}">Cancelar</button>`;
   else if (i.estado === 'pagada') acc = (i.acceso
@@ -652,7 +881,8 @@ function tarjetaInscripcion(i, codigos) {
     <div class="cita-cuando">${esc(fmtFecha(new Date(i.creado), { day: 'numeric', month: 'numeric', year: 'numeric' }))} · Ref. <code>${esc(i.referencia)}</code></div>
     <div class="cita-servicio">${esc(i.curso_nombre)}</div>
     <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a> · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a></div>
-    <p class="cita-monto">${i.monto_gs ? 'A pagar: ' + gs(i.monto_gs) : esc(i.precio_ref || '')}</p>
+    <p class="cita-monto">${conMat ? 'Matrícula: ' + gs(i.monto_gs) : 'Sin matrícula'}</p>
+    ${i.precio_ref ? `<p class="suave">${esc(/^Curso: /.test(i.precio_ref) ? i.precio_ref.split(' · ')[0] : i.precio_ref)} · se cobra aparte, durante el curso</p>` : ''}
     ${i.notas ? `<p class="cita-notas">📝 ${esc(i.notas)}</p>` : ''}
     ${i.acceso && cod ? `<p class="suave">Código de acceso: <code>${esc(cod.codigo)}</code>${cod.user_id ? ' · ya entró al aula' : ' · todavía no entró'}</p>` : ''}
     <div class="etiquetas">${et.join('')}</div>
@@ -672,7 +902,7 @@ async function cargarInscripciones() {
   const n = np.count || 0;
   $('#n-ins-pendientes').textContent = n; $('#n-ins-pendientes').classList.toggle('hay', n > 0);
   $('#lista-inscripciones').innerHTML = r.data.length ? r.data.map((i) => tarjetaInscripcion(i, codigos)).join('')
-    : `<p class="vacio">${estado.filtroIns === 'pendiente' ? 'No hay inscripciones por cobrar. 🎉' : 'Todavía no hay inscripciones.'}</p>`;
+    : `<p class="vacio">${estado.filtroIns === 'pendiente' ? 'No hay inscripciones pendientes. 🎉' : 'Todavía no hay inscripciones.'}</p>`;
 }
 
 async function cargarCursos() {
@@ -680,6 +910,7 @@ async function cargarCursos() {
   const lista = cursos();
   if (!estado.cursoSel || !lista.some((c) => c.id === estado.cursoSel)) estado.cursoSel = lista[0] && lista[0].id;
   sel.innerHTML = lista.map((c) => `<option value="${esc(c.id)}"${c.id === estado.cursoSel ? ' selected' : ''}>${esc(c.nombre)}${c.activo ? '' : ' (oculto)'}</option>`).join('');
+  pintarCursosAdmin();
   await Promise.all([cargarInscripciones(), cargarLecciones()]);
 }
 
@@ -693,7 +924,7 @@ let insPago = null;
 function abrirPago(i) {
   insPago = i;
   const f = $('#form-pago'); f.reset(); f.acceso.checked = true; $('#pago-error').textContent = '';
-  $('#pago-resumen').textContent = `${i.cliente_nombre} · ${i.curso_nombre}${i.monto_gs ? ' · ' + gs(i.monto_gs) : ''} · Ref. ${i.referencia}`;
+  $('#pago-resumen').textContent = `${i.cliente_nombre} · ${i.curso_nombre}${i.monto_gs ? ' · matrícula ' + gs(i.monto_gs) : ''} · Ref. ${i.referencia}. Al confirmarla, la alumna queda inscripta; el curso se cobra aparte.`;
   $('#dlg-pago').showModal();
 }
 async function confirmarPago(e) {
@@ -706,14 +937,25 @@ async function confirmarPago(e) {
   btn.disabled = false;
   if (error || !data || data.ok === false) { if (ventana) ventana.close(); $('#pago-error').textContent = errorLegible(error) || 'No se pudo registrar.'; return; }
   $('#dlg-pago').close();
-  if (dar && data.codigo) { await enviarAcceso(i, data.codigo, ventana); toast('Pago registrado y acceso enviado ✓'); }
-  else toast('Pago registrado 💰');
+  if (dar && data.codigo) { await enviarAcceso(i, data.codigo, ventana); toast('Matrícula registrada y acceso enviado ✓'); }
+  else toast('Matrícula registrada 💰');
   await Promise.all([cargarInscripciones(), cargarPendientes()]);
 }
 
 async function accionInscripcion(accion, id, boton) {
   const i = cacheIns.get(id); if (!i) return;
   if (accion === 'pago') { abrirPago(i); return; }
+  if (accion === 'confirmar') {
+    // Curso sin matrícula: se confirma la inscripción y se da acceso (no hay pago que registrar).
+    if (!confirm(`¿Confirmar la inscripción de ${i.cliente_nombre} a ${i.curso_nombre}? Se le da acceso a las clases y se abre WhatsApp con su código.`)) return;
+    const ventana = window.open('', '_blank'); boton.disabled = true;
+    const { data, error } = await sb.rpc('admin_registrar_pago', { p_id: i.id, p_metodo: null, p_ref: null, p_dar_acceso: true });
+    if (error || !data || data.ok === false || !data.codigo) { if (ventana) ventana.close(); toast(errorLegible(error) || 'No se pudo confirmar.', true); boton.disabled = false; return; }
+    await enviarAcceso(i, data.codigo, ventana);
+    toast('Inscripción confirmada ✓');
+    await Promise.all([cargarInscripciones(), cargarPendientes()]);
+    return;
+  }
   if (accion === 'whatsapp') { window.open(urlWhatsApp(i.cliente_telefono, `¡Hola ${(i.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
   if (accion === 'dar' || accion === 'reenviar') {
     const ventana = window.open('', '_blank');
@@ -746,13 +988,6 @@ function opcionesCursos() {
     ? s.extra.variantes.map((v) => ({ id: v.id, servicio: s, variante: v, nombre: `${s.nombre}: ${v.etiqueta}` }))
     : [{ id: s.id, servicio: s, variante: null, nombre: s.nombre }]);
 }
-function montoDe(texto) {
-  const t = String(texto || ''); const NUM = '(\\d{1,3}(?:\\.\\d{3})+|\\d+)';
-  const n = (m) => (m ? Number(m[1].replace(/\./g, '')) : null);
-  const curso = n(t.match(new RegExp(NUM))); const mat = n(t.match(new RegExp('matr[ií]cula[^0-9(]*gs\\.?\\s*' + NUM, 'i')));
-  const total = n(t.match(new RegExp('total[^0-9]*gs\\.?\\s*' + NUM, 'i')));
-  return total ?? (curso === null ? null : curso + (mat || 0));
-}
 function abrirNuevaAlumna() {
   const f = $('#form-alumna'); f.reset(); f.pagada.checked = true; f.acceso.checked = true; $('#alumna-error').textContent = '';
   $('#al-curso').innerHTML = opcionesCursos().map((o) => `<option value="${esc(o.id)}">${esc(o.nombre)}</option>`).join('');
@@ -766,11 +1001,12 @@ async function guardarAlumna(e) {
   if (!o || f.nombre.value.trim().length < 2 || f.telefono.value.replace(/\D/g, '').length < 6 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     $('#alumna-error').textContent = 'Completá curso, nombre, teléfono y un email válido.'; return;
   }
-  const precio = o.variante ? (o.variante.precioReserva || o.variante.precio) : (o.servicio.precio_reserva_texto || o.servicio.precio_texto);
+  const precio = o.variante ? o.variante.precio : o.servicio.precio_texto;
+  const mat = o.variante ? matriculaOpcion(o.variante) : (o.servicio.sena_gs || null);
   const fila = {
     servicio_id: o.servicio.id, variante_id: o.variante ? o.variante.id : null,
     curso_nombre: (o.variante && o.variante.nombreReserva) || (o.servicio.extra && o.servicio.extra.nombreReserva) || o.servicio.nombre,
-    precio_ref: precio, monto_gs: montoDe(precio), cliente_nombre: f.nombre.value.trim(), cliente_telefono: f.telefono.value.trim(),
+    precio_ref: [precio ? 'Curso: ' + precio : '', mat ? 'Matrícula: ' + gs(mat) : 'Sin matrícula'].filter(Boolean).join(' · '), monto_gs: mat || 0, cliente_nombre: f.nombre.value.trim(), cliente_telefono: f.telefono.value.trim(),
     cliente_email: email, origen: 'admin', estado: f.pagada.checked ? 'pagada' : 'pendiente',
   };
   const dar = f.acceso.checked;
@@ -1092,7 +1328,7 @@ function notificarNuevas(nuevas) {
   if (!document.hidden && document.hasFocus()) return; // en pantalla ya hay sonido + mensaje + insignia
   if (avisos.sub) return; // el push del servidor ya la muestra (evita duplicados)
   for (const r of nuevas.slice(0, 3)) {
-    if (r.inscripcion_id) mostrarNotificacion(`Nueva inscripción: ${r.servicio_nombre.replace(/^Inscripción: /, '')}`, `${r.cliente_nombre}\nTocá para ver el pago.`, `reserva-${r.id}`);
+    if (r.inscripcion_id) mostrarNotificacion(`Nueva inscripción: ${r.servicio_nombre.replace(/^Inscripción: /, '')}`, `${r.cliente_nombre}\nTocá para ver la inscripción.`, `reserva-${r.id}`);
     else mostrarNotificacion(`Nueva solicitud: ${r.servicio_nombre}`, `${r.cliente_nombre} · ${textoCuando(r)}${r.costo_extra ? ' · costo adicional' : ''}\nTocá para aprobar o rechazar.`, `reserva-${r.id}`);
   }
   if (nuevas.length > 3) mostrarNotificacion(`${nuevas.length} solicitudes nuevas`, 'Tocá para verlas en el panel.', 'reservas-varias');
@@ -1246,6 +1482,21 @@ function prepararEventos() {
   }));
   $('#lista-inscripciones').addEventListener('click', (e) => { const b = e.target.closest('[data-ins]'); if (b) accionInscripcion(b.dataset.ins, b.dataset.id, b); });
   $('#form-pago').addEventListener('submit', confirmarPago);
+  $('#btn-nuevo-curso').addEventListener('click', () => abrirEditorCurso(null));
+  $('#lista-cursos-admin').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cu]'); if (!b) return;
+    const id = b.closest('[data-curso-admin]').dataset.cursoAdmin;
+    if (b.dataset.cu === 'editar') abrirEditorCurso(id); else ordenarCurso(id, Number(b.dataset.cu));
+  });
+  $('#form-curso').addEventListener('submit', guardarCurso);
+  $('#cu-flyer').addEventListener('change', (e) => { const a = e.target.files && e.target.files[0]; if (a) subirFlyer(a); });
+  $('#cu-flyer-quitar').addEventListener('click', () => { edCurso.flyer = null; pintarFlyerEditor(); $('#cu-flyer-info').textContent = 'Flyer quitado. Tocá “Guardar curso” para confirmar.'; });
+  $('#cu-agregar-opcion').addEventListener('click', () => { $('#cu-opciones').insertAdjacentHTML('beforeend', filaOpcion()); $('#cu-opciones .opcion-curso:last-child input').focus(); });
+  $('#cu-opciones').addEventListener('click', (e) => { if (e.target.closest('[data-quitar-opcion]')) e.target.closest('.opcion-curso').remove(); });
+  $('#cu-borrar').addEventListener('click', borrarCurso);
+  $('#dlg-curso').addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]')) cerrarEditorCurso(); });
+  $('#dlg-curso').addEventListener('cancel', (e) => { e.preventDefault(); cerrarEditorCurso(); });
+  $('[data-ir-cursos]').addEventListener('click', (e) => { e.preventDefault(); elegirTab('cursos'); });
   $('#btn-nueva-alumna').addEventListener('click', abrirNuevaAlumna);
   $('#form-alumna').addEventListener('submit', guardarAlumna);
   for (const d of ['#dlg-pago', '#dlg-alumna']) $(d).addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]') || e.target === e.currentTarget) $(d).close(); });

@@ -735,6 +735,8 @@ async function actualizarDesdeSupabase() {
     modoSupabase = true;
     refrescarContenido(previo);
     document.documentElement.classList.add('datos-en-vivo');
+    // Enlace directo a un curso o servicio que solo existe en Supabase (p. ej. un curso nuevo cargado por Tania).
+    if (/^#(?:servicio|curso)-/.test(location.hash) && !$('#dlg-detalle').open && !document.querySelector('dialog[open]')) atenderHash();
     // Si la clienta ya tenía el formulario abierto, se actualizan los horarios.
     if ($('#dlg-reserva').open) { aplicarModoReserva(); generarHoras(); }
   } catch (err) {

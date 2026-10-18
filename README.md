@@ -73,20 +73,21 @@ URL pública: https://taniasanabria.github.io/
 3. Con **◀ Antes / Después ▶** cambiás el orden. Con **Eliminar** la sacás, y con **Mover a…** la pasás a otro álbum o servicio.
 
 **Servicios** (pestaña 💄)
-1. Tocá un servicio para editar el nombre, el precio que se muestra, la seña, la duración y la descripción.
+1. Tocá un servicio para editar (los cursos se editan en la pestaña Cursos) el nombre, el precio que se muestra, la seña, la duración y la descripción.
 2. **Mostrar en el sitio (activo)** muestra u oculta el servicio en la web sin borrarlo. Las flechas cambian el orden.
 3. **Minutos que ocupa en la agenda** define cuánto tiempo bloquea el turno. Tocá **Guardar** para aplicar los cambios.
 
 **Cursos** (pestaña 🎓)
-1. **Inscripciones:** lo que llega desde la web, con la referencia (`C-XXXXX`) y el monto a pagar. El número rojo indica cuántas falta cobrar; en Citas también aparece un aviso.
-2. Cuando la alumna te manda el comprobante por WhatsApp, tocá **💰 Registrar pago**, elegí transferencia/QR/efectivo, anotá el número del comprobante (opcional) y dejá tildado **Dar acceso a las clases**. Se abre WhatsApp con el enlace al aula y su **código de acceso**: solo tocá enviar.
-3. **📲 Enviar acceso** vuelve a mandar el código; **Quitar acceso** la deja sin clases (sin borrar el pago); **Cancelar** anula la inscripción.
-4. **＋ Agregar alumna** sirve para alguien que pagó en persona: queda pagada, con acceso, y te abre el WhatsApp con el código.
-5. **Clases de cada curso:** elegí el curso y agregá clases: **Video** (pegá el enlace de YouTube subido como "No listado", o de Google Drive compartido como "Cualquier persona con el enlace"), **PDF o foto** (se sube desde el celular; las fotos se achican solas) u **Otro enlace**. Con *Módulo* las agrupás. Las flechas cambian el orden; **Ver** muestra cómo la ve la alumna.
-6. Las alumnas entran en **https://taniasanabria.github.io/alumnas/** con su email y el código.
+1. **Mis cursos:** **＋ Nuevo curso** o **Editar** para cargar nombre, **flyer** (foto o imagen del celular; se optimiza sola y se ve en la tarjeta y en la página del curso), descripción, **matrícula**, precio del curso, modalidad, opciones (p. ej. Regular / Masterclass) y contenido (una línea por tema; con `#` al principio, un subtítulo). **Borrar** lo quita de la web (las inscripciones quedan guardadas). Las flechas cambian el orden.
+2. **Inscripciones:** lo que llega desde la web, con la referencia (`C-XXXXX`) y la **matrícula**. Para inscribirse se paga solo la matrícula; el curso se cobra aparte, durante el curso. El número rojo indica cuántas faltan; en Citas también aparece un aviso.
+3. Cuando la alumna te manda el comprobante de la matrícula, tocá **💰 Matrícula pagada**, elegí transferencia/QR/efectivo y dejá tildado **Dar acceso a las clases**. Se abre WhatsApp con el enlace al aula y su **código de acceso**: solo tocá enviar. Si el curso no tiene matrícula, el botón es **✓ Confirmar inscripción**.
+4. **📲 Enviar acceso** vuelve a mandar el código; **Quitar acceso** la deja sin clases (sin borrar el pago); **Cancelar** anula la inscripción.
+5. **＋ Agregar alumna** sirve para alguien que pagó la matrícula en persona: queda pagada, con acceso, y te abre el WhatsApp con el código.
+6. **Clases de cada curso:** elegí el curso y agregá clases: **Video** (pegá el enlace de YouTube subido como "No listado", o de Google Drive compartido como "Cualquier persona con el enlace"), **PDF o foto** (se sube desde el celular; las fotos se achican solas) u **Otro enlace**. Con *Módulo* las agrupás. Las flechas cambian el orden; **Ver** muestra cómo la ve la alumna.
+7. Las alumnas entran en **https://taniasanabria.github.io/alumnas/** con su email y el código.
 
 **Ajustes** (pestaña ⚙️)
-1. Acá están el número de WhatsApp y los **datos para el pago** (banco y alias). Van en el mensaje de aprobación de las citas y se muestran a quien se inscribe a un curso (solo después de inscribirse). También podés subir la **imagen del QR** de cobro y editar el mensaje de acceso a las clases.
+1. Acá están el número de WhatsApp y los **datos para el pago** (banco y alias). Van en el mensaje de aprobación de las citas y se muestran a quien se inscribe a un curso con matrícula (solo después de confirmar la inscripción). También podés subir la **imagen del QR** de cobro y editar el mensaje de acceso a las clases.
 2. También podés editar los textos de las políticas del sitio, el intervalo entre turnos, la anticipación mínima y hasta cuántos días adelante se puede reservar.
 3. Desde acá también se cambia la contraseña.
 

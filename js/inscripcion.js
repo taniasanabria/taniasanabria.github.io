@@ -11,7 +11,7 @@
  */
 import { SUPABASE, PAGOS, URL_SITIO } from './config.js';
 import { rpc } from './datos.js';
-import { esc, icono, opcionesCurso, montoCurso, formatoGs, fichaCurso } from './render.js';
+import { esc, icono, opcionesCurso, cursoAparte, formatoGs, fichaCurso } from './render.js';
 
 const V = new URL(import.meta.url).search;
 let api = null;
@@ -77,7 +77,7 @@ function construir() {
       <div class="trampa" aria-hidden="true"><label for="ins-sitio">No completar</label><input id="ins-sitio" name="sitio_web" type="text" tabindex="-1" autocomplete="off"></div>
       <p class="form-error" id="ins-error" role="alert"></p>
       <button type="submit" class="btn btn-primario btn-grande btn-ancho" id="ins-enviar">${icono('check')} <span>Inscribirme</span></button>
-      <p class="campo-ayuda centrado">Tu lugar queda reservado como pendiente hasta que Tania reciba el pago.</p>
+      <p class="campo-ayuda centrado" id="ins-nota-final">Tu lugar queda reservado como pendiente hasta que Tania confirme la matrícula.</p>
     </form>
     <div class="ins-ok" id="ins-ok" hidden tabindex="-1"></div>
   </div>`;
@@ -112,9 +112,12 @@ function pintarMonto() {
   const o = opcionElegida();
   const caja = $('#ins-monto');
   if (!caja) return;
-  const m = o ? montoCurso(o.precioTexto) : null;
-  caja.hidden = !(m && m.total);
-  if (m && m.total) caja.innerHTML = `${m.mensual ? 'Para inscribirte (1.ª cuota + matrícula)' : 'Total a pagar'}: <strong>${formatoGs(m.total)}</strong>`;
+  caja.hidden = !o;
+  if (!o) return;
+  $('#ins-nota-final').textContent = o.matricula ? 'Tu lugar queda reservado como pendiente hasta que Tania confirme la matrícula.' : 'Tania te confirma tu lugar por WhatsApp.';
+  caja.innerHTML = (o.matricula
+    ? `Para inscribirte pagás solo la matrícula: <strong>${formatoGs(o.matricula)}</strong>`
+    : '<strong>Sin matrícula:</strong> no pagás nada para inscribirte.') + `<br><small>${esc(cursoAparte(o))}</small>`;
 }
 
 export async function abrirInscripcion(id, origen, apiApp) {
@@ -131,7 +134,7 @@ export async function abrirInscripcion(id, origen, apiApp) {
   $('#ins-ficha').innerHTML = fichaCurso(s) + '<p class="ins-monto" id="ins-monto" aria-live="polite" hidden></p>';
   const ops = opcionesCurso(s);
   $('#ins-opciones').hidden = ops.length < 2;
-  $('#ins-opciones-lista').innerHTML = ops.length < 2 ? '' : ops.map((o) => `<label class="check"><input type="radio" name="opcion" value="${esc(o.id)}"${o.id === id ? ' checked' : ''}> <span><strong>${esc(o.etiqueta)}</strong> · ${esc(o.precioVisible)}</span></label>`).join('');
+  $('#ins-opciones-lista').innerHTML = ops.length < 2 ? '' : ops.map((o) => `<label class="check"><input type="radio" name="opcion" value="${esc(o.id)}"${o.id === id ? ' checked' : ''}> <span><strong>${esc(o.etiqueta)}</strong> · ${o.matricula ? 'matrícula ' + formatoGs(o.matricula) : 'sin matrícula'}</span></label>`).join('');
   pintarMonto();
   $('#ins-enviar').disabled = false;
   api.abrirDialogo(dlg, origen);
@@ -156,8 +159,7 @@ async function enviar(e) {
   errores.forEach(([el]) => el && el.type !== 'radio' && marcar(el, true));
   if (errores.length) { $('#ins-error').textContent = errores[0][1]; (errores[0][0] || f.nombre).focus(); return; }
 
-  const m = montoCurso(o.precioTexto);
-  const base = { curso: o.nombre, precio: o.precioTexto, monto_gs: m.total, nombre, email, telefono: tel };
+  const base = { curso: o.nombre, precio: o.precioVisible, monto_gs: o.matricula || 0, matricula_gs: o.matricula, sin_matricula: !o.matricula, nombre, email, telefono: tel };
   if (f.sitio_web.value) { mostrarOk({ ...base, referencia: null, modo: 'registrada' }); return; } // trampa para robots
 
   const boton = $('#ins-enviar');
@@ -189,43 +191,56 @@ async function enviar(e) {
 }
 
 function mensajeComprobante(d) {
+  const conMatricula = !d.sin_matricula && d.monto_gs > 0;
   return [`¡Hola Tania! Me inscribí al *${d.curso}* desde la web.`, d.referencia ? `Referencia: *${d.referencia}*` : '',
-    d.monto_gs ? `Monto: ${formatoGs(d.monto_gs)}` : '', `Nombre: ${d.nombre}`, `Email: ${d.email}`,
-    d.modo === 'online' ? 'Te envío el comprobante de pago 👇' : '¿Me pasás los datos para el pago?'].filter(Boolean).join('\n');
+    conMatricula ? `Matrícula: ${formatoGs(d.monto_gs)}` : 'Sin matrícula', `Nombre: ${d.nombre}`, `Email: ${d.email}`,
+    !conMatricula ? '¿Me confirmás mi lugar?' : d.modo === 'online' ? 'Te envío el comprobante de pago de la matrícula 👇' : '¿Me pasás los datos para pagar la matrícula?'].filter(Boolean).join('\n');
 }
 
 function mostrarOk(d) {
   const ok = $('#ins-ok');
-  const qr = d.qr_pago ? `${SUPABASE.url}/storage/v1/object/public/fotos/${encodeURIComponent(d.qr_pago)}` : '';
-  const datos = (d.datos_pago || '').trim();
-  const pagoTarjeta = d.modo === 'online' && PAGOS && PAGOS.tarjeta && PAGOS.tarjeta.url;
+  const conMatricula = !d.sin_matricula && d.monto_gs > 0;
+  // Los datos de pago y el QR llegan SOLO en la respuesta de crear_inscripcion (después de inscribirse).
+  const qr = conMatricula && d.qr_pago ? `${SUPABASE.url}/storage/v1/object/public/fotos/${encodeURIComponent(d.qr_pago)}` : '';
+  const datos = conMatricula ? (d.datos_pago || '').trim() : '';
+  const pagoTarjeta = conMatricula && d.modo === 'online' && PAGOS && PAGOS.tarjeta && PAGOS.tarjeta.url;
+  const aparte = `<p class="ins-aparte">${icono('receipt')} ${esc(cursoAparte({ precioVisible: d.precio }))}</p>`;
   let pago = '';
-  if (d.modo === 'online') {
+  if (d.modo === 'online' && conMatricula) {
     pago = `<div class="ins-pago">
-      <h3>${icono('receipt')} Cómo pagar</h3>
-      ${d.monto_gs ? `<p class="ins-pago-monto">${d.mensual ? 'Para inscribirte (1.ª cuota + matrícula)' : 'Total a pagar'}: <strong>${formatoGs(d.monto_gs)}</strong></p>` : `<p>${esc(d.precio || '')}</p>`}
+      <h3>${icono('receipt')} Cómo pagar la matrícula</h3>
+      <p class="ins-pago-monto">Matrícula a pagar ahora: <strong>${formatoGs(d.monto_gs)}</strong></p>
       ${d.referencia ? `<p>Referencia de tu inscripción: <strong class="ins-ref">${esc(d.referencia)}</strong> <small>(ponela en el concepto de la transferencia)</small></p>` : ''}
       ${datos ? `<p class="ins-pago-sub">Transferencia</p><pre class="ins-datos">${esc(datos)}</pre>` : ''}
       ${qr ? `<p class="ins-pago-sub">O pagá con QR</p><img class="ins-qr" src="${esc(qr)}" alt="Código QR para pagar a Tania Sanabria" width="240" height="240" loading="lazy">` : ''}
       ${!datos && !qr ? '<p>Tania te va a enviar por WhatsApp los datos para la transferencia o el QR.</p>' : ''}
       ${pagoTarjeta ? `<button type="button" class="btn btn-secundario btn-ancho" id="ins-tarjeta">${icono('credit-card')} ${esc(PAGOS.tarjeta.etiqueta || 'Pagar con tarjeta')}</button>` : ''}
     </div>`;
+  } else if (d.modo === 'online') {
+    pago = `<div class="ins-pago"><h3>${icono('check')} Sin matrícula</h3><p>No tenés que pagar nada para inscribirte. Tania te escribe por WhatsApp para confirmar tu lugar.</p>
+      ${d.referencia ? `<p>Referencia de tu inscripción: <strong class="ins-ref">${esc(d.referencia)}</strong></p>` : ''}</div>`;
   }
   const titulo = d.modo === 'whatsapp' ? '¡Ya casi!' : '¡Inscripción recibida!';
   const bajada = d.modo === 'online'
-    ? `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong> quedó reservado como pendiente.`
+    ? `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong> quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`
     : d.modo === 'registrada'
-      ? `Tania recibió tu solicitud para <strong>${esc(d.curso)}</strong> y te va a escribir por WhatsApp con los datos de pago.`
-      : esc(d.aviso || 'Enviale tu inscripción a Tania por WhatsApp y ella te pasa los datos de pago.');
+      ? `Tania recibió tu solicitud para <strong>${esc(d.curso)}</strong> y te va a escribir por WhatsApp${conMatricula ? ' con los datos para pagar la matrícula' : ''}.`
+      : esc(d.aviso || 'Enviale tu inscripción a Tania por WhatsApp y ella te confirma los pasos.');
+  const pasos = d.modo === 'online'
+    ? (conMatricula
+      ? '<li>Pagá la matrícula por transferencia o con el QR.</li><li><strong>Enviá el comprobante</strong> a Tania por WhatsApp (botón de abajo).</li>'
+      : '<li>Avisale a Tania por WhatsApp (botón de abajo) y esperá su confirmación.</li>')
+    : `<li>Escribile a Tania por WhatsApp (botón de abajo).</li>${conMatricula ? '<li>Pagá la matrícula con los datos que te envíe.</li>' : ''}`;
   ok.innerHTML = `
     <h2 class="dialogo-titulo">${titulo} ${icono('check')}</h2>
     <p>${bajada}</p>
     ${pago}
+    ${aparte}
     <ol class="ins-pasos">
-      ${d.modo === 'online' ? '<li>Hacé la transferencia o pagá con el QR.</li><li><strong>Enviá el comprobante</strong> a Tania por WhatsApp (botón de abajo).</li>' : '<li>Escribile a Tania por WhatsApp (botón de abajo).</li><li>Pagá con los datos que te envíe.</li>'}
-      <li>Cuando Tania confirme tu pago, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el aula de alumnas</a>.</li>
+      ${pasos}
+      <li>Cuando Tania confirme tu ${conMatricula ? 'matrícula' : 'inscripción'}, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el aula de alumnas</a>.</li>
     </ol>
-    <a class="btn btn-primario btn-grande btn-ancho" id="ins-wa" href="${esc(urlWa(mensajeComprobante(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} ${d.modo === 'online' ? 'Enviar comprobante por WhatsApp' : 'Escribir a Tania por WhatsApp'}</a>
+    <a class="btn btn-primario btn-grande btn-ancho" id="ins-wa" href="${esc(urlWa(mensajeComprobante(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} ${d.modo === 'online' && conMatricula ? 'Enviar comprobante por WhatsApp' : d.modo === 'online' ? 'Avisar a Tania por WhatsApp' : 'Escribir a Tania por WhatsApp'}</a>
     <button type="button" class="btn btn-secundario btn-ancho" data-cerrar>Listo</button>`;
   $('#form-inscripcion').hidden = true;
   ok.hidden = false;
