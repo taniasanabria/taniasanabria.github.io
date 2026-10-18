@@ -125,7 +125,7 @@
       </header>
       <ol class="pasos">
         <li><span class="paso-num">1</span><h3>Elegí tu servicio</h3><p>Mirá los detalles, la duración y el valor de referencia.</p></li>
-        <li><span class="paso-num">2</span><h3>Proponé fecha y horario</h3><p>Completá el formulario: te lleva a WhatsApp con todo listo para enviar.</p></li>
+        <li><span class="paso-num">2</span><h3>Proponé fecha y horario</h3><p>Completá el formulario en la web. ¿Dudas? Preguntá en el chat.</p></li>
         <li><span class="paso-num">3</span><h3>Confirmá tu cupo</h3><p>Tania te confirma la disponibilidad y te envía los datos para abonar el total o solo la seña por transferencia o QR.</p></li>
       </ol>
       <p class="pasos-politica">{{ICONO_INFO}} <span data-texto="politicaSena">{{POLITICA}}</span></p>
@@ -146,10 +146,10 @@
       <p>{{ICONO_RELOJ}} {{HORARIO}}</p>
       <p class="pie-nota">{{HORARIO_ESPECIAL}}</p>
       <p>{{ICONO_CANDADO}} {{ATENCION}}</p>
-      <p>{{ICONO_WA}} <a href="https://wa.me/{{WA}}" target="_blank" rel="noopener">{{TEL}}</a></p>
     </address>
     <div class="pie-acciones">
       <a class="btn btn-secundario" href="{{MAPA}}" target="_blank" rel="noopener">{{ICONO_MAPA}} Abrir en Google Maps</a>
+      <button type="button" class="btn btn-secundario" data-chat aria-expanded="false" aria-controls="chat">{{ICONO_CHAT}} Escribinos en el chat</button>
       <button type="button" class="btn btn-primario" data-reservar="">Reservar turno</button>
     </div>
   </div>
@@ -158,11 +158,9 @@
 
 <section class="barra-movil" aria-label="Acciones rápidas">
   <button type="button" class="btn btn-primario" data-reservar="">{{ICONO_CALENDARIO}} Reservar turno</button>
-  <button type="button" class="btn btn-chat" data-chat aria-expanded="false" aria-controls="chat" aria-label="Abrir el asistente: preguntas y reservas">{{ICONO_CHAT}}</button>
-  <a class="btn btn-wa" href="https://wa.me/{{WA}}" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">{{ICONO_WA}}</a>
+  <button type="button" class="btn btn-chat" data-chat aria-expanded="false" aria-controls="chat" aria-label="Preguntá en el chat">{{ICONO_CHAT}} <span>Preguntá</span></button>
 </section>
 <button type="button" class="chat-flotante" data-chat aria-expanded="false" aria-controls="chat" aria-label="Abrir el asistente: preguntas y reservas">{{ICONO_CHAT}}<span>¿Dudas? Preguntame</span></button>
-<a class="wa-flotante" href="https://wa.me/{{WA}}" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">{{ICONO_WA}}</a>
 
 <!-- Detalle de servicio -->
 <dialog class="dialogo" id="dlg-detalle" aria-labelledby="detalle-titulo">
@@ -259,7 +257,7 @@
       </div>
 
       <p class="form-error" id="r-error" role="alert"></p>
-      <button type="submit" class="btn btn-primario btn-grande btn-ancho" id="r-enviar">{{ICONO_WA}} <span id="r-enviar-texto">Enviar solicitud por WhatsApp</span></button>
+      <button type="submit" class="btn btn-primario btn-grande btn-ancho" id="r-enviar">{{ICONO_CALENDARIO}} <span id="r-enviar-texto">Enviar solicitud por WhatsApp</span></button>
       <p class="campo-ayuda centrado">La fecha y el horario quedan sujetos a confirmación de Tania.</p>
     </form>
     <div class="reserva-ok" id="reserva-ok" hidden tabindex="-1">

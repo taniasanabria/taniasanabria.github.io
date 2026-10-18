@@ -165,7 +165,7 @@ escribir('404.html', `<!DOCTYPE html>
     <p>Puede que el enlace esté incompleto o que la página haya cambiado de lugar.</p>
     <p class="hero-acciones">
       <a class="btn btn-primario" href="./">Ir al inicio</a>
-      <a class="btn btn-secundario" href="https://wa.me/${n.whatsapp}" rel="noopener">Escribir por WhatsApp</a>
+      <a class="btn btn-secundario" href="./#chat">Preguntá en el chat</a>
     </p>
   </main>
 </body>

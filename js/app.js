@@ -426,7 +426,7 @@ const MENSAJES_ERROR = {
   NOMBRE_INVALIDO: 'Escribí tu nombre y apellido.',
   TELEFONO_INVALIDO: 'Escribí un teléfono válido (ej: 0981 123 456).',
   EMAIL_INVALIDO: 'Revisá el email (o dejalo vacío).',
-  SERVICIO_NO_DISPONIBLE: 'Ese servicio no está disponible en este momento. Escribinos por WhatsApp.',
+  SERVICIO_NO_DISPONIBLE: 'Ese servicio no está disponible en este momento. Preguntá en el chat.',
 };
 
 function mostrarReservaOk({ registrada, url, resumen, abrir }) {
@@ -667,6 +667,8 @@ const ENLACES_VIEJOS = {
 function atenderHash() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (!hash) return;
+  // Enlace al asistente (p. ej. desde la página 404)
+  if (hash === 'chat') { history.replaceState(null, '', location.pathname + location.search); abrirAsistente(); return; }
   // Enlace directo a un servicio o curso (botón "Compartir"): abre su ficha.
   const directo = hash.match(/^(?:servicio|curso)-(.+)$/);
   if (directo && servicioPorId(directo[1])) {

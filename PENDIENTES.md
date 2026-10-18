@@ -36,7 +36,8 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - Alternativas descartadas por ahora: email con Resend (requiere crear una cuenta) y bot de Telegram (requiere que Tania cree el bot). Se pueden sumar más adelante sobre el mismo trigger.
 
 ## Asistente del sitio (chat para clientas, 17/10/2026)
-- ✅ Botón "¿Dudas? Preguntame" (escritorio) y botón 💬 en la barra inferior (celular). Se descarga recién al tocarlo, así que no afecta la velocidad de la página. No aparece en `/admin/`.
+- ✅ **Sin botones de WhatsApp en el sitio (pedido de Harold, 17/10/2026):** se quitaron el botón flotante, el de la barra inferior, el enlace del teléfono en el pie y el de la página 404. En su lugar: **Preguntá** (barra del celular), **Escribinos en el chat** (pie) y **Preguntá en el chat** (404, abre `/#chat`). WhatsApp queda solo dentro del chat ("Hablar con Tania", cuando no sabe responder), después de enviar una reserva o inscripción (comprobante / coordinar), en el aula de alumnas ("¿No tenés código?") y en el panel. El teléfono sigue en los datos estructurados (JSON-LD).
+- ✅ Botón "¿Dudas? Preguntame" (escritorio) y botón **Preguntá** en la barra inferior (celular). Se descarga recién al tocarlo, así que no afecta la velocidad de la página. No aparece en `/admin/`.
 - Responde **solo con los datos del sitio**: los servicios, precios y señas que Tania edita en el panel, más los horarios, la dirección, las políticas y los cursos (`data/catalogo.json`). Si no sabe algo, lo dice y ofrece **Hablar con Tania** por WhatsApp, con la pregunta ya escrita.
 - Lleva al formulario de reserva con el servicio ya elegido.
 - Pruebas: `node tools/probar-chat.mjs` corre más de 40 preguntas de ejemplo y verifica que ningún precio de las respuestas falte en el catálogo.

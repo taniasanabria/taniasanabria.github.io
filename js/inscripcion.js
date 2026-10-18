@@ -24,7 +24,7 @@ const MENSAJES = {
   TELEFONO_INVALIDO: 'Escribí un teléfono válido (ej: 0981 123 456).',
   EMAIL_INVALIDO: 'Revisá tu email: lo vas a usar para entrar a las clases.',
   ELEGI_UNA_OPCION: 'Elegí una de las opciones del curso.',
-  CURSO_NO_DISPONIBLE: 'Este curso no está disponible en este momento. Escribile a Tania por WhatsApp.',
+  CURSO_NO_DISPONIBLE: 'Este curso no está disponible en este momento. Preguntá en el chat.',
   NOTAS_DEMASIADO_LARGAS: 'El comentario es muy largo.',
 };
 

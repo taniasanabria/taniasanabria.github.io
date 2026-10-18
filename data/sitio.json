@@ -2,7 +2,7 @@
   "_ayuda": "Configuración de publicación. Sitio de usuario de GitHub Pages: cuenta taniasanabria, repo taniasanabria.github.io, publicado en la raíz. Cambiá 'url' si cambia la cuenta o el repo, o cuando haya dominio propio. Después ejecutá: node tools/build.mjs",
   "url": "https://taniasanabria.github.io/",
   "titulo": "Tania Sanabria | Makeup Studio Professional en Fernando de la Mora",
-  "descripcion": "Tania Sanabria Makeup Studio Professional. Maquillaje social y de novias, aerógrafo HD, cejas, trenzas, Glitter Bar, Neon Party y academia de maquillaje en Fernando de la Mora. Reservá tu turno por WhatsApp.",
+  "descripcion": "Tania Sanabria Makeup Studio Professional. Maquillaje social y de novias, aerógrafo HD, cejas, trenzas, Glitter Bar, Neon Party y academia de maquillaje en Fernando de la Mora. Reservá tu turno online.",
   "imagenCompartir": "img/og-tania-sanabria.jpg",
   "colorTema": "#1b1610",
   "fuenteDatos": "supabase",
