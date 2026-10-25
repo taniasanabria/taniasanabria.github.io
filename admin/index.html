@@ -135,7 +135,8 @@
             📷 Subir fotos
             <input type="file" id="f-archivos" accept="image/*" multiple>
           </label>
-          <p class="suave">Podés elegir varias a la vez. Se achican y optimizan solas antes de subir.</p>
+          <label class="check f-editar-opc"><input type="checkbox" id="f-editar" checked> Editar cada foto antes de subir (recortar, girar, logo)</label>
+          <p class="suave">Podés elegir varias a la vez. Se achican y optimizan solas antes de subir. Para editar una foto ya subida tocá “✏️ Editar” debajo de ella.</p>
           <div id="f-progreso" class="progreso" aria-live="polite"></div>
         </div>
         <div id="f-grilla" class="grilla-fotos"></div>
@@ -398,6 +399,7 @@
         <p class="suave" id="cu-flyer-info">Se muestra completo en la tarjeta y en la página del curso. Ideal vertical (4:5) o cuadrado; se optimiza solo.</p>
         <div class="acciones izq">
           <label class="btn btn-borde btn-subir">📷 <span id="cu-flyer-texto">Subir flyer</span><input type="file" id="cu-flyer" accept="image/jpeg,image/png,image/webp"></label>
+          <button type="button" class="btn btn-borde" id="cu-flyer-editar" hidden>✏️ Editar flyer</button>
           <button type="button" class="btn btn-borde" id="cu-flyer-quitar" hidden>Quitar flyer</button>
         </div>
       </fieldset>

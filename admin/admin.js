@@ -3,6 +3,7 @@
  * Solo funciona para emails cargados en la tabla public.admins (ver supabase/schema.sql).
  */
 import { SUPABASE } from '../js/config.js';
+import { editarImagen } from './editor-fotos.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -510,6 +511,7 @@ async function cargarFotos() {
         <button type="button" class="btn btn-borde" data-mover="-1" ${i === 0 ? 'disabled' : ''} aria-label="Mover antes">◀ Antes</button>
         <button type="button" class="btn btn-borde" data-mover="1" ${i === data.length - 1 ? 'disabled' : ''} aria-label="Mover después">Después ▶</button>
         <button type="button" class="btn btn-borde btn-borrar" data-borrar>🗑 Eliminar</button>
+        <button type="button" class="btn btn-borde btn-editar" data-editar>✏️ Editar · recortar · logo</button>
       </div>
       <select data-cambiar-destino aria-label="Mover a otro servicio o álbum"><option value="">Mover a…</option>${opcionesDestino('')}</select>
     </div>`).join('') : '<p class="vacio">Todavía no hay fotos aquí. Tocá “Subir fotos”.</p>';
@@ -552,11 +554,17 @@ async function subirFotos(archivos) {
   prog.innerHTML = '';
   let orden = fotosActuales.reduce((m, f) => Math.max(m, f.orden), 0);
   let ok = 0;
-  for (const archivo of archivos) {
+  const editar = $('#f-editar') && $('#f-editar').checked;
+  for (let archivo of archivos) {
     const linea = document.createElement('div');
     linea.textContent = `⏳ ${archivo.name}: optimizando…`;
     prog.append(linea);
     try {
+      if (editar) {
+        const r = await editarImagen(archivo, { titulo: archivos.length > 1 ? `Foto ${archivos.indexOf(archivo) + 1} de ${archivos.length}` : 'Editar antes de subir', acciones: [{ id: 'original', texto: 'Sin cambios' }, { id: 'subir', texto: 'Subir' }] });
+        if (!r) { linea.textContent = `– ${archivo.name}: no se subió (cancelada)`; continue; }
+        if (r.accion === 'subir') archivo = new File([r.blob], archivo.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      }
       const { salidas, formato, ancho, alto } = await optimizar(archivo);
       const id = crypto.randomUUID();
       linea.textContent = `⏳ ${archivo.name}: subiendo…`;
@@ -618,6 +626,53 @@ async function cambiarDestinoFoto(id, destino) {
   const { error } = await sb.from('fotos').update({ ...campoDestino(destino), orden: 9999 }).eq('id', id);
   if (error) { toast(errorLegible(error), true); return; }
   toast('Foto movida ✓');
+  cargarFotos();
+}
+
+// Editar una foto ya subida: "Reemplazar" sube archivos nuevos (ruta nueva = el sitio muestra la versión nueva
+// sin problemas de caché), actualiza la misma fila y borra los archivos viejos; "Guardar copia" agrega otra foto.
+function urlGrande(f) {
+  const w = Math.max(...f.anchos);
+  return f.origen === 'sitio' ? new URL(`../img/${f.ruta}-${w}.webp`, location.href).href : urlStorage(`${f.ruta}-${w}.${f.formato || 'webp'}`);
+}
+async function subirVersiones(blob, prefijo = '') {
+  const { salidas, formato, ancho, alto } = await optimizar(blob);
+  const ruta = prefijo + crypto.randomUUID();
+  const subidos = [];
+  try {
+    for (const s of salidas) {
+      const nombre = `${ruta}-${s.w}.${formato}`;
+      const { error } = await sb.storage.from('fotos').upload(nombre, s.blob, { contentType: formato === 'webp' ? 'image/webp' : 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error) throw error;
+      subidos.push(nombre);
+    }
+  } catch (e) { if (subidos.length) await sb.storage.from('fotos').remove(subidos); throw e; }
+  return { ruta, anchos: salidas.map((s) => s.w), formato, ancho, alto, subidos };
+}
+async function editarFotoExistente(id) {
+  const f = fotosActuales.find((x) => x.id === id); if (!f) return;
+  let r;
+  try { r = await editarImagen(urlGrande(f), { titulo: 'Editar foto', acciones: [{ id: 'copia', texto: 'Copia' }, { id: 'reemplazar', texto: 'Guardar' }] }); }
+  catch (e) { toast(errorLegible(e), true); return; }
+  if (!r) return;
+  toast('⏳ Guardando la foto editada…');
+  let nueva;
+  try { nueva = await subirVersiones(r.blob); } catch (e) { toast(errorLegible(e), true); return; }
+  const datos = { origen: 'storage', ruta: nueva.ruta, anchos: nueva.anchos, formato: nueva.formato, ancho: nueva.ancho, alto: nueva.alto };
+  if (r.accion === 'copia') {
+    const { id: _i, creado: _c, ...resto } = f;
+    const { error } = await sb.from('fotos').insert({ ...resto, ...datos, orden: (f.orden || 0) + 1 });
+    if (error) { await sb.storage.from('fotos').remove(nueva.subidos); toast(errorLegible(error), true); return; }
+    toast('Copia editada guardada ✓');
+  } else {
+    const { error } = await sb.from('fotos').update(datos).eq('id', f.id);
+    if (error) { await sb.storage.from('fotos').remove(nueva.subidos); toast(errorLegible(error), true); return; }
+    if (f.origen === 'storage') {
+      const { data: usos } = await sb.from('fotos').select('id').eq('ruta', f.ruta);
+      if (usos && !usos.length) await sb.storage.from('fotos').remove(f.anchos.map((w) => `${f.ruta}-${w}.${f.formato || 'webp'}`));
+    }
+    toast('Foto reemplazada ✓');
+  }
   cargarFotos();
 }
 
@@ -795,7 +850,7 @@ function textoAContenido(texto, previos = []) {
 }
 function pintarFlyerEditor() {
   const f = edCurso.flyer;
-  $('#cu-flyer-vista').hidden = !f; $('#cu-flyer-quitar').hidden = !f;
+  $('#cu-flyer-vista').hidden = !f; $('#cu-flyer-quitar').hidden = !f; $('#cu-flyer-editar').hidden = !f;
   $('#cu-flyer-texto').textContent = f ? 'Cambiar flyer' : 'Subir flyer';
   if (f) $('#cu-flyer-img').src = urlFlyer(f, f.anchos[Math.min(1, f.anchos.length - 1)]);
 }
@@ -1686,6 +1741,7 @@ function prepararEventos() {
     const item = e.target.closest('[data-foto]'); if (!item) return;
     const m = e.target.closest('[data-mover]'); if (m) { moverFoto(item.dataset.foto, Number(m.dataset.mover)); return; }
     if (e.target.closest('[data-borrar]')) borrarFoto(item.dataset.foto);
+    if (e.target.closest('[data-editar]')) editarFotoExistente(item.dataset.foto);
   });
   $('#f-grilla').addEventListener('change', (e) => {
     const s = e.target.closest('[data-cambiar-destino]'); if (s) cambiarDestinoFoto(e.target.closest('[data-foto]').dataset.foto, s.value);
@@ -1715,7 +1771,18 @@ function prepararEventos() {
     if (b.dataset.cu === 'editar') abrirEditorCurso(id); else ordenarCurso(id, Number(b.dataset.cu));
   });
   $('#form-curso').addEventListener('submit', guardarCurso);
-  $('#cu-flyer').addEventListener('change', (e) => { const a = e.target.files && e.target.files[0]; if (a) subirFlyer(a); });
+  $('#cu-flyer').addEventListener('change', async (e) => {
+    const a = e.target.files && e.target.files[0]; if (!a) return;
+    if (!/^image\/(jpeg|png|webp)$/.test(a.type)) { subirFlyer(a); return; }
+    let r; try { r = await editarImagen(a, { titulo: 'Editar flyer', ratio: 'original', acciones: [{ id: 'subir', texto: 'Usar flyer' }] }); } catch (err) { toast(errorLegible(err), true); }
+    e.target.value = '';
+    if (r) subirFlyer(new File([r.blob], 'flyer.jpg', { type: 'image/jpeg' }));
+  });
+  $('#cu-flyer-editar').addEventListener('click', async () => {
+    const f = edCurso && edCurso.flyer; if (!f) return;
+    let r; try { r = await editarImagen(urlFlyer(f, Math.max(...f.anchos)), { titulo: 'Editar flyer', ratio: 'original', acciones: [{ id: 'subir', texto: 'Usar flyer' }] }); } catch (err) { toast(errorLegible(err), true); }
+    if (r) subirFlyer(new File([r.blob], 'flyer.jpg', { type: 'image/jpeg' }));
+  });
   $('#cu-flyer-quitar').addEventListener('click', () => { edCurso.flyer = null; pintarFlyerEditor(); $('#cu-flyer-info').textContent = 'Flyer quitado. Tocá “Guardar curso” para confirmar.'; });
   $('#cu-agregar-opcion').addEventListener('click', () => { $('#cu-opciones').insertAdjacentHTML('beforeend', filaOpcion()); $('#cu-opciones .opcion-curso:last-child input').focus(); });
   $('#cu-opciones').addEventListener('click', (e) => { if (e.target.closest('[data-quitar-opcion]')) e.target.closest('.opcion-curso').remove(); });

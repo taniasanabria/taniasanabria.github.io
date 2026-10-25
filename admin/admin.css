@@ -251,3 +251,30 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 @media (max-width: 420px) { .horario-fila, .horarios-cabecera { grid-template-columns: 1fr 5.6rem .8rem 5.6rem auto; gap: .25rem; } }
 .horario-fila:has([data-libre]) { grid-template-columns: 1fr auto; }
 .horario-fila select, .horario-fila input { min-height: 42px; }
+
+/* Editor de fotos (pantalla completa, pensado para el dedo) */
+dialog.editor { width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0; padding: 0; border-radius: 0; background: #14110d; color: #fff; display: none; flex-direction: column; overscroll-behavior: contain; }
+dialog.editor[open] { display: flex; }
+.ed-barra { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem; padding-top: max(.5rem, env(safe-area-inset-top)); background: #1b1610; border-bottom: 1px solid #2e271e; }
+.ed-titulo { flex: 1; text-align: center; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-acciones { display: flex; gap: .4rem; }
+.ed-btn-txt, .ed-btn-ok { min-height: 44px; padding: .45rem .8rem; border-radius: 10px; font: inherit; font-weight: 700; font-size: .95rem; cursor: pointer; border: 1px solid #4a4134; background: transparent; color: #f3ede3; }
+.ed-btn-ok { background: var(--oro-claro); border-color: var(--oro-claro); color: #1b1610; }
+.ed-escena { position: relative; flex: 1; min-height: 0; background: repeating-conic-gradient(#1d1915 0 25%, #191511 0 50%) 0 0 / 22px 22px; }
+.ed-lienzo { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.ed-ocupado { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(20,17,13,.7); font-weight: 700; }
+.ed-panel { padding: .7rem .8rem .2rem; background: #1b1610; }
+.ed-chips { display: flex; gap: .45rem; overflow-x: auto; padding-bottom: .3rem; scrollbar-width: none; }
+.ed-chip { flex: none; display: inline-flex; align-items: center; gap: .3rem; min-height: 42px; padding: .4rem .9rem; border-radius: 999px; border: 1px solid #4a4134; background: #241e17; color: #f3ede3; font: inherit; font-size: .92rem; font-weight: 600; cursor: pointer; margin: 0; }
+.ed-chip[aria-pressed="true"] { background: var(--oro-claro); border-color: var(--oro-claro); color: #1b1610; }
+.ed-subir input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.ed-ayuda { color: #b8ad9c; font-size: .82rem; margin: .35rem 0 .2rem; }
+.ed-slider { display: grid; grid-template-columns: 6.5rem 1fr 2.6rem; align-items: center; gap: .5rem; margin: .15rem 0; font-weight: 600; font-size: .9rem; color: #f3ede3; }
+.ed-slider input { min-height: 40px; padding: 0; border: 0; background: transparent; accent-color: var(--oro-claro); margin: 0; }
+.ed-slider output { text-align: right; font-variant-numeric: tabular-nums; color: #d8c79c; }
+.ed-tabs { display: grid; grid-template-columns: repeat(4, 1fr); background: #1b1610; border-top: 1px solid #2e271e; padding-bottom: env(safe-area-inset-bottom); }
+.ed-tabs button { display: flex; flex-direction: column; align-items: center; gap: .1rem; min-height: 58px; border: 0; background: none; color: #b8ad9c; font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; }
+.ed-tabs button span { font-size: 1.25rem; }
+.ed-tabs button[aria-selected="true"] { color: var(--oro-claro); box-shadow: inset 0 3px 0 var(--oro-claro); }
+.foto-acciones .btn-editar { flex-basis: 100%; }
+.f-editar-opc { margin-top: .6rem; }
