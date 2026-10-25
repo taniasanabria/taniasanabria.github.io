@@ -78,3 +78,9 @@
 .horarios-pendientes strong { color: #f6e7bd; font-family: var(--titulos); letter-spacing: .04em; }
 .horarios-pendientes p { margin: .2rem 0 .3rem; font-size: .9rem; color: #d9cfbf; }
 .horarios-pendientes .btn-texto { color: var(--oro-brillo); padding-left: 0; min-height: 36px; }
+/* 1.5.0 · clases por semana: elegir N días distintos */
+.ins-dias-ayuda { display: flex; gap: .55rem; align-items: flex-start; margin: 0 0 .7rem; padding: .65rem .8rem; border-radius: 12px; background: #fbf6ec; border: 1px solid var(--linea); font-size: .88rem; line-height: 1.4; color: var(--tinta); }
+.ins-dias-ayuda svg { flex: none; width: 1.1em; height: 1.1em; margin-top: .15em; color: var(--oro); }
+.ins-dias-ayuda.completo { background: #eef7ef; border-color: #b9dcbf; }
+.dia-grupo.dia-con-eleccion { border-color: var(--oro); box-shadow: 0 0 0 1px var(--oro) inset; }
+.dia-grupo-titulo em.dia-elegido { color: #2f7a3d; }

@@ -30,6 +30,8 @@ const MENSAJES = {
   ELEGI_UN_HORARIO: 'Elegí el horario que te queda mejor.',
   HORARIO_INVALIDO: 'Ese horario ya no está disponible. Elegí otro.',
   HORARIO_COMPLETO: 'Ese horario se llenó recién. Elegí otro horario o escribile a Tania por el chat.',
+  DIAS_REPETIDOS: 'Elegí días distintos (un solo horario por día).',
+  ELEGI_N_DIAS: 'Elegí la cantidad de días que pide el curso.',
   CURSO_COMPLETO: 'El curso ya no tiene lugares libres. Escribile a Tania por el chat para la lista de espera.',
 };
 
@@ -71,7 +73,7 @@ function construir() {
       <div id="ins-ficha"></div>
       <fieldset class="ins-opciones" id="ins-opciones" hidden><legend>Elegí la modalidad</legend><div id="ins-opciones-lista"></div></fieldset>
       <p class="ins-cupos" id="ins-cupos" aria-live="polite" hidden></p>
-      <fieldset class="ins-horarios" id="ins-horarios" hidden><legend>Elegí día y horario</legend><div class="ins-leyenda" aria-hidden="true"><span class="l-libre">Disponible</span><span class="l-ultimos">Últimos lugares</span><span class="l-completo">Completo</span></div><div id="ins-horarios-lista"></div></fieldset>
+      <fieldset class="ins-horarios" id="ins-horarios" hidden><legend id="ins-horarios-titulo">Elegí día y horario</legend><p class="ins-dias-ayuda" id="ins-dias-ayuda" aria-live="polite" hidden></p><div class="ins-leyenda" aria-hidden="true"><span class="l-libre">Disponible</span><span class="l-ultimos">Últimos lugares</span><span class="l-completo">Completo</span></div><div id="ins-horarios-lista"></div></fieldset>
       <div id="ins-sin-horarios" hidden></div>
       <div class="campo-fila">
         <div class="campo">
@@ -107,6 +109,7 @@ function construir() {
     $('#ins-error').textContent = '';
   });
   $('#ins-opciones').addEventListener('change', pintarMonto);
+  $('#ins-horarios').addEventListener('change', elegirDia);
 }
 
 function marcar(el, invalido) {
@@ -182,10 +185,39 @@ async function pintarCupos(s) {
     + `<span class="ins-cupos-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>`;
   const lista = d.horarios || [];
   hs.hidden = !lista.length;
-  $('#ins-horarios-lista').innerHTML = lista.length ? grillaHorariosCurso(lista) : '';
+  // Clases por semana: solo con la SQL 1.5.0 (disponibilidad_cursos trae clases_semana); si no, 1 día como antes.
+  diasPorSemana = Math.min(Math.max(parseInt(d.clases_semana, 10) || 1, 1), 3);
+  $('#ins-horarios-lista').innerHTML = lista.length ? grillaHorariosCurso(lista, diasPorSemana) : '';
+  $('#ins-horarios-titulo').textContent = diasPorSemana > 1 ? `Elegí tus ${diasPorSemana} días y horarios` : 'Elegí día y horario';
+  pintarAyudaDias();
   sin.hidden = !!lista.length || lleno;
   sin.innerHTML = lista.length ? '' : horariosAConfirmar();
   $('#ins-enviar').disabled = lleno || (lista.length > 0 && lista.every((h) => h.disponibles <= 0));
+}
+
+let diasPorSemana = 1;
+const elegidos = () => [...dlg.querySelectorAll('input[name="horario"]:checked')];
+function pintarAyudaDias() {
+  const a = $('#ins-dias-ayuda');
+  const lista = elegidos();
+  a.hidden = !dlg.querySelector('input[name="horario"]');
+  dlg.querySelectorAll('[data-dia-grupo]').forEach((g) => { const ok = !!g.querySelector('input:checked'); g.classList.toggle('dia-con-eleccion', ok); const m = g.querySelector('.dia-elegido'); if (m) m.hidden = !ok; });
+  const fijo = 'Es tu horario fijo: el mismo día y hora todas las semanas hasta terminar el curso.';
+  if (diasPorSemana === 1) { a.innerHTML = `${icono('calendar-check')} <span>1 clase por semana. ${fijo}</span>`; return; }
+  const faltan = diasPorSemana - lista.length;
+  a.innerHTML = `${icono('calendar-check')} <span><strong>${diasPorSemana} clases por semana: elegí ${diasPorSemana} días distintos</strong> (un horario por día) · `
+    + (faltan > 0 ? `elegiste ${lista.length} de ${diasPorSemana}` : '✓ listo') + `. ${fijo}</span>`;
+  a.classList.toggle('completo', faltan <= 0);
+}
+function elegirDia(e) {
+  const el = e.target;
+  if (el.name !== 'horario' || el.type !== 'checkbox') { pintarAyudaDias(); return; }
+  if (el.checked) {
+    // un solo horario por día: elegir otro del mismo día lo reemplaza
+    dlg.querySelectorAll('input[name="horario"]:checked').forEach((x) => { if (x !== el && x.dataset.dia === el.dataset.dia) x.checked = false; });
+    if (elegidos().length > diasPorSemana) { el.checked = false; $('#ins-error').textContent = `Este curso es de ${diasPorSemana} clases por semana: quitá un día antes de elegir otro.`; }
+  }
+  pintarAyudaDias();
 }
 
 const telefonoValido = (t) => { const d = t.replace(/[^\d+]/g, ''); return /^(\+?595|0)?9\d{8}$/.test(d) || /^\+?\d{8,15}$/.test(d); };
@@ -202,8 +234,9 @@ async function enviar(e) {
   if (!telefonoValido(tel)) errores.push([f.telefono, MENSAJES.TELEFONO_INVALIDO]);
   if (!emailValido(email)) errores.push([f.email, MENSAJES.EMAIL_INVALIDO]);
   const conHorarios = !$('#ins-horarios').hidden && !!dlg.querySelector('input[name="horario"]');
-  const horario = conHorarios ? (dlg.querySelector('input[name="horario"]:checked') || {}).value : null;
-  if (conHorarios && !horario) errores.push([dlg.querySelector('input[name="horario"]'), MENSAJES.ELEGI_UN_HORARIO]);
+  const marcados = conHorarios ? elegidos().map((x) => x.value) : [];
+  const horario = marcados.length ? marcados.join('; ') : null; // "Lunes 09:00–11:00; Jueves 16:00–18:00"
+  if (conHorarios && marcados.length !== diasPorSemana) errores.push([dlg.querySelector('input[name="horario"]'), diasPorSemana > 1 ? `Elegí ${diasPorSemana} días distintos con su horario (elegiste ${marcados.length}).` : MENSAJES.ELEGI_UN_HORARIO]);
   errores.forEach(([el]) => el && el.type !== 'radio' && marcar(el, true));
   if (errores.length) { $('#ins-error').textContent = errores[0][1]; (errores[0][0] || f.nombre).focus(); return; }
 

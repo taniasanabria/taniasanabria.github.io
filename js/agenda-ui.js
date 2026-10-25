@@ -24,7 +24,7 @@ export function partirHorario(texto) {
 export const pocos = (disp, cupo) => disp > 0 && disp <= Math.max(2, Math.ceil((cupo || 10) * 0.2));
 
 /** HTML de la grilla de horarios de un curso. `lista` = [{ horario, cupo, ocupados, disponibles }]. */
-export function grillaHorariosCurso(lista) {
+export function grillaHorariosCurso(lista, n = 1) {
   const grupos = new Map();
   for (const h of lista) {
     const p = partirHorario(h.horario);
@@ -33,27 +33,28 @@ export function grillaHorariosCurso(lista) {
     grupos.get(clave).items.push({ ...h, p });
   }
   const libresTotales = lista.filter((h) => h.disponibles > 0);
-  const unico = libresTotales.length === 1;
+  const unico = n === 1 && libresTotales.length === 1;
+  const tipo = n > 1 ? 'checkbox' : 'radio';
   const minutos = (t) => { const m = String(t).match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : 9999; };
   return [...grupos.entries()].sort((a, b) => a[1].orden - b[1].orden).map(([dia, g]) => {
     g.items.sort((x, y) => minutos(x.p.hora) - minutos(y.p.hora));
     const lleno = g.items.every((h) => h.disponibles <= 0);
-    const chips = g.items.map((h) => {
+    const chips = g.items.map((h) => { const p = h.p;
       const completo = h.disponibles <= 0;
       const ultimos = pocos(h.disponibles, h.cupo);
       const estado = completo ? 'completo' : ultimos ? 'ultimos' : 'libre';
       const badge = completo ? 'Completo' : ultimos ? (h.disponibles === 1 ? '¡Último lugar!' : `Últimos ${h.disponibles}`) : `${h.disponibles} lugares`;
       const pct = h.cupo ? Math.min(100, Math.round((h.ocupados / h.cupo) * 100)) : 0;
       return `<label class="hora-chip estado-${estado}">
-        <input type="radio" name="horario" value="${esc(h.horario)}"${completo ? ' disabled' : ''}${unico && !completo ? ' checked' : ''}>
+        <input type="${tipo}" name="horario" data-dia="${esc(p.dia || h.horario)}" value="${esc(h.horario)}"${completo ? ' disabled' : ''}${unico && !completo ? ' checked' : ''}>
         <span class="hora-chip-hora">${esc(h.p.hora.replace(/\s*[–—-]\s*(?=\d)/, ' – '))}</span>
         <span class="hora-chip-estado">${esc(badge)}</span>
         <span class="hora-chip-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>
         <span class="solo-lector">${esc(h.horario)}: ${completo ? 'completo, sin lugares' : `${h.disponibles} de ${h.cupo} lugares libres`}</span>
       </label>`;
     }).join('');
-    return `<div class="dia-grupo${lleno ? ' dia-lleno' : ''}">
-      <p class="dia-grupo-titulo"><span>${esc(dia)}</span>${lleno ? '<em>Completo</em>' : ''}</p>
+    return `<div class="dia-grupo${lleno ? ' dia-lleno' : ''}" data-dia-grupo="${esc(dia)}">
+      <p class="dia-grupo-titulo"><span>${esc(dia)}</span>${lleno ? '<em>Completo</em>' : n > 1 ? '<em class="dia-elegido" hidden>✓ Elegido</em>' : ''}</p>
       <div class="dia-grupo-horas">${chips}</div>
     </div>`;
   }).join('');

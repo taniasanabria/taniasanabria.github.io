@@ -326,10 +326,12 @@
         <label>Duración (minutos) <input type="number" name="dur" min="10" max="720" step="5"></label>
       </div>
       <div id="hora-alumna">
-        <label for="hora-sel">Día y horario del curso</label>
+        <p class="suave" id="hora-alumna-n"></p>
+        <label for="hora-sel" id="hora-sel-lbl">Día y horario del curso</label>
         <select id="hora-sel" name="horario_sel"></select>
+        <div id="hora-sels-extra"></div>
         <label id="hora-otro-lbl" for="hora-otro">Otro horario (texto)</label>
-        <input id="hora-otro" name="horario_otro" maxlength="80" placeholder="Ej: Lunes 09:00–11:00">
+        <input id="hora-otro" name="horario_otro" maxlength="200" placeholder="Ej: Lunes 09:00–11:00; Jueves 16:00–18:00">
       </div>
       <p class="suave">El cambio también se ve en la app de agenda de Tania.</p>
       <p class="error" id="hora-error" role="alert"></p>
@@ -418,6 +420,9 @@
         <div>
           <label for="cu-cupo">Cupo máximo por horario</label>
           <input id="cu-cupo" name="cupo" type="number" min="1" max="500" inputmode="numeric" placeholder="10">
+          <label for="cu-clases">Clases por semana</label>
+          <select id="cu-clases" name="clases_semana"><option value="1">1 día por semana</option><option value="2">2 días por semana</option><option value="3">3 días por semana</option></select>
+          <p class="suave">La alumna elige esa cantidad de días distintos (un horario por día) y los mantiene todas las semanas hasta terminar.</p>
         </div>
         <div>
           <label>Días y horarios del curso <small id="cu-horarios-cuenta" class="suave"></small></label>

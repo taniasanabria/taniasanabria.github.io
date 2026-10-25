@@ -345,20 +345,29 @@ function abrirCambioHora(tipo, x) {
   } else {
     const s = estado.servicios.find((y) => y.id === x.servicio_id);
     const hs = (s && s.extra && Array.isArray(s.extra.horarios) ? s.extra.horarios : []).slice().sort((a, b) => ordenHorario(a) - ordenHorario(b));
-    const actual = x.horario || '';
-    const igual = (h) => { const p = leerHorario(h); const q = leerHorario(actual); return p && q ? p.dia === q.dia && p.ini === q.ini : sinTilde(h) === sinTilde(actual); };
-    const sel = hs.find(igual);
+    const n = soportaClases() ? clasesDe(s) : 1;
+    const partes = String(x.horario || '').split(/\s*;\s*/).filter(Boolean);
+    const igual = (h, actual) => { const p = leerHorario(h); const q = leerHorario(actual); return p && q ? p.dia === q.dia && p.ini === q.ini : sinTilde(h) === sinTilde(actual); };
+    const sels = partes.map((t) => hs.find((h) => igual(h, t)));
+    const conocido = partes.length > 0 && partes.length <= n && sels.every(Boolean);
+    const cupos = (cuposCache && cuposCache[x.servicio_id] && cuposCache[x.servicio_id].horarios) || [];
+    const occ = (h) => { const c = cupos.find((y) => y.horario === h); return c ? ` · ${c.ocupados}/${c.cupo}` : ''; };
     const grupos = new Map();
     hs.forEach((h) => { const p = leerHorario(h); const k = p ? p.dia : 'Otros'; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(h); });
-    $('#hora-sel').innerHTML = '<option value="">Sin horario asignado</option>'
-      + [...grupos].map(([d, l]) => `<optgroup label="${esc(d)}">${l.map((h) => `<option value="${esc(h)}"${h === sel ? ' selected' : ''}>${esc(h)}</option>`).join('')}</optgroup>`).join('')
-      + `<option value="__otro"${actual && !sel ? ' selected' : ''}>Otro horario…</option>`;
-    f.horario_otro.value = actual && !sel ? actual : '';
+    const opciones = (sel, primero) => `<option value="">${primero ? 'Sin horario asignado' : 'Elegí el día y horario'}</option>`
+      + [...grupos].map(([d, l]) => `<optgroup label="${esc(d)}">${l.map((h) => `<option value="${esc(h)}"${h === sel ? ' selected' : ''}>${esc(h)}${occ(h)}</option>`).join('')}</optgroup>`).join('')
+      + (primero ? `<option value="__otro"${partes.length && !conocido ? ' selected' : ''}>Otro horario…</option>` : '');
+    $('#hora-alumna-n').textContent = n > 1 ? `Curso de ${n} clases por semana: elegí ${n} días distintos. Es su horario fijo todas las semanas.` : 'Curso de 1 clase por semana: mismo día y hora todas las semanas.';
+    $('#hora-sel-lbl').textContent = n > 1 ? 'Día 1' : 'Día y horario del curso';
+    $('#hora-sel').innerHTML = opciones(conocido ? sels[0] : null, true);
+    $('#hora-sels-extra').innerHTML = Array.from({ length: n - 1 }, (_, k) => `<label for="hora-sel-${k + 2}">Día ${k + 2}</label><select id="hora-sel-${k + 2}" class="hora-sel-extra">${opciones(conocido ? sels[k + 1] : null, false)}</select>`).join('');
+    f.horario_otro.value = partes.length && !conocido ? x.horario : '';
+    edHora.n = n;
     mostrarOtro();
   }
   $('#dlg-hora').showModal();
 }
-function mostrarOtro() { const o = $('#hora-sel').value === '__otro'; $('#hora-otro').hidden = !o; $('#hora-otro-lbl').hidden = !o; }
+function mostrarOtro() { const o = $('#hora-sel').value === '__otro'; $('#hora-otro').hidden = !o; $('#hora-otro-lbl').hidden = !o; $('#hora-sels-extra').hidden = o || !$('#hora-sel').value; }
 async function guardarCambioHora(e) {
   e.preventDefault();
   if (!edHora) return;
@@ -370,8 +379,19 @@ async function guardarCambioHora(e) {
     const ini = instante(f.fecha.value, f.hora.value);
     q = sb.from('reservas').update({ inicio: ini.toISOString(), fin: new Date(ini.getTime() + dur * 6e4).toISOString(), fecha_preferida: f.fecha.value, hora_preferida: f.hora.value }).eq('id', edHora.x.id);
   } else {
-    const v = $('#hora-sel').value === '__otro' ? f.horario_otro.value.trim().slice(0, 80) : $('#hora-sel').value;
-    if ($('#hora-sel').value === '__otro' && !v) { err.textContent = 'Escribí el horario o elegí uno de la lista.'; return; }
+    let v;
+    if ($('#hora-sel').value === '__otro') {
+      v = f.horario_otro.value.trim().slice(0, 200);
+      if (!v) { err.textContent = 'Escribí el horario o elegí uno de la lista.'; return; }
+    } else if (!$('#hora-sel').value) {
+      v = '';
+    } else {
+      const lista = [$('#hora-sel').value, ...$$('#hora-sels-extra select').map((x) => x.value)];
+      if (lista.some((h) => !h)) { err.textContent = `Este curso es de ${edHora.n} clases por semana: elegí los ${edHora.n} días.`; return; }
+      const dias = lista.map((h) => (leerHorario(h) || { dia: h }).dia);
+      if (new Set(dias).size !== dias.length) { err.textContent = 'Elegí días distintos (un horario por día).'; return; }
+      v = lista.sort((a, b) => ordenHorario(a) - ordenHorario(b)).join('; ');
+    }
     q = sb.from('inscripciones').update({ horario: v || null }).eq('id', edHora.x.id);
   }
   btn.disabled = true;
@@ -688,8 +708,37 @@ const matriculaOpcion = (v) => (typeof v.matricula === 'number' ? (v.matricula >
 let cuposCache = null;
 function textoCupos(id) {
   const d = cuposCache && cuposCache[id]; if (!d) return '';
-  const hs = (d.horarios || []).map((h) => `${esc(h.horario)}: ${h.ocupados}/${h.cupo}`).join(' · ');
-  return `<div class="curso-cupos">👩‍🎓 ${d.ocupados}/${d.cupo} lugares ocupados${hs ? ` <span class="suave">(${hs})</span>` : ''}</div>`;
+  const hs = (d.horarios || []).slice();
+  const n = clasesDe(estado.servicios.find((s) => s.id === id));
+  const pct = d.cupo ? Math.min(100, Math.round((d.ocupados / d.cupo) * 100)) : 0;
+  const alumnas = typeof d.alumnas === 'number' ? `${d.alumnas} alumna${d.alumnas === 1 ? '' : 's'} · ` : '';
+  const resumen = `<div class="curso-cupos"><span>👩‍🎓 ${alumnas}${d.ocupados}/${d.cupo} lugares ocupados${soportaClases() ? ` · ${n} clase${n > 1 ? 's' : ''}/semana` : ''}</span><span class="cupos-barra" aria-hidden="true"><i style="width:${pct}%"></i></span></div>`;
+  if (!hs.length) return resumen;
+  const grupos = new Map();
+  hs.forEach((h) => { const p = leerHorario(h.horario); const k = p ? p.dia : 'Otros'; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push({ ...h, p }); });
+  const filas = [...grupos].sort((a, b) => ordenDia(a[0]) - ordenDia(b[0])).map(([dia, l]) => `<div class="cupos-dia"><span class="cupos-dia-nombre">${esc(dia.slice(0, 3))}</span><div class="cupos-dia-horas">${l.sort((x, y) => ordenHorario(x.horario) - ordenHorario(y.horario)).map((h) => {
+    const est = h.disponibles <= 0 ? 'lleno' : h.ocupados > 0 ? 'parcial' : 'libre';
+    const hora = h.p ? `${h.p.ini.replace(/^0/, '').replace(':00', '')}${h.p.fin ? '–' + h.p.fin.replace(/^0/, '').replace(':00', '') : ''}` : h.horario;
+    return `<span class="cupo-chip ${est}" title="${esc(h.horario)}: ${h.ocupados} de ${h.cupo}"><b>${esc(hora)}</b><small>${h.ocupados}/${h.cupo}</small></span>`;
+  }).join('')}</div></div>`).join('');
+  const ocupados = hs.filter((h) => h.ocupados > 0).length;
+  return resumen + `<details class="cupos-detalle"><summary>🕒 Horarios (${hs.length})${ocupados ? ` · ${ocupados} con alumnas` : ''} <span class="flecha" aria-hidden="true">▾</span></summary>
+    <div class="cupos-grilla">${filas}</div>
+    <p class="cupos-leyenda"><span class="cupo-chip libre"></span>libre <span class="cupo-chip parcial"></span>con alumnas <span class="cupo-chip lleno"></span>completo</p></details>`;
+}
+// Clases por semana: solo se activan cuando la base ya tiene clases-por-semana.sql (disponibilidad_cursos trae clases_semana).
+const soportaClases = () => !!cuposCache && Object.values(cuposCache).some((d) => d && 'clases_semana' in d);
+const ordenDia = (d) => { const k = DIAS_CURSO.indexOf(d); return k < 0 ? 99 : k; };
+function inferirClases(c) {
+  const t = sinTilde([c && c.descripcion, c && c.duracion_texto, c && JSON.stringify(c.extra || {})].join(' '));
+  const m = t.match(/(\d|una|un|dos|tres)\s+(?:clases?|veces|dias?)\s*(?:semanal|semanales|por semana|a la semana|x semana)/);
+  if (!m) return 1;
+  const n = { una: 1, un: 1, dos: 2, tres: 3 }[m[1]] || parseInt(m[1], 10);
+  return Math.min(Math.max(n || 1, 1), 3);
+}
+function clasesDe(c) {
+  const v = parseInt(c && c.extra && c.extra.clases_semana, 10);
+  return v >= 1 && v <= 3 ? v : inferirClases(c);
 }
 async function cargarCupos() {
   const { data, error } = await sb.rpc('disponibilidad_cursos');
@@ -837,6 +886,7 @@ function abrirEditorCurso(id) {
   f.modalidad.value = ex.modalidad || ex.subtitulo || '';
   f.duracion.value = (c && c.duracion_texto) || '';
   f.cupo.value = ex.cupo_max || '';
+  f.clases_semana.value = String(c ? clasesDe(c) : 1);
   f.horarios.value = (Array.isArray(ex.horarios) ? ex.horarios : []).join('\n');
   pintarFilasHorario();
   f.contenido_titulo.value = ex.detallesTitulo || '';
@@ -936,6 +986,7 @@ async function guardarCurso(e) {
   // Cupos y horarios: la web muestra lugares libres por horario (public.disponibilidad_cursos, sin datos personales).
   const cupo = parseInt(f.cupo.value, 10);
   if (cupo > 0 && cupo <= 500) ex.cupo_max = cupo; else delete ex.cupo_max;
+  ex.clases_semana = Math.min(Math.max(parseInt(f.clases_semana.value, 10) || 1, 1), 3);
   sincronizarHorarios();
   if (!sincronizarHorarios()) { $('#curso-error').textContent = 'Revisá los horarios marcados en rojo: la hora “hasta” tiene que ser después de “desde”.'; return; }
   const horarios = [...new Set(f.horarios.value.split('\n').map((t) => t.trim().slice(0, 80)).filter(Boolean))].sort((x, y) => ordenHorario(x) - ordenHorario(y)).slice(0, MAX_HORARIOS);
