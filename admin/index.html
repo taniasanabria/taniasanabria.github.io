@@ -387,6 +387,17 @@
       <input id="cu-modalidad" name="modalidad" maxlength="200" placeholder="Ej: Presencial, 1 clase semanal + material online">
       <label for="cu-duracion">Duración (opcional)</label>
       <input id="cu-duracion" name="duracion" maxlength="120" placeholder="Ej: 3 meses">
+      <div class="dos-col">
+        <div>
+          <label for="cu-cupo">Cupo máximo por horario</label>
+          <input id="cu-cupo" name="cupo" type="number" min="1" max="500" inputmode="numeric" placeholder="10">
+        </div>
+        <div>
+          <label for="cu-horarios">Horarios / turnos (uno por línea)</label>
+          <textarea id="cu-horarios" name="horarios" rows="3" maxlength="600" placeholder="Martes 18:00&#10;Sábado 09:00"></textarea>
+        </div>
+      </div>
+      <p class="suave">En la web se ven los lugares libres de cada horario (sin nombres). Si no cargás horarios, el cupo es para todo el curso. Vacío = 10 lugares.</p>
 
       <fieldset class="opciones-curso">
         <legend>Opciones (opcional)</legend>

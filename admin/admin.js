@@ -185,7 +185,7 @@ function tarjetaCita(r, { nueva = false } = {}) {
   if (r.sena_ref || r.pago === 'total') etiquetas.push(`<span class="etiqueta">${r.pago === 'total' ? 'Paga el total' + (r.precio_ref ? ': ' + esc(r.precio_ref) : '') : 'Seña ' + esc(r.sena_ref || '')}</span>`);
   if (r.personas) etiquetas.push(`<span class="etiqueta">${r.personas} ${r.personas === 1 ? 'persona' : 'personas'}</span>`);
   if (!r.bloquea && r.inicio) etiquetas.push('<span class="etiqueta">No ocupa agenda</span>');
-  etiquetas.push(`<span class="etiqueta">${r.origen === 'web' ? 'Desde la web' : 'Cargada a mano'}</span>`);
+  etiquetas.push(`<span class="etiqueta">${r.origen === 'web' ? 'Desde la web' : r.origen === 'app' ? '📱 Desde la app' : 'Cargada a mano'}</span>`);
   let acciones = '';
   if (r.estado === 'pendiente') {
     acciones = `<button type="button" class="btn btn-aprobar" data-accion="aprobar" data-id="${r.id}">✓ Aprobar</button>
@@ -211,7 +211,7 @@ function tarjetaCita(r, { nueva = false } = {}) {
 const cacheReservas = new Map();
 
 async function cargarPendientes({ avisar = false } = {}) {
-  const { data, error } = await sb.from('reservas').select('*').eq('estado', 'pendiente')
+  const { data, error } = await sb.from('reservas').select('*').eq('estado', 'pendiente').neq('origen', 'app')
     .order('inicio', { ascending: true, nullsFirst: false }).order('creado', { ascending: true });
   if (error) { toast(errorLegible(error), true); return; }
   data.forEach((r) => cacheReservas.set(r.id, r));
@@ -626,6 +626,19 @@ const urlFlyer = (f, ancho) => (f && f.ruta ? `${URL_FOTOS}${f.ruta}-${ancho || 
 const archivosFlyer = (f) => (f && f.ruta ? f.anchos.map((w) => `${f.ruta}-${w}.${f.formato === 'jpg' ? 'jpg' : 'webp'}`) : []);
 const matriculaOpcion = (v) => (typeof v.matricula === 'number' ? (v.matricula > 0 ? v.matricula : null) : numeroGs(String(v.sena || '').match(/\d{1,3}(?:\.\d{3})+|\d+/)?.[0]));
 
+// Cupos ocupados/libres (RPC pública disponibilidad_cursos; si todavía no está instalada no se muestra nada).
+let cuposCache = null;
+function textoCupos(id) {
+  const d = cuposCache && cuposCache[id]; if (!d) return '';
+  const hs = (d.horarios || []).map((h) => `${esc(h.horario)}: ${h.ocupados}/${h.cupo}`).join(' · ');
+  return `<div class="curso-cupos">👩‍🎓 ${d.ocupados}/${d.cupo} lugares ocupados${hs ? ` <span class="suave">(${hs})</span>` : ''}</div>`;
+}
+async function cargarCupos() {
+  const { data, error } = await sb.rpc('disponibilidad_cursos');
+  cuposCache = error ? null : data;
+  pintarCursosAdmin();
+}
+
 function pintarCursosAdmin() {
   const lista = cursos();
   $('#lista-cursos-admin').innerHTML = lista.length ? lista.map((c, i) => {
@@ -634,7 +647,7 @@ function pintarCursosAdmin() {
     const datos = ops.map((o) => `${o.etiqueta ? esc(o.etiqueta) + ': ' : ''}${o.mat ? 'matrícula ' + gs(o.mat) : 'sin matrícula'}${o.precio ? ' · curso ' + esc(o.precio) : ''}`).join('<br>');
     const mini = ex.flyer && ex.flyer.ruta ? `<img class="miniatura" src="${esc(urlFlyer(ex.flyer, ex.flyer.anchos[0]))}" alt="" loading="lazy">` : '<span class="miniatura" aria-hidden="true">🎓</span>';
     return `<div class="curso-admin${c.activo ? '' : ' inactivo'}" data-curso-admin="${esc(c.id)}">${mini}
-      <div><div class="curso-nombre">${esc(c.nombre)}${c.activo ? '' : ' · <em>oculto</em>'}</div><div class="curso-datos">${datos}</div></div>
+      <div><div class="curso-nombre">${esc(c.nombre)}${c.activo ? '' : ' · <em>oculto</em>'}</div><div class="curso-datos">${datos}</div>${textoCupos(c.id)}</div>
       <div class="acciones">
         <button type="button" class="btn btn-borde btn-chico" data-cu="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${esc(c.nombre)}">↑</button>
         <button type="button" class="btn btn-borde btn-chico" data-cu="1" ${i === lista.length - 1 ? 'disabled' : ''} aria-label="Bajar ${esc(c.nombre)}">↓</button>
@@ -692,6 +705,8 @@ function abrirEditorCurso(id) {
   f.precio.value = c ? c.precio_texto : '';
   f.modalidad.value = ex.modalidad || ex.subtitulo || '';
   f.duracion.value = (c && c.duracion_texto) || '';
+  f.cupo.value = ex.cupo_max || '';
+  f.horarios.value = (Array.isArray(ex.horarios) ? ex.horarios : []).join('\n');
   f.contenido_titulo.value = ex.detallesTitulo || '';
   f.contenido.value = contenidoATexto(ex);
   f.destacados.value = (ex.beneficios || []).map((b) => b.texto).join('\n');
@@ -786,6 +801,11 @@ async function guardarCurso(e) {
   ex.cta = ex.cta || 'Inscribirme';
   ex.accion = ex.accion || 'inscribirme a este curso';
   if (edCurso.flyer) ex.flyer = edCurso.flyer; else delete ex.flyer;
+  // Cupos y horarios: la web muestra lugares libres por horario (public.disponibilidad_cursos, sin datos personales).
+  const cupo = parseInt(f.cupo.value, 10);
+  if (cupo > 0 && cupo <= 500) ex.cupo_max = cupo; else delete ex.cupo_max;
+  const horarios = [...new Set(f.horarios.value.split('\n').map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12);
+  if (horarios.length) ex.horarios = horarios; else delete ex.horarios;
   const m = precio.match(/\d{1,3}(?:\.\d{3})+|\d+/);
   const fila = {
     nombre, descripcion: f.descripcion.value.trim(), precio_texto: precio, precio_reserva_texto: null,
@@ -861,15 +881,18 @@ function rellenarAcceso(plantilla, i, codigo) {
 
 function tarjetaInscripcion(i, codigos) {
   const conMat = i.monto_gs > 0;
-  const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${i.estado === 'pendiente' ? (conMat ? 'Matrícula por cobrar' : 'Por confirmar') : i.estado === 'pagada' ? (conMat ? 'Matrícula pagada' : 'Confirmada') : 'Cancelada'}</span>`];
+  const fase = i.estado === 'pagada' && i.app_estado === 'finalizada' ? 'Finalizó el curso' : i.estado === 'pagada' && i.origen === 'app' ? 'Cursando' : null;
+  const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${fase || (i.estado === 'pendiente' ? (conMat ? 'Matrícula por cobrar' : 'Por confirmar') : i.estado === 'pagada' ? (conMat ? 'Matrícula pagada' : 'Confirmada') : 'Cancelada')}</span>`];
   if (i.acceso) et.push('<span class="etiqueta acceso-si">🔓 Con acceso</span>');
   else if (i.estado !== 'cancelada') et.push('<span class="etiqueta">🔒 Sin acceso</span>');
   if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
-  et.push(`<span class="etiqueta">${i.origen === 'web' ? 'Desde la web' : 'Cargada a mano'}</span>`);
+  et.push(`<span class="etiqueta">${i.origen === 'web' ? 'Desde la web' : i.origen === 'app' ? '📱 Desde la app' : 'Cargada a mano'}</span>`);
   let acc = '';
   if (i.estado === 'pendiente') acc = `${conMat ? `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Matrícula pagada</button>` : `<button type="button" class="btn btn-aprobar" data-ins="confirmar" data-id="${i.id}">✓ Confirmar inscripción</button>`}
       <button type="button" class="btn btn-wa" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>
       <button type="button" class="btn btn-borde" data-ins="cancelar" data-id="${i.id}">Cancelar</button>`;
+  else if (i.estado === 'pagada' && !i.cliente_email) acc = `<span class="suave">Sin email: cargalo en la app para darle acceso al aula.</span>`
+    + `<button type="button" class="btn btn-borde" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>`;
   else if (i.estado === 'pagada') acc = (i.acceso
       ? `<button type="button" class="btn btn-wa" data-ins="reenviar" data-id="${i.id}">📲 Enviar acceso</button>
          <button type="button" class="btn btn-borde" data-ins="quitar" data-id="${i.id}">🔒 Quitar acceso</button>`
@@ -880,7 +903,8 @@ function tarjetaInscripcion(i, codigos) {
   return `<article class="cita inscripcion estado-${i.estado === 'pendiente' ? 'pendiente' : i.estado}" data-inscripcion="${i.id}">
     <div class="cita-cuando">${esc(fmtFecha(new Date(i.creado), { day: 'numeric', month: 'numeric', year: 'numeric' }))} · Ref. <code>${esc(i.referencia)}</code></div>
     <div class="cita-servicio">${esc(i.curso_nombre)}</div>
-    <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a> · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a></div>
+    <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a>${i.cliente_email ? ` · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a>` : ''}</div>
+    ${progresoAlumna(i)}
     <p class="cita-monto">${conMat ? 'Matrícula: ' + gs(i.monto_gs) : 'Sin matrícula'}</p>
     ${i.precio_ref ? `<p class="suave">${esc(/^Curso: /.test(i.precio_ref) ? i.precio_ref.split(' · ')[0] : i.precio_ref)} · se cobra aparte, durante el curso</p>` : ''}
     ${i.notas ? `<p class="cita-notas">📝 ${esc(i.notas)}</p>` : ''}
@@ -888,6 +912,18 @@ function tarjetaInscripcion(i, codigos) {
     <div class="etiquetas">${et.join('')}</div>
     <div class="cita-acciones">${acc}</div>
   </article>`;
+}
+
+// Horario y avance del curso (lo carga la app de agenda: cuotas pagadas, deuda y próximo vencimiento).
+function progresoAlumna(i) {
+  const partes = [];
+  if (i.horario) partes.push(`🕒 ${esc(i.horario)}`);
+  if (i.fecha_inicio) partes.push(`Inicio ${esc(fmtFecha(new Date(i.fecha_inicio + 'T12:00:00'), { day: 'numeric', month: 'short', year: 'numeric' }))}`);
+  if (i.proximo_venc && i.estado !== 'cancelada') partes.push(`<strong>Vence ${esc(fmtFecha(new Date(i.proximo_venc + 'T12:00:00'), { day: 'numeric', month: 'short' }))}</strong>`);
+  const tot = i.cuotas_total || 0; const pag = Math.min(i.cuotas_pagadas || 0, tot);
+  const barra = tot ? `<div class="avance" role="img" aria-label="${pag} de ${tot} cuotas pagadas"><i style="width:${Math.round((pag / tot) * 100)}%"></i></div>
+    <p class="avance-txt">${pag}/${tot} cuotas pagadas${i.deuda_gs > 0 ? ` · <span class="debe">Debe ${gs(i.deuda_gs)}</span>` : i.deuda_gs === 0 ? ' · al día ✓' : ''}</p>` : '';
+  return partes.length || barra ? `<div class="alumna-avance">${partes.length ? `<p class="suave">${partes.join(' · ')}</p>` : ''}${barra}</div>` : '';
 }
 
 async function cargarInscripciones() {
@@ -911,7 +947,7 @@ async function cargarCursos() {
   if (!estado.cursoSel || !lista.some((c) => c.id === estado.cursoSel)) estado.cursoSel = lista[0] && lista[0].id;
   sel.innerHTML = lista.map((c) => `<option value="${esc(c.id)}"${c.id === estado.cursoSel ? ' selected' : ''}>${esc(c.nombre)}${c.activo ? '' : ' (oculto)'}</option>`).join('');
   pintarCursosAdmin();
-  await Promise.all([cargarInscripciones(), cargarLecciones()]);
+  await Promise.all([cargarInscripciones(), cargarLecciones(), cargarCupos()]);
 }
 
 function abrirWa(ventana, tel, texto) { abrirWhatsApp(ventana, urlWhatsApp(tel, texto)); }

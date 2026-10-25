@@ -26,7 +26,21 @@ const MENSAJES = {
   ELEGI_UNA_OPCION: 'Elegí una de las opciones del curso.',
   CURSO_NO_DISPONIBLE: 'Este curso no está disponible en este momento. Preguntá en el chat.',
   NOTAS_DEMASIADO_LARGAS: 'El comentario es muy largo.',
+  ELEGI_UN_HORARIO: 'Elegí el horario que te queda mejor.',
+  HORARIO_INVALIDO: 'Ese horario ya no está disponible. Elegí otro.',
+  HORARIO_COMPLETO: 'Ese horario se llenó recién. Elegí otro horario o escribile a Tania por el chat.',
+  CURSO_COMPLETO: 'El curso ya no tiene lugares libres. Escribile a Tania por el chat para la lista de espera.',
 };
+
+// Cupos por curso y horario (public.disponibilidad_cursos: solo números, nunca datos de alumnas).
+// Si la función todavía no está instalada, la inscripción funciona como antes (sin horario ni cupos).
+let cupos = null; let cuposCargados = 0;
+async function cargarCupos() {
+  if (cupos && Date.now() - cuposCargados < 60000) return cupos;
+  try { cupos = await rpc('disponibilidad_cursos', {}); cuposCargados = Date.now(); } catch { cupos = null; }
+  return cupos;
+}
+const lugares = (n) => (n === 1 ? 'queda 1 lugar' : `quedan ${n} lugares`);
 
 function cargarCss() {
   if (document.getElementById('css-cursos')) return Promise.resolve();
@@ -55,6 +69,8 @@ function construir() {
       <h2 class="dialogo-titulo" id="ins-titulo"></h2>
       <div id="ins-ficha"></div>
       <fieldset class="ins-opciones" id="ins-opciones" hidden><legend>Elegí la modalidad</legend><div id="ins-opciones-lista"></div></fieldset>
+      <p class="ins-cupos" id="ins-cupos" aria-live="polite" hidden></p>
+      <fieldset class="ins-opciones" id="ins-horarios" hidden><legend>Elegí tu horario</legend><div id="ins-horarios-lista"></div></fieldset>
       <div class="campo-fila">
         <div class="campo">
           <label for="ins-nombre">Nombre y apellido</label>
@@ -137,10 +153,29 @@ export async function abrirInscripcion(id, origen, apiApp) {
   $('#ins-opciones-lista').innerHTML = ops.length < 2 ? '' : ops.map((o) => `<label class="check"><input type="radio" name="opcion" value="${esc(o.id)}"${o.id === id ? ' checked' : ''}> <span><strong>${esc(o.etiqueta)}</strong> · ${o.matricula ? 'matrícula ' + formatoGs(o.matricula) : 'sin matrícula'}</span></label>`).join('');
   pintarMonto();
   $('#ins-enviar').disabled = false;
+  $('#ins-cupos').hidden = true; $('#ins-horarios').hidden = true; $('#ins-horarios-lista').innerHTML = '';
   api.abrirDialogo(dlg, origen);
+  pintarCupos(s);
   $('.dialogo-cuerpo').scrollTop = 0;
   if (matchMedia('(hover: hover) and (pointer: fine)').matches) $('#ins-nombre').focus();
   return true;
+}
+
+async function pintarCupos(s) {
+  const d = (await cargarCupos() || {})[s.id];
+  if (actual !== s) return;
+  const caja = $('#ins-cupos'); const hs = $('#ins-horarios');
+  if (!d) { caja.hidden = true; hs.hidden = true; return; }
+  const lleno = d.disponibles <= 0;
+  caja.hidden = false;
+  caja.classList.toggle('lleno', lleno);
+  caja.innerHTML = lleno
+    ? `${icono('xmark')} <strong>Curso completo</strong> · ${d.ocupados} de ${d.cupo} lugares ocupados. Escribile a Tania por el chat para la lista de espera.`
+    : `${icono('check')} <strong>${lugares(d.disponibles)[0].toUpperCase() + lugares(d.disponibles).slice(1)}</strong> · ${d.ocupados} de ${d.cupo} ocupados`;
+  const lista = d.horarios || [];
+  hs.hidden = !lista.length;
+  $('#ins-horarios-lista').innerHTML = lista.map((h, k) => `<label class="check${h.disponibles <= 0 ? ' agotado' : ''}"><input type="radio" name="horario" value="${esc(h.horario)}"${h.disponibles <= 0 ? ' disabled' : ''}${lista.filter((x) => x.disponibles > 0).length === 1 && h.disponibles > 0 ? ' checked' : ''}> <span><strong>${esc(h.horario)}</strong> · ${h.disponibles <= 0 ? 'completo' : lugares(h.disponibles)} <small>(${h.ocupados}/${h.cupo})</small></span></label>`).join('');
+  $('#ins-enviar').disabled = lleno;
 }
 
 const telefonoValido = (t) => { const d = t.replace(/[^\d+]/g, ''); return /^(\+?595|0)?9\d{8}$/.test(d) || /^\+?\d{8,15}$/.test(d); };
@@ -156,18 +191,27 @@ async function enviar(e) {
   if (nombre.length < 3) errores.push([f.nombre, MENSAJES.NOMBRE_INVALIDO]);
   if (!telefonoValido(tel)) errores.push([f.telefono, MENSAJES.TELEFONO_INVALIDO]);
   if (!emailValido(email)) errores.push([f.email, MENSAJES.EMAIL_INVALIDO]);
+  const conHorarios = !$('#ins-horarios').hidden;
+  const horario = conHorarios ? (dlg.querySelector('input[name="horario"]:checked') || {}).value : null;
+  if (conHorarios && !horario) errores.push([dlg.querySelector('input[name="horario"]'), MENSAJES.ELEGI_UN_HORARIO]);
   errores.forEach(([el]) => el && el.type !== 'radio' && marcar(el, true));
   if (errores.length) { $('#ins-error').textContent = errores[0][1]; (errores[0][0] || f.nombre).focus(); return; }
 
-  const base = { curso: o.nombre, precio: o.precioVisible, monto_gs: o.matricula || 0, matricula_gs: o.matricula, sin_matricula: !o.matricula, nombre, email, telefono: tel };
+  const base = { horario, curso: o.nombre, precio: o.precioVisible, monto_gs: o.matricula || 0, matricula_gs: o.matricula, sin_matricula: !o.matricula, nombre, email, telefono: tel };
   if (f.sitio_web.value) { mostrarOk({ ...base, referencia: null, modo: 'registrada' }); return; } // trampa para robots
 
   const boton = $('#ins-enviar');
   boton.disabled = true; boton.lastElementChild.textContent = 'Enviando…';
   try {
     if (!api.enLinea()) throw Object.assign(new Error('sin-supabase'), { codigo: 'SIN_CONEXION' });
-    const r = await rpc('crear_inscripcion', { p_curso: o.id, p_nombre: nombre, p_telefono: tel, p_email: email, p_notas: notas || null });
-    if (!r || r.ok === false) throw Object.assign(new Error('inscripcion'), { codigo: (r && r.error) || 'ERROR' });
+    const args = { p_curso: o.id, p_nombre: nombre, p_telefono: tel, p_email: email, p_notas: notas || null };
+    if (horario) args.p_horario = horario;   // solo si la web ya tiene cupos/horarios (función nueva instalada)
+    const r = await rpc('crear_inscripcion', args);
+    if (!r || r.ok === false) {
+      if (r && /COMPLETO|HORARIO_INVALIDO/.test(r.error || '')) { cupos = null; pintarCupos(actual); }
+      throw Object.assign(new Error('inscripcion'), { codigo: (r && r.error) || 'ERROR' });
+    }
+    cupos = null;
     mostrarOk({ ...base, ...r, modo: 'online', id: r.id });
   } catch (err) {
     const msg = MENSAJES[err.codigo];
@@ -192,7 +236,7 @@ async function enviar(e) {
 
 function mensajeComprobante(d) {
   const conMatricula = !d.sin_matricula && d.monto_gs > 0;
-  return [`¡Hola Tania! Me inscribí al *${d.curso}* desde la web.`, d.referencia ? `Referencia: *${d.referencia}*` : '',
+  return [`¡Hola Tania! Me inscribí al *${d.curso}* desde la web.`, d.horario ? `Horario: ${d.horario}` : '', d.referencia ? `Referencia: *${d.referencia}*` : '',
     conMatricula ? `Matrícula: ${formatoGs(d.monto_gs)}` : 'Sin matrícula', `Nombre: ${d.nombre}`, `Email: ${d.email}`,
     !conMatricula ? '¿Me confirmás mi lugar?' : d.modo === 'online' ? 'Te envío el comprobante de pago de la matrícula 👇' : '¿Me pasás los datos para pagar la matrícula?'].filter(Boolean).join('\n');
 }
@@ -222,7 +266,7 @@ function mostrarOk(d) {
   }
   const titulo = d.modo === 'whatsapp' ? '¡Ya casi!' : '¡Inscripción recibida!';
   const bajada = d.modo === 'online'
-    ? `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong> quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`
+    ? `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`
     : d.modo === 'registrada'
       ? `Tania recibió tu solicitud para <strong>${esc(d.curso)}</strong> y te va a escribir por WhatsApp${conMatricula ? ' con los datos para pagar la matrícula' : ''}.`
       : esc(d.aviso || 'Enviale tu inscripción a Tania por WhatsApp y ella te confirma los pasos.');

@@ -25,3 +25,11 @@
 .ins-monto small { display: block; margin-top: .25rem; color: #e9dcc0; font-size: .82rem; line-height: 1.4; }
 .ins-aparte { display: flex; gap: .5rem; align-items: flex-start; font-size: .9rem; background: var(--marfil-2); border-radius: 12px; padding: .7rem .9rem; margin: 0 0 1rem; }
 .ins-aparte .ic { flex: none; margin-top: .15rem; color: var(--oro); }
+
+/* Cupos y horarios del curso (solo números: nunca datos de alumnas) */
+.ins-cupos { margin: 0 0 1rem; padding: .6rem .9rem; border-radius: 12px; background: #f1f7ee; color: #2f5a2a; font-size: .92rem; display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
+.ins-cupos svg { width: 1.05em; height: 1.05em; flex: none; }
+.ins-cupos.lleno { background: #fbefee; color: #8a2a22; }
+.ins-opciones .check.agotado { opacity: .55; }
+.ins-opciones .check.agotado strong { text-decoration: line-through; }
+.ins-opciones .check small { color: #8a7d68; }

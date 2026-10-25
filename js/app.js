@@ -214,6 +214,7 @@ function generarHoras() {
 
 // Horarios reales desde Supabase (solo los libres; nunca se ven datos de otras clientas).
 let pedidoHoras = 0;
+let hayHorariosDelDia = true;
 const OPCION_COORDINAR = '<option value="a coordinar">Otro horario / a coordinar por WhatsApp</option>';
 
 async function generarHorasLibres(datos) {
@@ -231,9 +232,15 @@ async function generarHorasLibres(datos) {
   sel.innerHTML = '<option value="">Buscando horarios libres…</option>';
   sel.disabled = true;
   ayuda.textContent = '';
-  let libres;
+  let libres; let ocupados = [];
   try {
-    libres = await rpc('horarios_libres', { p_fecha: fecha, p_servicio: datos.id });
+    // horarios_del_dia: todos los horarios con libre/ocupado (sin datos de nadie). Si aún no existe, horarios_libres.
+    let todos = null;
+    if (hayHorariosDelDia) {
+      try { todos = await rpc('horarios_del_dia', { p_fecha: fecha, p_servicio: datos.id }); } catch { hayHorariosDelDia = false; }
+    }
+    if (Array.isArray(todos)) { libres = todos.filter((h) => h.libre); ocupados = todos.filter((h) => !h.libre); }
+    else libres = await rpc('horarios_libres', { p_fecha: fecha, p_servicio: datos.id });
   } catch (err) {
     if (n !== pedidoHoras) return;
     console.info('Horarios en línea no disponibles; se usa el modo WhatsApp.', err.codigo || err);
@@ -250,9 +257,10 @@ async function generarHorasLibres(datos) {
   let html = `<option value="">${libres.length ? 'Elegí un horario libre…' : 'No quedan horarios libres este día'}</option>`;
   if (normales.length) html += `<optgroup label="Horarios libres">${normales.map(opcion).join('')}</optgroup>`;
   if (extra.length) html += `<optgroup label="Domingo / fuera de horario · costo adicional">${extra.map(opcion).join('')}</optgroup>`;
+  if (ocupados.length) html += `<optgroup label="Ya reservados (no disponibles)">${ocupados.map((h) => `<option disabled>${esc(h.hora)} hs · ocupado</option>`).join('')}</optgroup>`;
   sel.innerHTML = html + OPCION_COORDINAR;
   if (libres.length) {
-    ayuda.textContent = `${libres.length === 1 ? 'Queda 1 horario libre' : `Hay ${libres.length} horarios libres`} este día.`;
+    ayuda.textContent = `${libres.length === 1 ? 'Queda 1 horario libre' : `Hay ${libres.length} horarios libres`} este día.${ocupados.length ? ` ${ocupados.length === 1 ? '1 ya está reservado' : `${ocupados.length} ya están reservados`}.` : ''}`;
     $('#r-dias').hidden = true;
   } else {
     ayuda.textContent = 'Este día no tiene horarios libres. Elegí otra fecha o "a coordinar".';

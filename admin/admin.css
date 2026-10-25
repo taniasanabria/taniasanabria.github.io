@@ -204,3 +204,12 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 .curso-admin .curso-nombre { font-weight: 600; }
 .curso-admin .curso-datos { font-size: .85rem; color: #6b5f50; }
 .curso-admin .acciones { margin: 0; flex-wrap: nowrap; }
+
+/* Avance de alumnas (cuotas) y cupos de cursos */
+.alumna-avance { margin: .35rem 0 .2rem; }
+.avance { height: 7px; border-radius: 99px; background: #efe6d3; overflow: hidden; margin-top: .3rem; max-width: 22rem; }
+.avance i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a1f, #d4af37); border-radius: inherit; }
+.avance-txt { font-size: .85rem; color: #6b5f50; margin: .25rem 0 0; }
+.avance-txt .debe { color: var(--rojo); font-weight: 600; }
+.curso-cupos { font-size: .82rem; color: #5c4a1e; margin-top: .25rem; }
+.cita-cliente { overflow-wrap: anywhere; }
