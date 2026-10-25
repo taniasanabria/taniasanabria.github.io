@@ -84,6 +84,16 @@ const accesos = catalogo.categorias
   .concat([`<a class="acceso" href="#galeria"><span class="acceso-titulo">Galería de Fotos</span><span class="acceso-desc">Explorá nuestro portafolio y resultados reales</span></a>`])
   .join('');
 
+// Menú de categorías (barra fija): cada botón abre una vista exclusiva (#maquillaje, #galeria…).
+const ICONOS_CAT = { maquillaje: 'wand-magic-sparkles', estetica: 'scissors', eventos: 'bolt', academia: 'graduation-cap' };
+const CORTOS_CAT = { maquillaje: 'Maquillaje', estetica: 'Estética & Hair', eventos: 'Eventos VIP', academia: 'Academia' };
+const itemMenu = (id, texto, ic) => `<a class="menu-cat" href="#${R.esc(id)}" data-ir="${R.esc(id)}">${R.icono(ic)}<span>${R.esc(texto)}</span></a>`;
+const menuCats = [itemMenu('inicio', 'Inicio', 'house-chimney')]
+  .concat(catalogo.categorias.map((c) => itemMenu(c.id, c.menu || CORTOS_CAT[c.id] || c.titulo, ICONOS_CAT[c.id] || 'star')))
+  .concat([itemMenu('galeria', 'Galería', 'images'), itemMenu('sobre-tania', 'Sobre Tania', 'crown'), itemMenu('contacto', 'Contacto', 'location-dot')])
+  .join('');
+const destacados = R.seccionDestacados(catalogo.galerias, manifiesto);
+
 const retratoHero = R.imagen('retrato', manifiesto, { alt: 'Tania Sanabria, maquilladora profesional, con sus brochas', sizes: '(min-width: 900px) 420px, 52vw', prioridad: true, clase: 'hero-retrato' });
 const retratoBio = R.imagen('retrato', manifiesto, { alt: 'Retrato de Tania Sanabria', sizes: '(min-width: 900px) 360px, 70vw', clase: 'bio-retrato' });
 
@@ -125,6 +135,7 @@ const reemplazos = {
   ICONO_MENU: I('bars'), ICONO_CALENDARIO: I('calendar-check'), ICONO_CANDADO: I('user-lock'), ICONO_RELOJ: I('clock'),
   ICONO_UBICACION: I('location-dot'), ICONO_IG: I('instagram'), ICONO_FB: I('facebook-f'), ICONO_TT: I('tiktok'),
   ICONO_COMPARTIR: I('share-nodes'), ICONO_INFO: I('circle-info'), ICONO_WA: I('whatsapp'), ICONO_CHAT: I('comment-dots'), ICONO_MAPA: I('map-location-dot'),
+  ICONO_LUPA: I('magnifying-glass-plus'), MENU_CATS: menuCats, DESTACADOS: destacados,
   ICONO_X: I('xmark'), ICONO_IZQ: I('chevron-left'), ICONO_DER: I('chevron-right'), ICONO_CHECK: I('check'),
 };
 
@@ -136,7 +147,7 @@ for (const [clave, valor] of Object.entries(reemplazos)) {
 // Íconos usados por el HTML, por app.js y por los datos (detalles que se arman al vuelo)
 const usados = new Set([...html.matchAll(/#i-([a-z0-9-]+)/g)].map((m) => m[1]));
 for (const m of leer('js/app.js').matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
-for (const f of ['js/render.js', 'js/inscripcion.js']) for (const m of leer(f).matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
+for (const f of ['js/render.js', 'js/inscripcion.js', 'js/carrusel.js', 'js/visor.js', 'js/agenda-ui.js']) for (const m of leer(f).matchAll(/icono\('([a-z0-9-]+)'/g)) usados.add(m[1]);
 for (const m of JSON.stringify(catalogo).matchAll(/"icono":"([a-z0-9-]+)"/g)) usados.add(m[1]);
 const sinIcono = [...usados].filter((u) => !simbolos[u]);
 if (sinIcono.length) throw new Error('Íconos inexistentes en tools/iconos.svg: ' + sinIcono.join(', '));

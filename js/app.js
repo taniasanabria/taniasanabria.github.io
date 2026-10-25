@@ -3,7 +3,10 @@
  * El contenido principal ya viene en el HTML; aquí solo se agrega comportamiento.
  */
 import { cargarCatalogo, cargarManifiestoFotos, cargarDesdeSupabase, rpc, supabaseActivo } from './datos.js';
-import { detalleServicio, fotosDisponibles, indiceReservas, rutaFoto, seccionCategoria, galeriaPrincipal, opcionesServicio, esc } from './render.js';
+import { detalleServicio, fotosDisponibles, indiceReservas, rutaFoto, seccionCategoria, galeriaPrincipal, seccionDestacados, opcionesServicio, esc } from './render.js';
+import { iniciarCarruseles, refrescarCarruseles } from './carrusel.js';
+import { crearVisor } from './visor.js';
+import { pintarDias, pintarHoras } from './agenda-ui.js';
 
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
 const $$ = (sel, raiz = document) => Array.from(raiz.querySelectorAll(sel));
@@ -91,12 +94,13 @@ function abrirDetalle(id, origen) {
   dlg.classList.toggle('tema-neon', s.categoria === 'eventos');
   abrirDialogo(dlg, origen);
   $('.dialogo-cuerpo', dlg).scrollTop = 0;
+  iniciarCarruseles(dlg);
 }
 
 // ------------------------------------------------------------------
 // Visor de fotos
 // ------------------------------------------------------------------
-const visor = { fotos: [], indice: 0, titulo: '' };
+let visor = null;
 
 function coleccion(clave) {
   if (clave.startsWith('galeria-')) {
@@ -107,79 +111,14 @@ function coleccion(clave) {
   return s ? { fotos: fotosDisponibles(s.fotos, manifiesto), titulo: s.nombre } : null;
 }
 
-function mostrarFoto() {
-  const base = visor.fotos[visor.indice];
-  const info = manifiesto[base];
-  const img = $('#visor-img');
-  const anchos = info.anchos;
-  img.classList.remove('ampliada');
-  img.width = info.w;
-  img.height = info.h;
-  img.srcset = anchos.map((a) => `${rutaFoto(base, a, info)} ${a}w`).join(', ');
-  img.sizes = '100vw';
-  img.src = rutaFoto(base, anchos[anchos.length - 1], info);
-  img.alt = `${visor.titulo}: foto ${visor.indice + 1} de ${visor.fotos.length}`;
-  $('#visor-contador').textContent = `${visor.indice + 1} / ${visor.fotos.length}`;
-  const varias = visor.fotos.length > 1;
-  $('#visor-prev').hidden = !varias;
-  $('#visor-sig').hidden = !varias;
-  // Precargar la siguiente
-  if (varias) {
-    const sig = visor.fotos[(visor.indice + 1) % visor.fotos.length];
-    const pre = new Image();
-    pre.src = rutaFoto(sig, manifiesto[sig].anchos[manifiesto[sig].anchos.length - 1], manifiesto[sig]);
-  }
-}
-
-function moverVisor(paso) {
-  if (visor.fotos.length < 2) return;
-  visor.indice = (visor.indice + paso + visor.fotos.length) % visor.fotos.length;
-  mostrarFoto();
-}
-
 function abrirVisor(clave, indice, origen) {
   const c = coleccion(clave);
   if (!c || !c.fotos.length) return;
-  visor.fotos = c.fotos;
-  visor.titulo = c.titulo;
-  visor.indice = Math.max(0, Math.min(indice || 0, c.fotos.length - 1));
-  mostrarFoto();
-  abrirDialogo($('#dlg-visor'), origen);
+  visor.abrir(c.fotos, indice, c.titulo, origen);
 }
 
 function prepararVisor() {
-  const dlg = $('#dlg-visor');
-  const img = $('#visor-img');
-  $('#visor-prev').addEventListener('click', () => moverVisor(-1));
-  $('#visor-sig').addEventListener('click', () => moverVisor(1));
-  dlg.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') { e.preventDefault(); moverVisor(-1); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); moverVisor(1); }
-  });
-  // Deslizar para cambiar de foto; tocar para acercar/alejar. Se distingue arrastre de toque.
-  let inicio = null;
-  const escenario = $('#visor-escenario');
-  escenario.addEventListener('pointerdown', (e) => { inicio = { x: e.clientX, y: e.clientY, t: Date.now() }; });
-  escenario.addEventListener('pointerup', (e) => {
-    if (!inicio) return;
-    const dx = e.clientX - inicio.x;
-    const dy = e.clientY - inicio.y;
-    const ampliada = img.classList.contains('ampliada');
-    if (!ampliada && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
-      moverVisor(dx < 0 ? 1 : -1);
-    } else if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && e.target === img) {
-      img.classList.toggle('ampliada');
-      if (img.classList.contains('ampliada')) {
-        const r = img.getBoundingClientRect();
-        escenario.scrollLeft = (e.clientX - r.left) - escenario.clientWidth / 2;
-        escenario.scrollTop = (e.clientY - r.top) - escenario.clientHeight / 2;
-      }
-    } else if (!ampliada && e.target === escenario && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-      dlg.close();
-    }
-    inicio = null;
-  });
-  escenario.addEventListener('pointercancel', () => { inicio = null; });
+  visor = crearVisor({ dlg: $('#dlg-visor'), abrirDialogo, rutaFoto, manifiesto: () => manifiesto });
 }
 
 // ------------------------------------------------------------------
@@ -206,6 +145,7 @@ const HORA_EXTRA_HASTA = 22 * 60; // último turno ofrecido fuera de horario
 
 function generarHoras() {
   const datos = reservas[$('#r-servicio').value];
+  pintarTiraDias(datos);
   if (modoSupabase && datos && datos.usaTurno) return generarHorasLibres(datos);
   $('#r-dias').hidden = true;
   $('#r-hora').disabled = false;
@@ -226,7 +166,6 @@ async function generarHorasLibres(datos) {
     sel.innerHTML = '<option value="">Elegí primero una fecha…</option>' + OPCION_COORDINAR;
     ayuda.textContent = '';
     actualizarAvisoExtra();
-    cargarDiasLibres(datos, n);
     return;
   }
   sel.innerHTML = '<option value="">Buscando horarios libres…</option>';
@@ -263,25 +202,72 @@ async function generarHorasLibres(datos) {
     ayuda.textContent = `${libres.length === 1 ? 'Queda 1 horario libre' : `Hay ${libres.length} horarios libres`} este día.${ocupados.length ? ` ${ocupados.length === 1 ? '1 ya está reservado' : `${ocupados.length} ya están reservados`}.` : ''}`;
     $('#r-dias').hidden = true;
   } else {
-    ayuda.textContent = 'Este día no tiene horarios libres. Elegí otra fecha o "a coordinar".';
-    cargarDiasLibres(datos, n);
+    ayuda.textContent = 'Este día está completo. Elegí otro día de la lista o "A coordinar".';
   }
   actualizarAvisoExtra();
 }
 
-async function cargarDiasLibres(datos, n) {
-  const caja = $('#r-dias');
-  try {
-    const dias = await rpc('dias_con_turnos', { p_servicio: datos.id, p_dias: 21 });
-    if (n !== pedidoHoras) return;
-    const fmt = new Intl.DateTimeFormat('es-PY', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
-    $('#r-dias-lista').innerHTML = dias.slice(0, 8)
-      .map((d) => `<button type="button" class="dia-chip${d.costo_extra ? ' dia-extra' : ''}" data-fecha="${esc(d.fecha)}">${esc(fmt.format(new Date(d.fecha + 'T12:00:00Z')))}</button>`)
-      .join('');
-    caja.hidden = !dias.length;
-  } catch {
-    caja.hidden = true;
+// Tira de los próximos 14 días con su estado (libre, últimos turnos, completo, recargo).
+const cacheDias = new Map();
+let pedidoDias = 0;
+async function pintarTiraDias(datos) {
+  const caja = $('#r-dias-tira');
+  const cont = $('#r-dias-tira-lista');
+  const n = ++pedidoDias;
+  const hoy = new Date();
+  const fechas = Array.from({ length: 14 }, (_, k) => fechaLocalISO(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + k)));
+  let mapa = null;
+  if (modoSupabase && datos && datos.usaTurno) {
+    const c = cacheDias.get(datos.id);
+    if (c && Date.now() - c.t < 60000) mapa = c.mapa;
+    else {
+      try {
+        const dias = await rpc('dias_con_turnos', { p_servicio: datos.id, p_dias: 21 });
+        mapa = Object.fromEntries((dias || []).map((d) => [d.fecha, d]));
+        cacheDias.set(datos.id, { t: Date.now(), mapa });
+      } catch { mapa = null; }
+      if (n !== pedidoDias) return;
+    }
   }
+  const esEvento = datos && datos.esEvento;
+  const dias = fechas.map((fecha) => {
+    const info = horarioDelDia(fecha);
+    if (mapa) {
+      const d = mapa[fecha];
+      if (d) {
+        if (d.costo_extra) return { fecha, estado: 'extra', nota: 'Recargo' };
+        if (d.libres <= 3) return { fecha, estado: 'pocos', nota: d.libres === 1 ? 'Último turno' : `Últimos ${d.libres}` };
+        return { fecha, estado: 'libre', nota: 'Disponible' };
+      }
+      return info && info.horario ? { fecha, estado: 'completo', nota: 'Completo' } : { fecha, estado: 'cerrado', nota: 'Sin turnos' };
+    }
+    if (!esEvento && info && !info.horario) return { fecha, estado: 'extra', nota: 'Recargo' };
+    return { fecha, estado: 'libre', nota: 'Disponible' };
+  });
+  pintarDias(cont, dias, $('#r-fecha').value);
+  caja.hidden = !datos || datos.id === 'consulta';
+}
+
+function marcarDiaElegido() {
+  const v = $('#r-fecha').value;
+  $$('#r-dias-tira-lista .dia-celda').forEach((b) => { const si = b.dataset.fecha === v; b.classList.toggle('elegido', si); b.setAttribute('aria-pressed', String(si)); });
+}
+
+// Los horarios se muestran como botones (espejo del <select> #r-hora).
+function refrescarHoras() {
+  const sel = $('#r-hora');
+  const caja = $('#r-horas-chips');
+  const lista = $('#r-horas-lista');
+  $('#form-reserva').classList.add('con-chips');
+  caja.hidden = false;
+  if (sel.disabled) { lista.innerHTML = '<div class="horas-cargando" aria-busy="true"><span></span><span></span><span></span><span></span></div>'; $('#r-horas-titulo').textContent = 'Buscando horarios libres…'; return; }
+  pintarHoras(sel, lista);
+  const f = $('#r-fecha').value;
+  if (f) {
+    const [a, m, d] = f.split('-').map(Number);
+    const fecha = new Date(a, m - 1, d);
+    $('#r-horas-titulo').textContent = `Horarios del ${DIAS_ES[fecha.getDay()].toLowerCase()} ${d}/${m}`;
+  } else $('#r-horas-titulo').textContent = 'Horarios';
 }
 
 function aplicarModoReserva() {
@@ -463,7 +449,7 @@ async function enviarReserva(e) {
   const f = e.target;
   const datos = reservas[f.servicio.value];
   const errores = [];
-  const chequear = (el, ok, msg) => { marcar(el, !ok); if (!ok) errores.push({ el, msg }); };
+  const chequear = (el, ok, msg) => { marcar(el, !ok); if (el === f.hora) $('#r-horas-chips').classList.toggle('campo-invalido', !ok); if (!ok) errores.push({ el, msg }); };
   chequear(f.servicio, !!datos, 'Elegí un servicio.');
   chequear(f.nombre, f.nombre.value.trim().length >= 3, 'Escribí tu nombre y apellido.');
   chequear(f.telefono, telefonoValido(f.telefono.value), 'Escribí un teléfono válido (ej: 0981 123 456).');
@@ -473,7 +459,8 @@ async function enviarReserva(e) {
   if (datos && datos.sena) chequear(f.acepto, f.acepto.checked, 'Para continuar, aceptá la política de reserva.');
   if (errores.length) {
     $('#r-error').textContent = errores.map((x) => x.msg).join(' ');
-    errores[0].el.focus();
+    const foco = errores[0].el === f.hora && f.classList.contains('con-chips') ? ($('#r-horas-lista .hora-boton:not([disabled])') || $('#r-dias-tira-lista .dia-celda:not([disabled])')) : errores[0].el;
+    if (foco) foco.focus();
     return;
   }
   $('#r-error').textContent = '';
@@ -564,7 +551,17 @@ function prepararReserva() {
   const f = $('#form-reserva');
   $('#r-servicio').addEventListener('change', actualizarServicio);
   $('#r-fecha').addEventListener('change', generarHoras);
-  $('#r-hora').addEventListener('change', actualizarAvisoExtra);
+  $('#r-hora').addEventListener('change', () => { actualizarAvisoExtra(); refrescarHoras(); });
+  $('#r-fecha').addEventListener('change', marcarDiaElegido);
+  new MutationObserver(refrescarHoras).observe($('#r-hora'), { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  $('#r-horas-lista').addEventListener('click', (e) => {
+    const b = e.target.closest('.hora-boton[data-valor]');
+    if (!b) return;
+    const sel = $('#r-hora');
+    sel.value = b.dataset.valor;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    $('#r-horas-chips').classList.remove('campo-invalido');
+  });
   f.addEventListener('submit', enviarReserva);
   const limpiar = (e) => {
     if (e.target.getAttribute('aria-invalid') === 'true') marcar(e.target, false);
@@ -599,28 +596,72 @@ async function compartir(ancla) {
 // ------------------------------------------------------------------
 // Menú móvil, galería por álbumes y delegación de clics
 // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// Vistas por categoría (#maquillaje, #academia/curso-x, #galeria/social…):
+// cada botón del menú abre una sección exclusiva; el botón "atrás" y los enlaces directos funcionan.
+// Sin JS (o para buscadores) todo el contenido sigue en la página.
+// ------------------------------------------------------------------
+let vistaActual = null;
+const TITULO_BASE = document.title;
+
+function vistasDisponibles() {
+  return new Set($$('[data-vista]').flatMap((el) => el.dataset.vista.split(/\s+/)));
+}
+
+function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
+  if (!vistasDisponibles().has(vista)) vista = 'inicio';
+  const cambio = vista !== vistaActual;
+  vistaActual = vista;
+  document.documentElement.classList.add('vistas');
+  for (const el of $$('[data-vista]')) {
+    const activa = el.dataset.vista.split(/\s+/).includes(vista) && !(el.hidden && catalogo.categorias.some((c) => c.id === el.id));
+    el.classList.toggle('activa', activa);
+  }
+  for (const a of $$('.menu-cat')) {
+    const si = a.dataset.ir === vista;
+    a.classList.toggle('activo', si);
+    if (si) { a.setAttribute('aria-current', 'page'); a.scrollIntoView({ block: 'nearest', inline: 'center', behavior: cambio && vistaActual ? 'smooth' : 'auto' }); }
+    else a.removeAttribute('aria-current');
+  }
+  // Subcategorías (filtro de tarjetas)
+  const seccion = document.getElementById(vista);
+  if (seccion && seccion.querySelector('.subcats')) {
+    const valido = sub && seccion.querySelector(`#servicio-${CSS.escape(sub)}`);
+    for (const l of $$('.subcat', seccion)) {
+      const si = l.dataset.sub === (valido ? sub : '');
+      l.classList.toggle('activa', si);
+      if (si) { l.setAttribute('aria-current', 'true'); l.scrollIntoView({ block: 'nearest', inline: 'center' }); } else l.removeAttribute('aria-current');
+    }
+    for (const t of $$('.grilla > .tarjeta', seccion)) t.hidden = !!valido && t.id !== 'servicio-' + sub;
+    seccion.querySelector('.grilla').classList.toggle('grilla-sola', !!valido);
+  }
+  if (vista === 'galeria' && album) {
+    const chip = $(`.chip[data-album="${CSS.escape(album)}"]`);
+    if (chip) elegirAlbum(chip, false);
+  }
+  const etiqueta = $(`.menu-cat[data-ir="${CSS.escape(vista)}"] span`);
+  document.title = vista === 'inicio' || !etiqueta ? TITULO_BASE : `${etiqueta.textContent} · Tania Sanabria Makeup Studio`;
+  if (arriba && (cambio || sub)) window.scrollTo({ top: 0, behavior: 'auto' });
+  requestAnimationFrame(() => refrescarCarruseles());
+}
+
 function prepararMenu() {
-  const btn = $('#btn-menu');
-  const nav = $('#nav');
-  const uso = btn.querySelector('use');
-  const estado = (abierto) => {
-    nav.classList.toggle('abierto', abierto);
-    btn.setAttribute('aria-expanded', String(abierto));
-    btn.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
-    if (uso) uso.setAttribute('href', abierto ? '#i-xmark' : '#i-bars');
-  };
-  const cerrar = () => estado(false);
-  btn.addEventListener('click', () => estado(!nav.classList.contains('abierto')));
-  nav.addEventListener('click', (e) => { if (e.target.closest('a')) cerrar(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.classList.contains('abierto')) { cerrar(); btn.focus(); } });
   const cabecera = $('#cabecera');
   const observador = new IntersectionObserver(([en]) => cabecera.classList.toggle('compacta', !en.isIntersecting), { rootMargin: '-80px 0px 0px 0px' });
   observador.observe($('#inicio'));
+  // Tocar la categoría en la que ya estás: vuelve arriba (y quita el filtro de subcategoría).
+  $('#menu-cats').addEventListener('click', (e) => {
+    const a = e.target.closest('.menu-cat');
+    if (a && location.hash.split('/')[0] === '#' + a.dataset.ir) { e.preventDefault(); if (location.hash !== '#' + a.dataset.ir) location.hash = a.dataset.ir; else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (a && !location.hash && a.dataset.ir === 'inicio') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
 }
 
-function elegirAlbum(chip) {
-  $$('.chip').forEach((c) => c.setAttribute('aria-selected', String(c === chip)));
+function elegirAlbum(chip, actualizarUrl = true) {
+  $$('.chip[data-album]').forEach((c) => c.setAttribute('aria-selected', String(c === chip)));
   $$('[data-album-panel]').forEach((p) => { p.hidden = p.dataset.albumPanel !== chip.dataset.album; });
+  if (actualizarUrl) history.replaceState(history.state, '', '#galeria/' + chip.dataset.album);
+  refrescarCarruseles($('#galeria'));
 }
 
 // Asistente virtual: se descarga recién al tocar el botón (no afecta la carga de la página).
@@ -656,7 +697,7 @@ function prepararClics() {
     if (comp) { e.preventDefault(); compartir(comp.dataset.compartir); return; }
     const chip = e.target.closest('.chip[data-album]');
     if (chip) { elegirAlbum(chip); return; }
-    const dia = e.target.closest('.dia-chip[data-fecha]');
+    const dia = e.target.closest('.dia-chip[data-fecha], .dia-celda[data-fecha]');
     if (dia) { const campo = $('#r-fecha'); campo.value = dia.dataset.fecha; campo.dispatchEvent(new Event('change', { bubbles: true })); }
   });
 }
@@ -673,29 +714,36 @@ const ENLACES_VIEJOS = {
 };
 
 function atenderHash() {
-  const hash = decodeURIComponent(location.hash.slice(1));
-  if (!hash) return;
-  // Enlace al asistente (p. ej. desde la página 404)
-  if (hash === 'chat') { history.replaceState(null, '', location.pathname + location.search); abrirAsistente(); return; }
-  // Enlace directo a un servicio o curso (botón "Compartir"): abre su ficha.
-  const directo = hash.match(/^(?:servicio|curso)-(.+)$/);
-  if (directo && servicioPorId(directo[1])) {
-    document.getElementById('servicio-' + directo[1])?.scrollIntoView();
-    if (!$('#dlg-detalle').open) abrirDetalle(directo[1]);
-    return;
-  }
+  let hash = decodeURIComponent(location.hash.slice(1));
   if (hash in ENLACES_VIEJOS) {
     const destino = ENLACES_VIEJOS[hash];
-    if (!destino) return;
-    if (servicioPorId(destino)) {
-      history.replaceState(null, '', '#servicio-' + destino);
-      document.getElementById('servicio-' + destino)?.scrollIntoView();
-      abrirDetalle(destino);
-    } else {
-      history.replaceState(null, '', '#' + destino);
-      document.getElementById(destino)?.scrollIntoView();
+    if (!destino) { mostrarVista(vistaActual || 'inicio'); return; }
+    hash = servicioPorId(destino) ? 'servicio-' + destino : destino;
+    history.replaceState(null, '', '#' + hash);
+  }
+  if (!hash) { mostrarVista('inicio'); return; }
+  // Enlace al asistente (p. ej. desde la página 404)
+  if (hash === 'chat') { history.replaceState(null, '', location.pathname + location.search); mostrarVista(vistaActual || 'inicio', { arriba: false }); abrirAsistente(); return; }
+  // Enlace directo a un servicio o curso (botón "Compartir"): abre su categoría y su ficha.
+  const directo = hash.match(/^(?:servicio|curso)-(.+)$/);
+  if (directo) {
+    const s = servicioPorId(directo[1]);
+    if (s) {
+      mostrarVista(s.categoria);
+      document.getElementById('servicio-' + directo[1])?.scrollIntoView({ block: 'center' });
+      if (!$('#dlg-detalle').open) abrirDetalle(directo[1]);
+      return;
     }
   }
+  const [vista, sub] = hash.split('/');
+  if (vistasDisponibles().has(vista)) { mostrarVista(vista, vista === 'galeria' ? { album: sub } : { sub }); return; }
+  // Cualquier otro ancla: se muestra la vista que la contiene.
+  const el = document.getElementById(hash);
+  const contenedor = el && el.closest('[data-vista]');
+  if (contenedor) {
+    mostrarVista(contenedor.dataset.vista.split(/\s+/)[0], { arriba: false });
+    el.scrollIntoView();
+  } else if (!vistaActual) mostrarVista('inicio');
 }
 
 // ------------------------------------------------------------------
@@ -718,6 +766,10 @@ function refrescarContenido(previo) {
   }
   const galeria = galeriaPrincipal(catalogo.galerias, manifiesto);
   if (galeria !== galeriaPrincipal(previo.catalogo.galerias, previo.manifiesto)) $('#galeria-contenido').innerHTML = galeria;
+  const dest = seccionDestacados(catalogo.galerias, manifiesto);
+  if (dest !== seccionDestacados(previo.catalogo.galerias, previo.manifiesto) && $('#destacados') && dest) {
+    const t = document.createElement('template'); t.innerHTML = dest.trim(); $('#destacados').replaceWith(t.content.firstElementChild);
+  }
   const sel = $('#r-servicio');
   const opciones = opcionesServicio(catalogo.categorias, catalogo.servicios);
   if (opciones !== opcionesServicio(previo.catalogo.categorias, previo.catalogo.servicios)) {
@@ -734,6 +786,11 @@ function refrescarContenido(previo) {
   }
 }
 
+function subActual() {
+  const [v, sub] = decodeURIComponent(location.hash.slice(1)).split('/');
+  return v === 'galeria' ? { album: sub } : { sub };
+}
+
 async function actualizarDesdeSupabase() {
   if (!supabaseActivo()) return;
   try {
@@ -745,6 +802,8 @@ async function actualizarDesdeSupabase() {
     modoSupabase = true;
     refrescarContenido(previo);
     document.documentElement.classList.add('datos-en-vivo');
+    iniciarCarruseles();
+    if (!document.querySelector('dialog[open]')) { const v = vistaActual; vistaActual = null; mostrarVista(v || 'inicio', { arriba: false, ...subActual() }); }
     // Enlace directo a un curso o servicio que solo existe en Supabase (p. ej. un curso nuevo cargado por Tania).
     if (/^#(?:servicio|curso)-/.test(location.hash) && !$('#dlg-detalle').open && !document.querySelector('dialog[open]')) atenderHash();
     // Si la clienta ya tenía el formulario abierto, se actualizan los horarios.
@@ -763,6 +822,7 @@ async function iniciar() {
   prepararReserva();
   prepararMenu();
   prepararClics();
+  iniciarCarruseles();
   atenderHash();
   window.addEventListener('hashchange', atenderHash);
   document.documentElement.classList.add('js-listo');

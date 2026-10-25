@@ -213,3 +213,7 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 .avance-txt .debe { color: var(--rojo); font-weight: 600; }
 .curso-cupos { font-size: .82rem; color: #5c4a1e; margin-top: .25rem; }
 .cita-cliente { overflow-wrap: anywhere; }
+.horarios-filas { display: grid; gap: .4rem; margin-bottom: .5rem; }
+.horario-fila { display: grid; grid-template-columns: 1fr 7.5rem auto; gap: .4rem; align-items: center; }
+.horario-fila:has([data-libre]) { grid-template-columns: 1fr auto; }
+.horario-fila select, .horario-fila input { min-height: 42px; }

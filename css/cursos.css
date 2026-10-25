@@ -33,3 +33,48 @@
 .ins-opciones .check.agotado { opacity: .55; }
 .ins-opciones .check.agotado strong { text-decoration: line-through; }
 .ins-opciones .check small { color: #8a7d68; }
+
+/* ---------- Días y horarios del curso (rediseño) ---------- */
+.ins-cupos { position: relative; overflow: hidden; padding-bottom: 1rem; }
+.ins-cupos.ultimos { background: #fff6e0; color: #6b4a0c; }
+.ins-cupos-barra { position: absolute; left: .9rem; right: .9rem; bottom: .45rem; height: 4px; border-radius: 4px; background: rgba(0, 0, 0, .08); overflow: hidden; }
+.ins-cupos-barra i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #c9a24a, #e9d18c); }
+.ins-cupos.lleno .ins-cupos-barra i { background: #b8473d; }
+.ins-horarios { border: 0; padding: 0; margin: 0 0 1.1rem; min-width: 0; }
+.ins-horarios legend { font-weight: 700; font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; color: var(--oro); margin-bottom: .5rem; padding: 0; }
+.ins-leyenda { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .74rem; color: var(--texto-suave); margin-bottom: .7rem; }
+.ins-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
+.ins-leyenda span::before { content: ""; width: .7rem; height: .7rem; border-radius: 50%; }
+.l-libre::before { background: #3f8f5a; }
+.l-ultimos::before { background: #d39b1f; }
+.l-completo::before { background: #c5bcb0; }
+.dia-grupo { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: .75rem .8rem .85rem; margin-bottom: .6rem; }
+.dia-grupo-titulo { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 .55rem; font-family: var(--titulos); font-weight: 700; color: var(--tinta); font-size: 1rem; letter-spacing: .04em; }
+.dia-grupo-titulo em { font: 600 .7rem var(--cuerpo); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: #8a2a22; }
+.dia-lleno { background: #faf7f2; }
+.dia-lleno .dia-grupo-titulo span { color: #9b9184; }
+.dia-grupo-horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+.hora-chip { position: relative; display: flex; flex-direction: column; gap: .1rem; padding: .6rem .7rem .75rem; border-radius: 12px; border: 1.5px solid var(--linea); background: var(--marfil); cursor: pointer; transition: border-color .2s, box-shadow .2s, transform .15s, background-color .2s; overflow: hidden; }
+.hora-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.hora-chip-hora { font-weight: 700; font-size: 1.05rem; color: var(--tinta); }
+.hora-chip-estado { font-size: .74rem; font-weight: 600; color: #2f6b42; }
+.hora-chip-barra { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, .06); }
+.hora-chip-barra i { display: block; height: 100%; background: #3f8f5a; }
+.hora-chip.estado-ultimos .hora-chip-estado { color: #9a6a06; }
+.hora-chip.estado-ultimos .hora-chip-barra i { background: #d39b1f; }
+.hora-chip.estado-ultimos::after { content: ""; position: absolute; top: .55rem; right: .55rem; width: .5rem; height: .5rem; border-radius: 50%; background: #d39b1f; box-shadow: 0 0 0 0 rgba(211, 155, 31, .6); animation: latido 1.8s infinite; }
+@keyframes latido { 70% { box-shadow: 0 0 0 8px rgba(211, 155, 31, 0); } 100% { box-shadow: 0 0 0 0 rgba(211, 155, 31, 0); } }
+.hora-chip.estado-completo { cursor: not-allowed; background: repeating-linear-gradient(135deg, #f4f0ea 0 8px, #efe9e0 8px 16px); border-style: dashed; }
+.hora-chip.estado-completo .hora-chip-hora { color: #a39a8e; text-decoration: line-through; }
+.hora-chip.estado-completo .hora-chip-estado { color: #8a2a22; }
+.hora-chip.estado-completo .hora-chip-barra i { background: #c5bcb0; }
+.hora-chip:not(.estado-completo):hover { border-color: var(--oro-claro); transform: translateY(-1px); }
+.hora-chip:has(input:checked) { border-color: var(--tinta); background: var(--tinta); box-shadow: 0 8px 20px rgba(27, 22, 16, .22), 0 0 0 3px rgba(201, 162, 74, .35); }
+.hora-chip:has(input:checked) .hora-chip-hora { color: #f6e7bd; }
+.hora-chip:has(input:checked) .hora-chip-estado { color: #e9d18c; }
+.hora-chip:has(input:focus-visible) { outline: 3px solid var(--oro-claro); outline-offset: 2px; }
+.horarios-pendientes { display: flex; gap: .8rem; align-items: flex-start; padding: 1rem 1.1rem; margin: 0 0 1.1rem; border-radius: 16px; background: linear-gradient(135deg, #1b1610, #2c2318); color: #e9dcc0; border: 1px solid rgba(201, 162, 74, .45); }
+.horarios-pendientes > .ic { width: 1.6rem; height: 1.6rem; color: var(--oro-brillo); margin-top: .1rem; }
+.horarios-pendientes strong { color: #f6e7bd; font-family: var(--titulos); letter-spacing: .04em; }
+.horarios-pendientes p { margin: .2rem 0 .3rem; font-size: .9rem; color: #d9cfbf; }
+.horarios-pendientes .btn-texto { color: var(--oro-brillo); padding-left: 0; min-height: 36px; }

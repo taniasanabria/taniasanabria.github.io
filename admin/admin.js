@@ -692,6 +692,53 @@ function pintarFlyerEditor() {
   $('#cu-flyer-texto').textContent = f ? 'Cambiar flyer' : 'Subir flyer';
   if (f) $('#cu-flyer-img').src = urlFlyer(f, f.anchos[Math.min(1, f.anchos.length - 1)]);
 }
+// Días y horarios del curso: filas (día + hora) que se guardan como texto "Martes 18:00",
+// el mismo formato que usa la web (cupos por horario) y la app de agenda.
+const DIAS_CURSO = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const sinTilde = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function filaHorario(texto = '') {
+  const m = String(texto).trim().match(/^(\S+)\s+(\d{1,2}):(\d{2})$/);
+  const dia = m && DIAS_CURSO.find((d) => sinTilde(d) === sinTilde(m[1]));
+  const libre = texto && !dia;
+  const div = document.createElement('div');
+  div.className = 'horario-fila';
+  div.innerHTML = libre
+    ? `<input type="text" data-libre maxlength="80" value="${esc(texto)}" aria-label="Horario (texto libre)"><button type="button" class="btn" data-quitar-horario aria-label="Quitar">✕</button>`
+    : `<select data-dia aria-label="Día">${DIAS_CURSO.map((d) => `<option${d === dia ? ' selected' : ''}>${d}</option>`).join('')}</select>
+       <input type="time" data-hora step="900" value="${m ? m[2].padStart(2, '0') + ':' + m[3] : '18:00'}" aria-label="Hora">
+       <button type="button" class="btn" data-quitar-horario aria-label="Quitar">✕</button>`;
+  return div;
+}
+function pintarFilasHorario() {
+  const cont = $('#cu-horarios-filas');
+  cont.innerHTML = '';
+  $('#form-curso').horarios.value.split('\n').map((t) => t.trim()).filter(Boolean).forEach((t) => cont.append(filaHorario(t)));
+  if (!cont.children.length) cont.innerHTML = '<p class="suave" data-vacio>Sin horarios: la web muestra “Horarios a confirmar”.</p>';
+}
+function sincronizarHorarios() {
+  const filas = $$('#cu-horarios-filas .horario-fila').map((f) => {
+    const libre = $('[data-libre]', f);
+    if (libre) return libre.value.trim();
+    const h = $('[data-hora]', f).value;
+    return h ? `${$('[data-dia]', f).value} ${h}` : '';
+  }).filter(Boolean);
+  $('#form-curso').horarios.value = [...new Set(filas)].join('\n');
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#cu-horario-agregar')) {
+    const cont = $('#cu-horarios-filas');
+    cont.querySelector('[data-vacio]')?.remove();
+    if (cont.children.length >= 12) { toast('Máximo 12 horarios por curso.', true); return; }
+    const ult = cont.lastElementChild;
+    const nueva = filaHorario();
+    if (ult && $('[data-dia]', ult)) { $('[data-dia]', nueva).value = $('[data-dia]', ult).value; $('[data-hora]', nueva).value = $('[data-hora]', ult).value; }
+    cont.append(nueva); sincronizarHorarios();
+  }
+  const q = e.target.closest('[data-quitar-horario]');
+  if (q) { q.closest('.horario-fila').remove(); sincronizarHorarios(); if (!$('#cu-horarios-filas').children.length) pintarFilasHorario(); }
+});
+document.addEventListener('change', (e) => { if (e.target.closest('#cu-horarios-filas')) sincronizarHorarios(); });
+
 function abrirEditorCurso(id) {
   const c = id ? estado.servicios.find((s) => s.id === id) : null;
   const ex = (c && c.extra) || {};
@@ -707,6 +754,7 @@ function abrirEditorCurso(id) {
   f.duracion.value = (c && c.duracion_texto) || '';
   f.cupo.value = ex.cupo_max || '';
   f.horarios.value = (Array.isArray(ex.horarios) ? ex.horarios : []).join('\n');
+  pintarFilasHorario();
   f.contenido_titulo.value = ex.detallesTitulo || '';
   f.contenido.value = contenidoATexto(ex);
   f.destacados.value = (ex.beneficios || []).map((b) => b.texto).join('\n');
@@ -804,6 +852,7 @@ async function guardarCurso(e) {
   // Cupos y horarios: la web muestra lugares libres por horario (public.disponibilidad_cursos, sin datos personales).
   const cupo = parseInt(f.cupo.value, 10);
   if (cupo > 0 && cupo <= 500) ex.cupo_max = cupo; else delete ex.cupo_max;
+  sincronizarHorarios();
   const horarios = [...new Set(f.horarios.value.split('\n').map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12);
   if (horarios.length) ex.horarios = horarios; else delete ex.horarios;
   const m = precio.match(/\d{1,3}(?:\.\d{3})+|\d+/);

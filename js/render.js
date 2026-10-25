@@ -91,20 +91,52 @@ export function tarjetaServicio(s, manifiesto) {
 </article>`;
 }
 
+/** Nombre corto para los botones de subcategoría ("Maquillaje para Novias" → "Novias"). */
+export function nombreCorto(s) {
+  if (s.nombreCorto) return s.nombreCorto;
+  return String(s.nombre)
+    .replace(/^Maquillaje\s+(para\s+|de\s+)?/i, '')
+    .replace(/\s*\(.*?\)\s*/g, ' ')
+    .replace(/^Estación\s+/i, '')
+    .replace(/^Experiencia\s+/i, '')
+    .replace(/^Diseño y Perfilado de\s+/i, '')
+    .trim() || s.nombre;
+}
+
 export function seccionCategoria(cat, servicios, manifiesto) {
   const lista = servicios.filter((s) => s.categoria === cat.id);
+  const subs = lista.length > 2
+    ? `<nav class="subcats" aria-label="Subcategorías de ${esc(cat.titulo)}"><a class="subcat activa" href="#${esc(cat.id)}" data-sub="" aria-current="true">Todos <span>${lista.length}</span></a>${lista
+        .map((s) => `<a class="subcat" href="#${esc(cat.id)}/${esc(s.id)}" data-sub="${esc(s.id)}">${esc(nombreCorto(s))}</a>`)
+        .join('')}</nav>`
+    : '';
   return `
-<section class="seccion${cat.tema ? ' tema-' + esc(cat.tema) : ''}" id="${esc(cat.id)}" aria-labelledby="titulo-${esc(cat.id)}">
+<section class="seccion vista${cat.tema ? ' tema-' + esc(cat.tema) : ''}" id="${esc(cat.id)}" data-vista="${esc(cat.id)}" aria-labelledby="titulo-${esc(cat.id)}">
   <div class="contenedor">
     <header class="seccion-cabecera">
       <p class="sobretitulo">${esc(cat.titulo)}</p>
       <h2 id="titulo-${esc(cat.id)}">${esc(cat.tituloSeccion)} <span class="acento">${esc(cat.resaltado)}</span></h2>
       <p class="seccion-bajada">${esc(cat.descripcion)}</p>
     </header>
+    ${subs}
     <div class="grilla">${lista.map((s) => tarjetaServicio(s, manifiesto)).join('')}
     </div>
   </div>
 </section>`;
+}
+
+/**
+ * Carrusel 3D (coverflow) con luz LED detrás de cada foto. Cada foto es un botón que abre el visor
+ * (data-lightbox + data-indice). Sin JS se ve como una tira deslizable con scroll horizontal.
+ */
+export function carrusel(clave, fotos, manifiesto, { titulo = '', etiqueta = '' } = {}) {
+  if (!fotos.length) return '';
+  return `<div class="carrusel" data-carrusel="${esc(clave)}" role="region" aria-roledescription="carrusel" aria-label="${esc(etiqueta || titulo)}">
+  <div class="carrusel-pista">${fotos
+    .map((f, i) => `<button type="button" class="carrusel-item" data-lightbox="${esc(clave)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}${titulo ? ' · ' + esc(titulo) : ''}"><span class="carrusel-led" aria-hidden="true"></span><span class="carrusel-marco">${imagen(f, manifiesto, { alt: `${titulo}: foto ${i + 1}`, sizes: '(min-width: 900px) 340px, 64vw', anchoMax: 960 })}</span></button>`)
+    .join('')}</div>
+  ${fotos.length > 1 ? `<button type="button" class="carrusel-flecha prev" aria-label="Foto anterior" hidden>${icono('chevron-left')}</button><button type="button" class="carrusel-flecha sig" aria-label="Foto siguiente" hidden>${icono('chevron-right')}</button><div class="carrusel-puntos" aria-hidden="true"></div>` : ''}
+</div>`;
 }
 
 function listaDetalles(items) {
@@ -185,9 +217,7 @@ export function flyerCurso(s, manifiesto, { sizes = '(min-width: 700px) 560px, 9
 export function detalleServicio(s, manifiesto) {
   const fotos = fotosDisponibles(s.fotos, manifiesto);
   const galeria = fotos.length
-    ? `<div class="tira-fotos">${fotos
-        .map((f, i) => `<button type="button" class="tira-foto" data-lightbox="${esc(s.id)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}">${imagen(f, manifiesto, { alt: `${s.nombre}, foto ${i + 1}`, sizes: '(min-width: 700px) 200px, 40vw', anchoMax: 480 })}</button>`)
-        .join('')}</div>`
+    ? carrusel(s.id, fotos, manifiesto, { titulo: s.nombre, etiqueta: `Fotos de ${s.nombre}` })
     : `<div class="tira-vacia">${marcador({ texto: 'Pronto vas a ver fotos de este servicio aquí' })}</div>`;
 
   const complemento = s.complemento
@@ -225,6 +255,22 @@ ${normas}
 </div>`;
 }
 
+/** Inicio: carrusel con los trabajos destacados (primer álbum con fotos). */
+export function seccionDestacados(galerias, manifiesto) {
+  const g = galerias.map((x) => ({ ...x, fotos: fotosDisponibles(x.fotos, manifiesto) })).find((x) => x.fotos.length);
+  if (!g) return '';
+  return `<section class="seccion seccion-destacados vista" id="destacados" data-vista="inicio" aria-labelledby="titulo-destacados">
+  <div class="contenedor">
+    <header class="seccion-cabecera">
+      <p class="sobretitulo">Portafolio</p>
+      <h2 id="titulo-destacados">Trabajos <span class="acento">destacados</span></h2>
+    </header>
+    ${carrusel('galeria-' + g.id, g.fotos, manifiesto, { titulo: g.titulo, etiqueta: 'Trabajos destacados' })}
+    <p class="centrado destacados-mas"><a class="btn btn-secundario" href="#galeria">${icono('images')} Ver toda la galería</a></p>
+  </div>
+</section>`;
+}
+
 /** Galería principal: solo álbumes que tienen fotos; los vacíos se ocultan. */
 export function galeriaPrincipal(galerias, manifiesto) {
   const conFotos = galerias
@@ -236,9 +282,7 @@ export function galeriaPrincipal(galerias, manifiesto) {
     ? `<div class="chips" role="tablist" aria-label="Álbumes">${conFotos.map((g, i) => `<button type="button" role="tab" class="chip" aria-selected="${i === 0}" data-album="${esc(g.id)}">${esc(g.titulo)} <span>${g.fotos.length}</span></button>`).join('')}</div>`
     : `<p class="album-nombre">${esc(conFotos[0].titulo)} · ${conFotos[0].fotos.length} fotos</p>`;
   const albumes = conFotos
-    .map((g, gi) => `<div class="grilla-fotos" data-album-panel="${esc(g.id)}"${gi ? ' hidden' : ''}>${g.fotos
-      .map((f, i) => `<button type="button" class="foto-celda" data-lightbox="galeria-${esc(g.id)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${g.fotos.length} del álbum ${esc(g.titulo)}">${imagen(f, manifiesto, { alt: `${g.titulo}: foto ${i + 1}`, sizes: '(min-width: 1100px) 260px, (min-width: 700px) 30vw, 46vw', anchoMax: 480 })}</button>`)
-      .join('')}</div>`)
+    .map((g, gi) => `<div class="album-panel" data-album-panel="${esc(g.id)}"${gi ? ' hidden' : ''}>${carrusel('galeria-' + g.id, g.fotos, manifiesto, { titulo: g.titulo, etiqueta: `Álbum ${g.titulo}` })}</div>`)
     .join('');
   const nota = proximos.length
     ? `<p class="galeria-nota">${icono('wand-magic-sparkles')} Muy pronto sumamos nuevos álbumes: ${esc(proximos.join(', '))}.</p>`

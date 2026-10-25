@@ -43,24 +43,15 @@
       <img src="img/logo-96.webp" srcset="img/logo-96.webp 1x, img/logo-192.webp 2x" width="44" height="45" alt="">
       <span class="marca-texto"><span class="marca-nombre">Tania Sanabria</span><span class="marca-sub">Makeup Studio Professional</span></span>
     </a>
-    <nav class="nav" id="nav" aria-label="Secciones">
-      <ul>
-        <li><a href="#maquillaje">Maquillaje</a></li>
-        <li><a href="#estetica">Estética &amp; Hair</a></li>
-        <li><a href="#eventos">Eventos VIP</a></li>
-        <li><a href="#academia">Academia</a></li>
-        <li><a href="#galeria">Galería</a></li>
-        <li><a href="#sobre-tania">Sobre Tania</a></li>
-        <li><a href="#contacto">Contacto</a></li>
-      </ul>
-    </nav>
     <button type="button" class="btn btn-primario btn-chico solo-escritorio" data-reservar="">Reservar turno</button>
-    <button type="button" class="btn-menu" id="btn-menu" aria-expanded="false" aria-controls="nav" aria-label="Abrir menú">{{ICONO_MENU}}</button>
   </div>
+  <nav class="menu-cats" id="menu-cats" aria-label="Categorías">
+    <div class="menu-cats-fila" id="menu-cats-fila">{{MENU_CATS}}</div>
+  </nav>
 </header>
 
 <main id="contenido">
-  <section class="hero" id="inicio" aria-labelledby="hero-titulo">
+  <section class="hero vista" id="inicio" data-vista="inicio" aria-labelledby="hero-titulo">
     <div class="contenedor hero-grilla">
       <div class="hero-texto">
         <p class="sobretitulo">Tania Sanabria · Makeup Studio Professional</p>
@@ -86,20 +77,22 @@
     </nav>
   </section>
 
+  {{DESTACADOS}}
+
   {{SECCIONES}}
 
-  <section class="seccion" id="galeria" aria-labelledby="titulo-galeria">
+  <section class="seccion vista" id="galeria" data-vista="galeria" aria-labelledby="titulo-galeria">
     <div class="contenedor">
       <header class="seccion-cabecera">
         <p class="sobretitulo">Galería de fotos</p>
         <h2 id="titulo-galeria">Nuestro <span class="acento">Portafolio</span></h2>
-        <p class="seccion-bajada">Resultados reales de nuestras clientas. Tocá una foto para verla en grande.</p>
+        <p class="seccion-bajada">Resultados reales de nuestras clientas. Deslizá para recorrer y tocá una foto para verla en grande y hacer zoom.</p>
       </header>
       <div class="galeria" id="galeria-contenido">{{GALERIA}}</div>
     </div>
   </section>
 
-  <section class="seccion seccion-bio" id="sobre-tania" aria-labelledby="titulo-bio">
+  <section class="seccion seccion-bio vista" id="sobre-tania" data-vista="sobre-tania" aria-labelledby="titulo-bio">
     <div class="contenedor bio-grilla">
       <div class="bio-foto">{{BIO_FOTO}}</div>
       <div class="bio-texto">
@@ -117,7 +110,7 @@
     </div>
   </section>
 
-  <section class="seccion seccion-pasos" id="como-reservar" aria-labelledby="titulo-pasos">
+  <section class="seccion seccion-pasos vista" id="como-reservar" data-vista="inicio contacto" aria-labelledby="titulo-pasos">
     <div class="contenedor">
       <header class="seccion-cabecera">
         <p class="sobretitulo">Simple y rápido</p>
@@ -133,9 +126,23 @@
       <div class="centrado"><button type="button" class="btn btn-primario btn-grande" data-reservar="">Reservar turno</button></div>
     </div>
   </section>
+  <section class="seccion seccion-contacto vista" id="contacto" data-vista="contacto" aria-labelledby="titulo-contacto">
+    <div class="contenedor">
+      <header class="seccion-cabecera">
+        <p class="sobretitulo">Estamos para vos</p>
+        <h2 id="titulo-contacto">Contacto &amp; <span class="acento">ubicación</span></h2>
+        <p class="seccion-bajada">Atención exclusivamente con turno previo. Escribinos en el chat y te respondemos al instante.</p>
+      </header>
+      <div class="contacto-grilla">
+        <div class="contacto-tarjeta">{{ICONO_UBICACION}}<h3>Dirección</h3><p>{{DIRECCION}}</p><a class="btn btn-secundario" href="{{MAPA}}" target="_blank" rel="noopener">{{ICONO_MAPA}} Abrir en Google Maps</a></div>
+        <div class="contacto-tarjeta">{{ICONO_RELOJ}}<h3>Horario</h3><p>{{HORARIO}}</p><p class="contacto-nota">{{HORARIO_ESPECIAL}}</p></div>
+        <div class="contacto-tarjeta">{{ICONO_CHAT}}<h3>Chat</h3><p>Consultas, precios, disponibilidad y reservas, en un solo lugar.</p><button type="button" class="btn btn-primario" data-chat aria-expanded="false" aria-controls="chat">{{ICONO_CHAT}} Abrir el chat</button></div>
+      </div>
+    </div>
+  </section>
 </main>
 
-<footer class="pie" id="contacto">
+<footer class="pie" id="pie">
   <div class="contenedor pie-grilla">
     <div>
       <p class="pie-marca">Tania Sanabria</p>
@@ -172,14 +179,17 @@
 <dialog class="visor" id="dlg-visor" aria-label="Visor de fotos">
   <div class="visor-barra">
     <span class="visor-contador" id="visor-contador" aria-live="polite"></span>
+    <span class="visor-zoom-botones">
+      <button type="button" class="visor-boton" id="visor-menos" aria-label="Alejar">−</button>
+      <button type="button" class="visor-boton" id="visor-mas" aria-label="Acercar">{{ICONO_LUPA}}</button>
+    </span>
     <button type="button" class="btn-cerrar btn-cerrar-claro" data-cerrar aria-label="Cerrar visor">{{ICONO_X}}</button>
   </div>
-  <div class="visor-escenario" id="visor-escenario">
-    <img id="visor-img" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="1000" height="1500">
-  </div>
+  <div class="visor-escenario" id="visor-escenario"><div class="visor-pista" id="visor-pista"></div></div>
   <button type="button" class="visor-nav visor-prev" id="visor-prev" aria-label="Foto anterior">{{ICONO_IZQ}}</button>
   <button type="button" class="visor-nav visor-sig" id="visor-sig" aria-label="Foto siguiente">{{ICONO_DER}}</button>
-  <p class="visor-ayuda">Deslizá o usá las flechas · Tocá la foto para acercar</p>
+  <p class="visor-leyenda" id="visor-leyenda"></p>
+  <p class="visor-ayuda">Deslizá para cambiar · Pellizcá o tocá dos veces para hacer zoom · Deslizá hacia abajo para cerrar</p>
 </dialog>
 
 <!-- Formulario de reserva -->
@@ -222,6 +232,14 @@
           <label for="r-hora">Horario preferido</label>
           <select id="r-hora" name="hora" required></select>
         </div>
+      </div>
+      <div class="agenda-dias" id="r-dias-tira" hidden>
+        <p class="agenda-titulo">Próximos días</p>
+        <div class="agenda-dias-lista" id="r-dias-tira-lista" role="list"></div>
+      </div>
+      <div class="agenda-horas" id="r-horas-chips" hidden>
+        <p class="agenda-titulo" id="r-horas-titulo">Horarios</p>
+        <div id="r-horas-lista"></div>
       </div>
       <p class="campo-ayuda" id="r-fecha-info" aria-live="polite"></p>
       <div class="dias-libres" id="r-dias" hidden>

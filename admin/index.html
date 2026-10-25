@@ -393,8 +393,10 @@
           <input id="cu-cupo" name="cupo" type="number" min="1" max="500" inputmode="numeric" placeholder="10">
         </div>
         <div>
-          <label for="cu-horarios">Horarios / turnos (uno por línea)</label>
-          <textarea id="cu-horarios" name="horarios" rows="3" maxlength="600" placeholder="Martes 18:00&#10;Sábado 09:00"></textarea>
+          <label>Días y horarios del curso</label>
+          <div id="cu-horarios-filas" class="horarios-filas"></div>
+          <button type="button" class="btn" id="cu-horario-agregar">+ Agregar día y horario</button>
+          <textarea id="cu-horarios" name="horarios" rows="3" maxlength="600" hidden></textarea>
         </div>
       </div>
       <p class="suave">En la web se ven los lugares libres de cada horario (sin nombres). Si no cargás horarios, el cupo es para todo el curso. Vacío = 10 lugares.</p>

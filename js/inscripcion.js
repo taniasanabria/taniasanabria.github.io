@@ -12,6 +12,7 @@
 import { SUPABASE, PAGOS, URL_SITIO } from './config.js';
 import { rpc } from './datos.js';
 import { esc, icono, opcionesCurso, cursoAparte, formatoGs, fichaCurso } from './render.js';
+import { grillaHorariosCurso, horariosAConfirmar, pocos } from './agenda-ui.js';
 
 const V = new URL(import.meta.url).search;
 let api = null;
@@ -70,7 +71,8 @@ function construir() {
       <div id="ins-ficha"></div>
       <fieldset class="ins-opciones" id="ins-opciones" hidden><legend>Elegí la modalidad</legend><div id="ins-opciones-lista"></div></fieldset>
       <p class="ins-cupos" id="ins-cupos" aria-live="polite" hidden></p>
-      <fieldset class="ins-opciones" id="ins-horarios" hidden><legend>Elegí tu horario</legend><div id="ins-horarios-lista"></div></fieldset>
+      <fieldset class="ins-horarios" id="ins-horarios" hidden><legend>Elegí día y horario</legend><div class="ins-leyenda" aria-hidden="true"><span class="l-libre">Disponible</span><span class="l-ultimos">Últimos lugares</span><span class="l-completo">Completo</span></div><div id="ins-horarios-lista"></div></fieldset>
+      <div id="ins-sin-horarios" hidden></div>
       <div class="campo-fila">
         <div class="campo">
           <label for="ins-nombre">Nombre y apellido</label>
@@ -153,7 +155,8 @@ export async function abrirInscripcion(id, origen, apiApp) {
   $('#ins-opciones-lista').innerHTML = ops.length < 2 ? '' : ops.map((o) => `<label class="check"><input type="radio" name="opcion" value="${esc(o.id)}"${o.id === id ? ' checked' : ''}> <span><strong>${esc(o.etiqueta)}</strong> · ${o.matricula ? 'matrícula ' + formatoGs(o.matricula) : 'sin matrícula'}</span></label>`).join('');
   pintarMonto();
   $('#ins-enviar').disabled = false;
-  $('#ins-cupos').hidden = true; $('#ins-horarios').hidden = true; $('#ins-horarios-lista').innerHTML = '';
+  $('#ins-cupos').hidden = true; $('#ins-horarios').hidden = true; $('#ins-horarios-lista').innerHTML = ''; $('#ins-sin-horarios').hidden = true;
+  $('#ins-cupos').innerHTML = ''; $('#ins-horarios-lista').innerHTML = '<div class="horas-cargando" aria-busy="true"><span></span><span></span><span></span></div>'; $('#ins-horarios').hidden = false;
   api.abrirDialogo(dlg, origen);
   pintarCupos(s);
   $('.dialogo-cuerpo').scrollTop = 0;
@@ -162,20 +165,27 @@ export async function abrirInscripcion(id, origen, apiApp) {
 }
 
 async function pintarCupos(s) {
-  const d = (await cargarCupos() || {})[s.id];
+  const todos = await cargarCupos();
   if (actual !== s) return;
-  const caja = $('#ins-cupos'); const hs = $('#ins-horarios');
-  if (!d) { caja.hidden = true; hs.hidden = true; return; }
+  const d = (todos || {})[s.id];
+  const caja = $('#ins-cupos'); const hs = $('#ins-horarios'); const sin = $('#ins-sin-horarios');
+  if (!d) { caja.hidden = true; hs.hidden = true; sin.innerHTML = horariosAConfirmar(); sin.hidden = false; $('#ins-enviar').disabled = false; return; }
   const lleno = d.disponibles <= 0;
+  const ultimos = pocos(d.disponibles, d.cupo);
   caja.hidden = false;
   caja.classList.toggle('lleno', lleno);
-  caja.innerHTML = lleno
-    ? `${icono('xmark')} <strong>Curso completo</strong> · ${d.ocupados} de ${d.cupo} lugares ocupados. Escribile a Tania por el chat para la lista de espera.`
-    : `${icono('check')} <strong>${lugares(d.disponibles)[0].toUpperCase() + lugares(d.disponibles).slice(1)}</strong> · ${d.ocupados} de ${d.cupo} ocupados`;
+  caja.classList.toggle('ultimos', !lleno && ultimos);
+  const pct = d.cupo ? Math.min(100, Math.round((d.ocupados / d.cupo) * 100)) : 0;
+  caja.innerHTML = (lleno
+    ? `${icono('xmark')} <span><strong>Curso completo</strong> · ${d.ocupados} de ${d.cupo} lugares ocupados. Escribile a Tania por el chat para la lista de espera.</span>`
+    : `${icono('check')} <span><strong>${ultimos ? '¡Últimos lugares! ' : ''}${lugares(d.disponibles)[0].toUpperCase() + lugares(d.disponibles).slice(1)}</strong> · ${d.ocupados} de ${d.cupo} ocupados</span>`)
+    + `<span class="ins-cupos-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>`;
   const lista = d.horarios || [];
   hs.hidden = !lista.length;
-  $('#ins-horarios-lista').innerHTML = lista.map((h, k) => `<label class="check${h.disponibles <= 0 ? ' agotado' : ''}"><input type="radio" name="horario" value="${esc(h.horario)}"${h.disponibles <= 0 ? ' disabled' : ''}${lista.filter((x) => x.disponibles > 0).length === 1 && h.disponibles > 0 ? ' checked' : ''}> <span><strong>${esc(h.horario)}</strong> · ${h.disponibles <= 0 ? 'completo' : lugares(h.disponibles)} <small>(${h.ocupados}/${h.cupo})</small></span></label>`).join('');
-  $('#ins-enviar').disabled = lleno;
+  $('#ins-horarios-lista').innerHTML = lista.length ? grillaHorariosCurso(lista) : '';
+  sin.hidden = !!lista.length || lleno;
+  sin.innerHTML = lista.length ? '' : horariosAConfirmar();
+  $('#ins-enviar').disabled = lleno || (lista.length > 0 && lista.every((h) => h.disponibles <= 0));
 }
 
 const telefonoValido = (t) => { const d = t.replace(/[^\d+]/g, ''); return /^(\+?595|0)?9\d{8}$/.test(d) || /^\+?\d{8,15}$/.test(d); };
@@ -191,7 +201,7 @@ async function enviar(e) {
   if (nombre.length < 3) errores.push([f.nombre, MENSAJES.NOMBRE_INVALIDO]);
   if (!telefonoValido(tel)) errores.push([f.telefono, MENSAJES.TELEFONO_INVALIDO]);
   if (!emailValido(email)) errores.push([f.email, MENSAJES.EMAIL_INVALIDO]);
-  const conHorarios = !$('#ins-horarios').hidden;
+  const conHorarios = !$('#ins-horarios').hidden && !!dlg.querySelector('input[name="horario"]');
   const horario = conHorarios ? (dlg.querySelector('input[name="horario"]:checked') || {}).value : null;
   if (conHorarios && !horario) errores.push([dlg.querySelector('input[name="horario"]'), MENSAJES.ELEGI_UN_HORARIO]);
   errores.forEach(([el]) => el && el.type !== 'radio' && marcar(el, true));
