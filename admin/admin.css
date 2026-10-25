@@ -214,6 +214,13 @@ dialog::backdrop { background: rgba(27, 22, 16, .55); }
 .curso-cupos { font-size: .82rem; color: #5c4a1e; margin-top: .25rem; }
 .cita-cliente { overflow-wrap: anywhere; }
 .horarios-filas { display: grid; gap: .4rem; margin-bottom: .5rem; }
-.horario-fila { display: grid; grid-template-columns: 1fr 7.5rem auto; gap: .4rem; align-items: center; }
+.horario-fila, .horarios-cabecera { display: grid; grid-template-columns: minmax(6.5rem, 1fr) 6.6rem 1rem 6.6rem auto; gap: .4rem; align-items: center; }
+.horarios-cabecera { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; opacity: .7; padding: 0 .1rem; }
+.horario-fila.error input[type="time"] { border-color: #c0392b; box-shadow: 0 0 0 2px rgba(192, 57, 43, .25); }
+.horario-a { text-align: center; opacity: .7; }
+.horarios-botones { display: flex; flex-wrap: wrap; gap: .5rem; }
+#cu-horarios-filas { max-height: 22rem; overflow-y: auto; padding-right: .2rem; }
+.editar-hora { display: grid; gap: .6rem; }
+@media (max-width: 420px) { .horario-fila, .horarios-cabecera { grid-template-columns: 1fr 5.6rem .8rem 5.6rem auto; gap: .25rem; } }
 .horario-fila:has([data-libre]) { grid-template-columns: 1fr auto; }
 .horario-fila select, .horario-fila input { min-height: 42px; }

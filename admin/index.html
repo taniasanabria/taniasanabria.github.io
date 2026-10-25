@@ -313,6 +313,33 @@
     </form>
   </dialog>
 
+  <!-- ===== Cambiar día/hora de una cita o el horario de una alumna (se sincroniza con la app) ===== -->
+  <dialog id="dlg-hora" aria-labelledby="dlg-hora-titulo">
+    <form id="form-hora" method="dialog" novalidate class="editar-hora">
+      <h2 id="dlg-hora-titulo">Cambiar horario</h2>
+      <p class="suave" id="hora-quien"></p>
+      <div id="hora-cita">
+        <div class="fila-form">
+          <label>Fecha <input type="date" name="fecha"></label>
+          <label>Hora <input type="time" name="hora" step="900"></label>
+        </div>
+        <label>Duración (minutos) <input type="number" name="dur" min="10" max="720" step="5"></label>
+      </div>
+      <div id="hora-alumna">
+        <label for="hora-sel">Día y horario del curso</label>
+        <select id="hora-sel" name="horario_sel"></select>
+        <label id="hora-otro-lbl" for="hora-otro">Otro horario (texto)</label>
+        <input id="hora-otro" name="horario_otro" maxlength="80" placeholder="Ej: Lunes 09:00–11:00">
+      </div>
+      <p class="suave">El cambio también se ve en la app de agenda de Tania.</p>
+      <p class="error" id="hora-error" role="alert"></p>
+      <div class="acciones">
+        <button type="button" class="btn btn-borde" value="cancelar" data-cerrar>Cancelar</button>
+        <button type="submit" class="btn btn-principal" value="guardar">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- ===== Registrar pago de un curso ===== -->
   <dialog id="dlg-pago" aria-labelledby="dlg-pago-titulo">
     <form id="form-pago" method="dialog" novalidate>
@@ -393,10 +420,12 @@
           <input id="cu-cupo" name="cupo" type="number" min="1" max="500" inputmode="numeric" placeholder="10">
         </div>
         <div>
-          <label>Días y horarios del curso</label>
+          <label>Días y horarios del curso <small id="cu-horarios-cuenta" class="suave"></small></label>
+          <div class="horarios-cabecera" aria-hidden="true"><span>Día</span><span>Desde</span><span></span><span>Hasta</span><span></span></div>
           <div id="cu-horarios-filas" class="horarios-filas"></div>
-          <button type="button" class="btn" id="cu-horario-agregar">+ Agregar día y horario</button>
-          <textarea id="cu-horarios" name="horarios" rows="3" maxlength="600" hidden></textarea>
+          <div class="horarios-botones"><button type="button" class="btn" id="cu-horario-agregar">+ Agregar día y horario</button>
+          <button type="button" class="btn btn-borde" id="cu-horario-estandar">⟳ Cargar horarios estándar</button></div>
+          <textarea id="cu-horarios" name="horarios" rows="3" maxlength="3000" hidden></textarea>
         </div>
       </div>
       <p class="suave">En la web se ven los lugares libres de cada horario (sin nombres). Si no cargás horarios, el cupo es para todo el curso. Vacío = 10 lugares.</p>

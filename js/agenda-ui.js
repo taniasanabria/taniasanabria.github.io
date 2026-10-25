@@ -9,7 +9,7 @@ import { esc, icono } from './render.js';
 export const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const normal = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-/** "Martes 18:00" → { dia: 'Martes', orden: 1, hora: '18:00', texto }. Si no se reconoce el día, dia = null. */
+/** "Lunes 09:00–11:00" (o el viejo "Martes 18:00") → { dia: 'Martes', orden: 1, hora: '18:00', texto }. Si no se reconoce el día, dia = null. */
 export function partirHorario(texto) {
   const t = String(texto || '').trim();
   const m = t.match(/^([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\.?\s*(.*)$/);
@@ -34,7 +34,9 @@ export function grillaHorariosCurso(lista) {
   }
   const libresTotales = lista.filter((h) => h.disponibles > 0);
   const unico = libresTotales.length === 1;
+  const minutos = (t) => { const m = String(t).match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : 9999; };
   return [...grupos.entries()].sort((a, b) => a[1].orden - b[1].orden).map(([dia, g]) => {
+    g.items.sort((x, y) => minutos(x.p.hora) - minutos(y.p.hora));
     const lleno = g.items.every((h) => h.disponibles <= 0);
     const chips = g.items.map((h) => {
       const completo = h.disponibles <= 0;
@@ -44,7 +46,7 @@ export function grillaHorariosCurso(lista) {
       const pct = h.cupo ? Math.min(100, Math.round((h.ocupados / h.cupo) * 100)) : 0;
       return `<label class="hora-chip estado-${estado}">
         <input type="radio" name="horario" value="${esc(h.horario)}"${completo ? ' disabled' : ''}${unico && !completo ? ' checked' : ''}>
-        <span class="hora-chip-hora">${esc(h.p.hora)}</span>
+        <span class="hora-chip-hora">${esc(h.p.hora.replace(/\s*[–—-]\s*(?=\d)/, ' – '))}</span>
         <span class="hora-chip-estado">${esc(badge)}</span>
         <span class="hora-chip-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>
         <span class="solo-lector">${esc(h.horario)}: ${completo ? 'completo, sin lugares' : `${h.disponibles} de ${h.cupo} lugares libres`}</span>

@@ -190,6 +190,7 @@ function tarjetaCita(r, { nueva = false } = {}) {
   if (r.estado === 'pendiente') {
     acciones = `<button type="button" class="btn btn-aprobar" data-accion="aprobar" data-id="${r.id}">✓ Aprobar</button>
       <button type="button" class="btn btn-rechazar" data-accion="rechazar" data-id="${r.id}">✕ Rechazar</button>`;
+    if (!r.inscripcion_id) acciones += `<button type="button" class="btn btn-borde" data-accion="hora" data-id="${r.id}">🕒 Cambiar día/hora</button>`;
   } else if (r.estado === 'aprobada') {
     acciones = `<button type="button" class="btn btn-pagada" data-accion="pagada" data-id="${r.id}">💰 Marcar como pagada</button>
       <button type="button" class="btn btn-wa" data-accion="whatsapp" data-id="${r.id}">💬 WhatsApp</button>
@@ -198,6 +199,7 @@ function tarjetaCita(r, { nueva = false } = {}) {
     acciones = `<button type="button" class="btn btn-wa" data-accion="whatsapp" data-id="${r.id}">💬 WhatsApp</button>
       <button type="button" class="btn btn-borde" data-accion="cancelar" data-id="${r.id}">Cancelar cita</button>`;
   }
+  if (!r.inscripcion_id && (r.estado === 'aprobada' || r.estado === 'pagada')) acciones += `<button type="button" class="btn btn-borde" data-accion="hora" data-id="${r.id}">🕒 Cambiar día/hora</button>`;
   return `<article class="cita estado-${r.estado}${nueva ? ' nueva' : ''}" data-reserva="${r.id}">
     <div class="cita-cuando">${esc(textoCuando(r))}</div>
     <div class="cita-servicio">${esc(r.servicio_nombre)}</div>
@@ -298,6 +300,7 @@ async function accionCita(accion, id, boton) {
   const r = cacheReservas.get(id);
   if (!r) return;
   if (accion === 'whatsapp') { window.open(urlWhatsApp(r.cliente_telefono, `¡Hola ${(r.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
+  if (accion === 'hora') { abrirCambioHora('r', r); return; }
   if (accion === 'aprobar') {
     if (!estado.privados.datos_pago.trim() && !confirm('Todavía no cargaste los datos de pago en Ajustes. ¿Aprobar igual?')) return;
     const ventana = window.open('', '_blank'); // se abre ya (con el toque) para que el celular no la bloquee
@@ -323,6 +326,61 @@ async function accionCita(accion, id, boton) {
     if (await cambiarEstado(r, 'cancelada')) toast('Cita cancelada');
   }
   await cargarCitas();
+}
+
+// Cambiar día/hora de una cita ('r') o el horario de una alumna ('i'). Se guarda en la fila (web_mod = ahora),
+// así la app de agenda toma el cambio en su próxima sincronización (gana el último cambio).
+let edHora = null;
+function abrirCambioHora(tipo, x) {
+  edHora = { tipo, x };
+  const f = $('#form-hora'); f.reset(); $('#hora-error').textContent = '';
+  $('#hora-cita').hidden = tipo !== 'r'; $('#hora-alumna').hidden = tipo !== 'i';
+  $('#dlg-hora-titulo').textContent = tipo === 'r' ? 'Cambiar día y hora de la cita' : 'Horario de la alumna';
+  $('#hora-quien').textContent = tipo === 'r' ? `${x.cliente_nombre} · ${x.servicio_nombre}` : `${x.cliente_nombre} · ${x.curso_nombre}`;
+  if (tipo === 'r') {
+    f.fecha.value = x.inicio ? fechaLocalDe(x.inicio) : (x.fecha_preferida || hoyISO());
+    f.hora.value = x.inicio ? horaDe(x.inicio) : (/^\d{1,2}:\d{2}/.test(x.hora_preferida || '') ? x.hora_preferida.slice(0, 5).padStart(5, '0') : '');
+    const s = estado.servicios.find((y) => y.id === x.servicio_id);
+    f.dur.value = x.inicio && x.fin ? Math.round((new Date(x.fin) - new Date(x.inicio)) / 6e4) : (s ? s.duracion_min : 60);
+  } else {
+    const s = estado.servicios.find((y) => y.id === x.servicio_id);
+    const hs = (s && s.extra && Array.isArray(s.extra.horarios) ? s.extra.horarios : []).slice().sort((a, b) => ordenHorario(a) - ordenHorario(b));
+    const actual = x.horario || '';
+    const igual = (h) => { const p = leerHorario(h); const q = leerHorario(actual); return p && q ? p.dia === q.dia && p.ini === q.ini : sinTilde(h) === sinTilde(actual); };
+    const sel = hs.find(igual);
+    const grupos = new Map();
+    hs.forEach((h) => { const p = leerHorario(h); const k = p ? p.dia : 'Otros'; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(h); });
+    $('#hora-sel').innerHTML = '<option value="">Sin horario asignado</option>'
+      + [...grupos].map(([d, l]) => `<optgroup label="${esc(d)}">${l.map((h) => `<option value="${esc(h)}"${h === sel ? ' selected' : ''}>${esc(h)}</option>`).join('')}</optgroup>`).join('')
+      + `<option value="__otro"${actual && !sel ? ' selected' : ''}>Otro horario…</option>`;
+    f.horario_otro.value = actual && !sel ? actual : '';
+    mostrarOtro();
+  }
+  $('#dlg-hora').showModal();
+}
+function mostrarOtro() { const o = $('#hora-sel').value === '__otro'; $('#hora-otro').hidden = !o; $('#hora-otro-lbl').hidden = !o; }
+async function guardarCambioHora(e) {
+  e.preventDefault();
+  if (!edHora) return;
+  const f = e.target; const err = $('#hora-error'); const btn = f.querySelector('[type="submit"]');
+  let q;
+  if (edHora.tipo === 'r') {
+    const dur = Math.min(Math.max(parseInt(f.dur.value, 10) || 60, 10), 720);
+    if (!f.fecha.value || !f.hora.value) { err.textContent = 'Completá fecha y hora.'; return; }
+    const ini = instante(f.fecha.value, f.hora.value);
+    q = sb.from('reservas').update({ inicio: ini.toISOString(), fin: new Date(ini.getTime() + dur * 6e4).toISOString(), fecha_preferida: f.fecha.value, hora_preferida: f.hora.value }).eq('id', edHora.x.id);
+  } else {
+    const v = $('#hora-sel').value === '__otro' ? f.horario_otro.value.trim().slice(0, 80) : $('#hora-sel').value;
+    if ($('#hora-sel').value === '__otro' && !v) { err.textContent = 'Escribí el horario o elegí uno de la lista.'; return; }
+    q = sb.from('inscripciones').update({ horario: v || null }).eq('id', edHora.x.id);
+  }
+  btn.disabled = true;
+  const { error } = await q;
+  btn.disabled = false;
+  if (error) { err.textContent = errorLegible(error); return; }
+  $('#dlg-hora').close();
+  toast('Horario actualizado ✓ · también en la app');
+  if (edHora.tipo === 'r') await cargarCitas(); else await Promise.all([cargarInscripciones(), cargarCupos()]);
 }
 
 // Agregar cita a mano
@@ -692,20 +750,36 @@ function pintarFlyerEditor() {
   $('#cu-flyer-texto').textContent = f ? 'Cambiar flyer' : 'Subir flyer';
   if (f) $('#cu-flyer-img').src = urlFlyer(f, f.anchos[Math.min(1, f.anchos.length - 1)]);
 }
-// Días y horarios del curso: filas (día + hora) que se guardan como texto "Martes 18:00",
-// el mismo formato que usa la web (cupos por horario) y la app de agenda.
+// Días y horarios del curso: filas (día + desde + hasta) que se guardan como texto "Lunes 09:00–11:00"
+// (formato canónico, guion largo). También se leen los viejos "Martes 18:00" (solo hora de inicio).
+// Es el mismo texto que usa la web (cupos por horario) y la app de agenda.
 const DIAS_CURSO = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const sinTilde = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const MAX_HORARIOS = 40;
+const BLOQUES_LV = [['09:00', '11:00'], ['12:00', '14:00'], ['16:00', '18:00'], ['18:00', '20:00']];
+/** Horarios estándar de Tania: lunes a viernes 4 turnos, sábados sin el de 18 a 20. */
+const HORARIOS_ESTANDAR = DIAS_CURSO.slice(0, 6).flatMap((d) => (d === 'Sábado' ? BLOQUES_LV.slice(0, 3) : BLOQUES_LV).map(([a, b]) => `${d} ${a}–${b}`));
+const hhmm = (h, m) => `${String(h).padStart(2, '0')}:${m}`;
+/** "Lunes 09:00–11:00" | "Lunes 9:00 - 11:00" | "Martes 18:00" → { dia, ini, fin } o null. */
+function leerHorario(texto) {
+  const m = String(texto || '').trim().match(/^([A-Za-zÁÉÍÓÚáéíóú]+)\.?\s+(\d{1,2}):(\d{2})(?:\s*(?:–|—|-|a)\s*(\d{1,2}):(\d{2}))?\s*(?:hs?\.?)?$/i);
+  if (!m) return null;
+  const dia = DIAS_CURSO.find((d) => sinTilde(d) === sinTilde(m[1]));
+  return dia ? { dia, ini: hhmm(m[2], m[3]), fin: m[4] ? hhmm(m[4], m[5]) : '' } : null;
+}
+const textoHorario = (dia, ini, fin) => (ini ? `${dia} ${ini}${fin && fin > ini ? '–' + fin : ''}` : '');
+const ordenHorario = (t) => { const p = leerHorario(t); return p ? DIAS_CURSO.indexOf(p.dia) * 1e4 + Number(p.ini.replace(':', '')) : 9e4; };
 function filaHorario(texto = '') {
-  const m = String(texto).trim().match(/^(\S+)\s+(\d{1,2}):(\d{2})$/);
-  const dia = m && DIAS_CURSO.find((d) => sinTilde(d) === sinTilde(m[1]));
-  const libre = texto && !dia;
+  const p = leerHorario(texto);
+  const libre = texto && !p;
   const div = document.createElement('div');
-  div.className = 'horario-fila';
+  div.className = 'horario-fila' + (libre ? ' libre' : '');
   div.innerHTML = libre
     ? `<input type="text" data-libre maxlength="80" value="${esc(texto)}" aria-label="Horario (texto libre)"><button type="button" class="btn" data-quitar-horario aria-label="Quitar">✕</button>`
-    : `<select data-dia aria-label="Día">${DIAS_CURSO.map((d) => `<option${d === dia ? ' selected' : ''}>${d}</option>`).join('')}</select>
-       <input type="time" data-hora step="900" value="${m ? m[2].padStart(2, '0') + ':' + m[3] : '18:00'}" aria-label="Hora">
+    : `<select data-dia aria-label="Día">${DIAS_CURSO.map((d) => `<option${p && d === p.dia ? ' selected' : ''}>${d}</option>`).join('')}</select>
+       <input type="time" data-hora step="900" value="${p ? p.ini : '09:00'}" aria-label="Desde">
+       <span class="horario-a" aria-hidden="true">a</span>
+       <input type="time" data-fin step="900" value="${p ? p.fin : '11:00'}" aria-label="Hasta">
        <button type="button" class="btn" data-quitar-horario aria-label="Quitar">✕</button>`;
   return div;
 }
@@ -713,26 +787,36 @@ function pintarFilasHorario() {
   const cont = $('#cu-horarios-filas');
   cont.innerHTML = '';
   $('#form-curso').horarios.value.split('\n').map((t) => t.trim()).filter(Boolean).forEach((t) => cont.append(filaHorario(t)));
-  if (!cont.children.length) cont.innerHTML = '<p class="suave" data-vacio>Sin horarios: la web muestra “Horarios a confirmar”.</p>';
+  if (!cont.children.length) cont.innerHTML = '<p class="suave" data-vacio>Sin horarios: la web muestra “Horarios a confirmar”. Tocá “Cargar horarios estándar” para empezar.</p>';
+  $('#cu-horarios-cuenta').textContent = cont.querySelector('.horario-fila') ? `${cont.querySelectorAll('.horario-fila').length} horarios` : '';
 }
 function sincronizarHorarios() {
+  let malo = false;
   const filas = $$('#cu-horarios-filas .horario-fila').map((f) => {
     const libre = $('[data-libre]', f);
     if (libre) return libre.value.trim();
-    const h = $('[data-hora]', f).value;
-    return h ? `${$('[data-dia]', f).value} ${h}` : '';
+    const ini = $('[data-hora]', f).value; const fin = $('[data-fin]', f).value;
+    const err = !!(ini && fin && fin <= ini); f.classList.toggle('error', err); malo = malo || err;
+    return textoHorario($('[data-dia]', f).value, ini, err ? '' : fin);
   }).filter(Boolean);
   $('#form-curso').horarios.value = [...new Set(filas)].join('\n');
+  $('#cu-horarios-cuenta').textContent = filas.length ? `${filas.length} horarios` : '';
+  return !malo;
 }
 document.addEventListener('click', (e) => {
   if (e.target.closest('#cu-horario-agregar')) {
     const cont = $('#cu-horarios-filas');
     cont.querySelector('[data-vacio]')?.remove();
-    if (cont.children.length >= 12) { toast('Máximo 12 horarios por curso.', true); return; }
+    if (cont.children.length >= MAX_HORARIOS) { toast(`Máximo ${MAX_HORARIOS} horarios por curso.`, true); return; }
     const ult = cont.lastElementChild;
     const nueva = filaHorario();
-    if (ult && $('[data-dia]', ult)) { $('[data-dia]', nueva).value = $('[data-dia]', ult).value; $('[data-hora]', nueva).value = $('[data-hora]', ult).value; }
+    if (ult && $('[data-dia]', ult)) { $('[data-dia]', nueva).value = $('[data-dia]', ult).value; $('[data-hora]', nueva).value = $('[data-fin]', ult).value || $('[data-hora]', ult).value; }
     cont.append(nueva); sincronizarHorarios();
+  }
+  if (e.target.closest('#cu-horario-estandar')) {
+    const f = $('#form-curso');
+    if (f.horarios.value.trim() && !confirm('¿Reemplazar los horarios de este curso por los estándar?\n\nLunes a viernes: 09:00–11:00, 12:00–14:00, 16:00–18:00 y 18:00–20:00.\nSábados: 09:00–11:00, 12:00–14:00 y 16:00–18:00.')) return;
+    f.horarios.value = HORARIOS_ESTANDAR.join('\n'); pintarFilasHorario(); toast('Horarios estándar cargados. Tocá Guardar para publicarlos.');
   }
   const q = e.target.closest('[data-quitar-horario]');
   if (q) { q.closest('.horario-fila').remove(); sincronizarHorarios(); if (!$('#cu-horarios-filas').children.length) pintarFilasHorario(); }
@@ -853,7 +937,8 @@ async function guardarCurso(e) {
   const cupo = parseInt(f.cupo.value, 10);
   if (cupo > 0 && cupo <= 500) ex.cupo_max = cupo; else delete ex.cupo_max;
   sincronizarHorarios();
-  const horarios = [...new Set(f.horarios.value.split('\n').map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, 12);
+  if (!sincronizarHorarios()) { $('#curso-error').textContent = 'Revisá los horarios marcados en rojo: la hora “hasta” tiene que ser después de “desde”.'; return; }
+  const horarios = [...new Set(f.horarios.value.split('\n').map((t) => t.trim().slice(0, 80)).filter(Boolean))].sort((x, y) => ordenHorario(x) - ordenHorario(y)).slice(0, MAX_HORARIOS);
   if (horarios.length) ex.horarios = horarios; else delete ex.horarios;
   const m = precio.match(/\d{1,3}(?:\.\d{3})+|\d+/);
   const fila = {
@@ -948,6 +1033,7 @@ function tarjetaInscripcion(i, codigos) {
       : `<button type="button" class="btn btn-aprobar" data-ins="dar" data-id="${i.id}">🔓 Dar acceso</button>`)
     + `<button type="button" class="btn btn-borde" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>`;
   else acc = `<button type="button" class="btn btn-borde btn-borrar" data-ins="borrar" data-id="${i.id}">🗑 Borrar</button>`;
+  if (i.estado !== 'cancelada') acc += `<button type="button" class="btn btn-borde" data-ins="horario" data-id="${i.id}">🕒 ${i.horario ? 'Cambiar horario' : 'Asignar horario'}</button>`;
   const cod = codigos[i.cliente_email];
   return `<article class="cita inscripcion estado-${i.estado === 'pendiente' ? 'pendiente' : i.estado}" data-inscripcion="${i.id}">
     <div class="cita-cuando">${esc(fmtFecha(new Date(i.creado), { day: 'numeric', month: 'numeric', year: 'numeric' }))} · Ref. <code>${esc(i.referencia)}</code></div>
@@ -1030,6 +1116,7 @@ async function confirmarPago(e) {
 async function accionInscripcion(accion, id, boton) {
   const i = cacheIns.get(id); if (!i) return;
   if (accion === 'pago') { abrirPago(i); return; }
+  if (accion === 'horario') { abrirCambioHora('i', i); return; }
   if (accion === 'confirmar') {
     // Curso sin matrícula: se confirma la inscripción y se da acceso (no hay pago que registrar).
     if (!confirm(`¿Confirmar la inscripción de ${i.cliente_nombre} a ${i.curso_nombre}? Se le da acceso a las clases y se abre WhatsApp con su código.`)) return;
@@ -1512,9 +1599,12 @@ function prepararEventos() {
   $('#ag-hoy').addEventListener('click', () => { estado.fechaAgenda = hoyISO(); cargarAgenda(); });
   $('#btn-nueva-cita').addEventListener('click', abrirNuevaCita);
   $('#form-cita').addEventListener('submit', guardarNuevaCita);
+  $('#dlg-hora').addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]') || e.target === e.currentTarget) $('#dlg-hora').close(); });
   $('#dlg-cita').addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]') || e.target === e.currentTarget) $('#dlg-cita').close(); });
   // Horarios
   $('#btn-guardar-horario').addEventListener('click', guardarHorario);
+  $('#form-hora').addEventListener('submit', guardarCambioHora);
+  $('#hora-sel').addEventListener('change', mostrarOtro);
   $('#horario-semanal').addEventListener('change', (e) => { const f = e.target.closest('.dia-fila'); if (f) f.classList.toggle('cerrado', !$('[data-abierto]', f).checked); });
   $('#form-bloqueo').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = e.target;
