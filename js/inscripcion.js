@@ -13,6 +13,7 @@ import { SUPABASE, PAGOS, URL_SITIO } from './config.js';
 import { rpc } from './datos.js';
 import { esc, icono, opcionesCurso, cursoAparte, formatoGs, fichaCurso } from './render.js';
 import { botonesCopiar, activarCopiar } from './copiar.js';
+import { pintarComprobante, datosPago } from './comprobante.js';
 import { grillaHorariosCurso, horariosAConfirmar, pocos } from './agenda-ui.js';
 
 const V = new URL(import.meta.url).search;
@@ -328,12 +329,23 @@ function mostrarOk(d) {
       ${pasos}
       <li>Cuando Tania confirme tu ${conMatricula ? 'matrícula' : 'inscripción'}, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el aula de alumnas</a>.</li>
     </ol>
+    <div id="ins-comprobante" hidden></div>
     <a class="btn btn-primario btn-grande btn-ancho" id="ins-wa" href="${esc(urlWa(mensajeComprobante(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} ${d.modo === 'online' && conMatricula ? 'Enviar comprobante por WhatsApp' : d.modo === 'online' ? 'Avisar a Tania por WhatsApp' : 'Escribir a Tania por WhatsApp'}</a>
     <button type="button" class="btn btn-secundario btn-ancho" data-cerrar>Listo</button>`;
   $('#form-inscripcion').hidden = true;
   ok.hidden = false;
   ok.focus();
   if (!ok._copiar) { activarCopiar(ok); ok._copiar = true; }
+  // Comprobante (requiere supabase/comprobantes.sql; si no está, queda el botón de WhatsApp de siempre).
+  if (d.modo === 'online' && d.id && conMatricula) {
+    datosPago('i', d.id).then((p) => {
+      const caja = $('#ins-comprobante'); if (!p || !caja) return;
+      const txt = mensajeComprobante(d).replace(/\nTe envío el comprobante de pago de la matrícula 👇$/, '');
+      pintarComprobante(caja, { tipo: 'i', id: d.id, pago: p, conPago: false, tel: whatsapp(), mensaje: txt });
+      caja.hidden = false;
+      const viejo = $('#ins-wa'); if (viejo) viejo.hidden = true;
+    });
+  }
   const bt = $('#ins-tarjeta');
   if (bt) bt.addEventListener('click', () => pagarConTarjeta(d, bt));
 }

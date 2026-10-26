@@ -144,7 +144,9 @@ async function entrarAlPanel() {
   $('#cuenta-email').textContent = 'Ingresaste como ' + user.email;
   mostrarVista('panel');
   await cargarBase();
-  elegirTab(location.hash.replace('#', '') || 'citas', false);
+  const hashComp = location.hash.match(/^#comprobante=([ri]):([0-9a-f-]{36})$/i);
+  elegirTab(hashComp ? 'citas' : (location.hash.replace('#', '') || 'citas'), false);
+  if (hashComp) abrirComprobantePorId(hashComp[1] === 'r' ? 'reservas' : 'inscripciones', hashComp[2]);
   suscribirse();
   await registrarSW();
   await asegurarPush(); // renueva la suscripción si ya había permiso
@@ -207,6 +209,7 @@ function tarjetaCita(r, { nueva = false } = {}) {
     <div class="cita-cliente">${esc(r.cliente_nombre)} · <a href="tel:${esc(r.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(r.cliente_telefono)}</a>${r.cliente_email ? ` · <a href="mailto:${esc(r.cliente_email)}">${esc(r.cliente_email)}</a>` : ''}</div>
     ${r.notas ? `<p class="cita-notas">📝 ${esc(r.notas)}</p>` : ''}
     <div class="etiquetas">${etiquetas.join('')}</div>
+    ${bloqueComprobante('reservas', r)}
     ${acciones ? `<div class="cita-acciones">${acciones}</div>` : ''}
   </article>`;
 }
@@ -1151,6 +1154,7 @@ function tarjetaInscripcion(i, codigos) {
     ${i.notas ? `<p class="cita-notas">📝 ${esc(i.notas)}</p>` : ''}
     ${i.acceso && cod ? `<p class="suave">Código de acceso: <code>${esc(cod.codigo)}</code>${cod.user_id ? ' · ya entró al aula' : ' · todavía no entró'}</p>` : ''}
     <div class="etiquetas">${et.join('')}</div>
+    ${bloqueComprobante('inscripciones', i)}
     <div class="cita-acciones">${acc}</div>
   </article>`;
 }
@@ -1820,4 +1824,80 @@ arrancar().catch((err) => {
   console.warn('No se pudo iniciar el panel:', err);
   mostrarVista('login');
   $('#login-error').textContent = 'No se pudo conectar. Revisá internet y recargá la página.';
+});
+
+
+// ------------------------------------------------------------------ comprobantes de transferencia (supabase/comprobantes.sql)
+// Bucket privado "comprobantes": la miniatura y el visor usan URLs firmadas de 10 minutos.
+function bloqueComprobante(tabla, x) {
+  if (!('comprobante_estado' in x) || x.estado === 'cancelada' || x.estado === 'rechazada') return '';
+  const ver = x.comprobante_estado === 'verificado';
+  const ruta = x.comprobante_ruta;
+  const pdf = ruta && /\.pdf$/i.test(ruta);
+  return `<div class="comp-admin${ver ? ' comp-ok' : ''}">
+    ${ruta ? `<button type="button" class="comp-mini" data-comp="ver" data-tabla="${tabla}" data-id="${x.id}" data-ruta="${esc(ruta)}" aria-label="Ver comprobante">
+      ${pdf ? '<span class="comp-pdf">📄 PDF</span>' : `<img class="comp-thumb" data-ruta="${esc(ruta)}" alt="Comprobante" width="64" height="64">`}</button>` : ''}
+    <div class="comp-admin-txt">
+      <strong>${ver ? '✅ Pago verificado' : ruta ? '🧾 Comprobante enviado' : 'Sin comprobante'}</strong>
+      ${x.comprobante_en ? `<small>${esc(fmtFecha(new Date(x.comprobante_en), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }))}</small>` : ''}
+      <span class="comp-admin-acc">
+        ${ruta ? `<button type="button" class="btn btn-borde" data-comp="ver" data-tabla="${tabla}" data-id="${x.id}" data-ruta="${esc(ruta)}">🔍 Ver</button>` : ''}
+        ${ver ? `<button type="button" class="btn btn-borde" data-comp="desverificar" data-tabla="${tabla}" data-id="${x.id}">Deshacer</button>`
+              : `<button type="button" class="btn btn-aprobar" data-comp="verificar" data-tabla="${tabla}" data-id="${x.id}">✅ Pago verificado</button>`}
+      </span>
+    </div>
+  </div>`;
+}
+const firmas = new Map();
+async function urlFirmada(ruta) {
+  const f = firmas.get(ruta); if (f && f.exp > Date.now()) return f.url;
+  const { data, error } = await sb.storage.from('comprobantes').createSignedUrl(ruta, 600);
+  if (error || !data) throw error || new Error('sin url');
+  firmas.set(ruta, { url: data.signedUrl, exp: Date.now() + 540000 }); return data.signedUrl;
+}
+function hidratarMiniaturas() {
+  $$('img.comp-thumb:not([data-cargada])').forEach((img) => {
+    img.dataset.cargada = '1';
+    urlFirmada(img.dataset.ruta).then((u) => { img.src = u; }).catch(() => { img.alt = '🧾'; });
+  });
+}
+new MutationObserver(() => { clearTimeout(hidratarMiniaturas.t); hidratarMiniaturas.t = setTimeout(hidratarMiniaturas, 80); })
+  .observe(document.body, { childList: true, subtree: true });
+async function verComprobante(ruta, tabla, id) {
+  let d = $('#dlg-comprobante');
+  if (!d) {
+    d = document.createElement('dialog'); d.id = 'dlg-comprobante'; d.className = 'dlg-comprobante';
+    d.addEventListener('click', (e) => { if (e.target.closest('[data-cerrar]') || e.target === d) d.close(); });
+    document.body.appendChild(d);
+  }
+  d.innerHTML = '<div class="comp-visor"><p>Cargando…</p></div>';
+  if (!d.open) d.showModal();
+  try {
+    const u = await urlFirmada(ruta);
+    const pdf = /\.pdf$/i.test(ruta);
+    d.innerHTML = `<div class="comp-visor">
+      <div class="comp-visor-barra"><strong>🧾 Comprobante</strong><button type="button" class="btn btn-borde" data-cerrar>✕ Cerrar</button></div>
+      ${pdf ? `<iframe src="${esc(u)}" title="Comprobante PDF"></iframe>` : `<img src="${esc(u)}" alt="Comprobante de transferencia">`}
+      <div class="comp-visor-acc"><a class="btn btn-borde" href="${esc(u)}" target="_blank" rel="noopener">Abrir en otra pestaña</a>
+      ${tabla ? `<button type="button" class="btn btn-aprobar" data-comp="verificar" data-tabla="${tabla}" data-id="${id}">✅ Pago verificado</button>` : ''}</div></div>`;
+  } catch (err) { d.innerHTML = `<div class="comp-visor"><p>No se pudo abrir el comprobante: ${esc(errorLegible(err))}</p><button type="button" class="btn btn-borde" data-cerrar>Cerrar</button></div>`; }
+}
+async function abrirComprobantePorId(tabla, id) {
+  const { data, error } = await sb.from(tabla).select('id, comprobante_ruta').eq('id', id).maybeSingle();
+  if (error || !data) { toast('No encontré ese comprobante.', true); return; }
+  if (!data.comprobante_ruta) { toast('Esa reserva todavía no tiene comprobante.'); return; }
+  verComprobante(data.comprobante_ruta, tabla, id);
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-comp]'); if (!b) return;
+  const { comp, tabla, id, ruta } = b.dataset;
+  if (comp === 'ver') { verComprobante(ruta, tabla, id); return; }
+  b.disabled = true;
+  const { error } = await sb.rpc('admin_pago_verificado', { p_tabla: tabla, p_id: id, p_ok: comp === 'verificar' });
+  b.disabled = false;
+  if (error) { toast(errorLegible(error), true); return; }
+  toast(comp === 'verificar' ? '✅ Pago verificado' : 'Verificación deshecha');
+  const dv = $('#dlg-comprobante'); if (dv && dv.open) dv.close();
+  const tab = $$('.tabs [data-tab]').find((x) => x.getAttribute('aria-selected') === 'true');
+  if (tab && cargadores[tab.dataset.tab]) cargadores[tab.dataset.tab]();
 });

@@ -423,8 +423,11 @@ const MENSAJES_ERROR = {
   SERVICIO_NO_DISPONIBLE: 'Ese servicio no está disponible en este momento. Preguntá en el chat.',
 };
 
-function mostrarReservaOk({ registrada, url, resumen, abrir }) {
+function mostrarReservaOk({ registrada, url, resumen, abrir, id, texto }) {
   const f = $('#form-reserva');
+  const cajaPago = $('#reserva-pago');
+  cajaPago.hidden = true; cajaPago.innerHTML = ''; $('#reserva-ok-registrada').classList.remove('con-pago');
+  if (registrada && id) pintarPagoReserva(cajaPago, id, texto);
   $('#reserva-ok-titulo').textContent = registrada ? '¡Solicitud enviada!' : '¡Solicitud lista!';
   $('#reserva-ok-registrada').hidden = !registrada;
   $('#reserva-ok-whatsapp').hidden = registrada;
@@ -442,6 +445,19 @@ function mostrarReservaOk({ registrada, url, resumen, abrir }) {
   ok.focus();
   // Si el navegador bloqueó la ventana, el enlace visible sirve de respaldo.
   if (abrir && !ventana) aviso('Tocá el enlace para abrir WhatsApp.');
+}
+
+// Después de crear el turno: datos de transferencia + comprobante + WhatsApp (solo si comprobantes.sql está instalado).
+async function pintarPagoReserva(caja, id, texto) {
+  let mod;
+  try { mod = await import('./comprobante.js'); } catch { return; }
+  const pago = await mod.datosPago('r', id);
+  if (!pago) return; // sin la función nueva: queda el flujo anterior
+  const tel = (catalogo.negocio && catalogo.negocio.whatsapp) || mod.WA_TANIA;
+  mod.pintarComprobante(caja, { tipo: 'r', id, pago, tel, conPago: !!(pago.datos_pago || pago.monto_gs || pago.monto_texto),
+    mensaje: [texto, pago.monto_texto ? `💳 *${pago.es_sena ? 'Seña' : 'Monto'} a transferir:* ${pago.monto_texto}` : ''].filter(Boolean).join('\n') });
+  caja.hidden = false;
+  $('#reserva-ok-registrada').classList.add('con-pago');
 }
 
 async function enviarReserva(e) {
@@ -526,7 +542,7 @@ async function enviarReserva(e) {
   try {
     const r = await rpc('crear_reserva', args);
     if (!r || r.ok === false) throw Object.assign(new Error('reserva'), { codigo: (r && r.error) || 'ERROR' });
-    mostrarReservaOk({ registrada: true, url, resumen });
+    mostrarReservaOk({ registrada: true, url, resumen, id: r.id, texto: lineas.join('\n') });
   } catch (err) {
     const msg = MENSAJES_ERROR[err.codigo];
     if (msg) {
@@ -827,6 +843,7 @@ async function iniciar() {
   window.addEventListener('hashchange', atenderHash);
   document.documentElement.classList.add('js-listo');
   actualizarDesdeSupabase();
+  if (/[?&]comprobante=/.test(location.search)) import('./comprobante.js').then((m) => m.abrirDesdeEnlace(catalogo.negocio && catalogo.negocio.whatsapp)).catch(() => {});
 }
 
 iniciar().catch((err) => {
