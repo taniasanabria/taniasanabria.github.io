@@ -53,7 +53,7 @@ function construir() {
   raiz.setAttribute('aria-labelledby', 'chat-titulo');
   raiz.innerHTML = `
     <div class="chat-cabecera">
-      <img src="img/logo-96.webp" width="40" height="41" alt="">
+      <img src="img/logo-96.webp" width="34" height="40" alt="">
       <div class="chat-titulos">
         <h2 id="chat-titulo">Asistente de Tania</h2>
         <p>Respuestas automáticas · <a class="chat-humano" href="${esc(urlWhatsApp('¡Hola Tania! Te escribo desde la web.'))}" target="_blank" rel="noopener">Hablar con Tania</a></p>

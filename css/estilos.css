@@ -557,3 +557,6 @@ html { scroll-padding-top: calc(var(--alto-cabecera) + 70px); }
 .horas-cargando { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; }
 .horas-cargando span { height: 48px; border-radius: 11px; background: linear-gradient(90deg, #f3ede3, #faf7f2, #f3ede3); background-size: 200% 100%; animation: brillo 1.2s infinite linear; }
 @keyframes brillo { to { background-position: -200% 0; } }
+
+.pie-logo { display: block; width: 150px; height: auto; margin-bottom: .6rem; filter: drop-shadow(0 2px 6px rgba(0,0,0,.18)); }
+.error-404 img { width: 160px; height: auto; }

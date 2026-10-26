@@ -170,7 +170,7 @@ escribir('404.html', `<!DOCTYPE html>
 </head>
 <body class="pagina-404">
   <main class="error-404">
-    <img src="img/logo-192.webp" width="96" height="99" alt="Logo de Tania Sanabria Makeup Studio">
+    <img src="img/logo-completo-320.webp" srcset="img/logo-completo-320.webp 1x, img/logo-completo-640.webp 2x" width="160" height="140" alt="Logo de Tania Sanabria Makeup Studio">
     <p class="sobretitulo">Error 404</p>
     <h1>Esta página <span class="acento">no existe</span></h1>
     <p>Puede que el enlace esté incompleto o que la página haya cambiado de lugar.</p>
