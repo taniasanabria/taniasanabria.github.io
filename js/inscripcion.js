@@ -12,6 +12,7 @@
 import { SUPABASE, PAGOS, URL_SITIO } from './config.js';
 import { rpc } from './datos.js';
 import { esc, icono, opcionesCurso, cursoAparte, formatoGs, fichaCurso } from './render.js';
+import { botonesCopiar, activarCopiar } from './copiar.js';
 import { grillaHorariosCurso, horariosAConfirmar, pocos } from './agenda-ui.js';
 
 const V = new URL(import.meta.url).search;
@@ -298,7 +299,7 @@ function mostrarOk(d) {
       <h3>${icono('receipt')} Cómo pagar la matrícula</h3>
       <p class="ins-pago-monto">Matrícula a pagar ahora: <strong>${formatoGs(d.monto_gs)}</strong></p>
       ${d.referencia ? `<p>Referencia de tu inscripción: <strong class="ins-ref">${esc(d.referencia)}</strong> <small>(ponela en el concepto de la transferencia)</small></p>` : ''}
-      ${datos ? `<p class="ins-pago-sub">Transferencia</p><pre class="ins-datos">${esc(datos)}</pre>` : ''}
+      ${datos ? `<p class="ins-pago-sub">Transferencia</p><pre class="ins-datos">${esc(datos)}</pre>${botonesCopiar(datos)}` : ''}
       ${qr ? `<p class="ins-pago-sub">O pagá con QR</p><img class="ins-qr" src="${esc(qr)}" alt="Código QR para pagar a Tania Sanabria" width="240" height="240" loading="lazy">` : ''}
       ${!datos && !qr ? '<p>Tania te va a enviar por WhatsApp los datos para la transferencia o el QR.</p>' : ''}
       ${pagoTarjeta ? `<button type="button" class="btn btn-secundario btn-ancho" id="ins-tarjeta">${icono('credit-card')} ${esc(PAGOS.tarjeta.etiqueta || 'Pagar con tarjeta')}</button>` : ''}
@@ -332,6 +333,7 @@ function mostrarOk(d) {
   $('#form-inscripcion').hidden = true;
   ok.hidden = false;
   ok.focus();
+  if (!ok._copiar) { activarCopiar(ok); ok._copiar = true; }
   const bt = $('#ins-tarjeta');
   if (bt) bt.addEventListener('click', () => pagarConTarjeta(d, bt));
 }
