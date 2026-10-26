@@ -89,6 +89,17 @@ function rellenar(plantilla, r) {
   return String(plantilla || '').replace(/\{(\w+)\}/g, (m, k) => (k in valores ? valores[k] : m));
 }
 
+// Mensaje de aprobación según el pago: comprobante recibido / verificado / sin comprobante (admin/mensajes-aprobacion.js)
+function mensajeAprobacionReserva(r) {
+  const v = {}; rellenar('{fecha}|{hora}|{monto}|{pago}', r).split('|').forEach((x, k) => { v[['fecha', 'hora', 'monto', 'pago'][k]] = x; });
+  return window.mensajeAprobacion({ tipo: 'r', nombre: r.cliente_nombre, servicio: r.servicio_nombre, fecha: v.fecha, hora: v.hora, monto: v.monto, pago: v.pago,
+    comprobante_estado: r.comprobante_estado, comprobante_ruta: r.comprobante_ruta, plantilla: estado.privados.mensaje_aprobacion, datos_pago: estado.privados.datos_pago });
+}
+function mensajeAprobacionInscripcion(i) {
+  return window.mensajeAprobacion({ tipo: 'i', nombre: i.cliente_nombre, curso: i.curso_nombre, horario: i.horario || '', monto: i.monto_gs ? gs(i.monto_gs) : 'a coordinar', pago: 'la matrícula',
+    comprobante_estado: i.comprobante_estado, comprobante_ruta: i.comprobante_ruta, datos_pago: estado.privados && estado.privados.datos_pago });
+}
+
 function errorLegible(error) {
   if (!error) return '';
   if (error.code === '23P01') return 'Ese horario se superpone con otra cita.';
@@ -306,11 +317,11 @@ async function accionCita(accion, id, boton) {
   if (accion === 'whatsapp') { window.open(urlWhatsApp(r.cliente_telefono, `¡Hola ${(r.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
   if (accion === 'hora') { abrirCambioHora('r', r); return; }
   if (accion === 'aprobar') {
-    if (!estado.privados.datos_pago.trim() && !confirm('Todavía no cargaste los datos de pago en Ajustes. ¿Aprobar igual?')) return;
+    if (window.mensajeAprobacion.estadoPago(r) === 'sin' && !estado.privados.datos_pago.trim() && !confirm('Todavía no cargaste los datos de pago en Ajustes. ¿Aprobar igual?')) return;
     const ventana = window.open('', '_blank'); // se abre ya (con el toque) para que el celular no la bloquee
     boton.disabled = true;
     if (await cambiarEstado(r, 'aprobada')) {
-      abrirWhatsApp(ventana, urlWhatsApp(r.cliente_telefono, rellenar(estado.privados.mensaje_aprobacion, r)));
+      abrirWhatsApp(ventana, urlWhatsApp(r.cliente_telefono, mensajeAprobacionReserva(r)));
       toast('Cita confirmada ✓');
     } else if (ventana) ventana.close();
   } else if (accion === 'rechazar') {
@@ -1238,7 +1249,7 @@ async function accionInscripcion(accion, id, boton) {
     await Promise.all([cargarInscripciones(), cargarPendientes()]);
     return;
   }
-  if (accion === 'whatsapp') { window.open(urlWhatsApp(i.cliente_telefono, `¡Hola ${(i.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
+  if (accion === 'whatsapp') { window.open(urlWhatsApp(i.cliente_telefono, i.estado === 'pendiente' && i.monto_gs ? mensajeAprobacionInscripcion(i) : `¡Hola ${(i.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
   if (accion === 'dar' || accion === 'reenviar') {
     const ventana = window.open('', '_blank');
     boton.disabled = true;
