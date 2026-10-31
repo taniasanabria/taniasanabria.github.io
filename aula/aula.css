@@ -77,11 +77,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--o
 .error { color: var(--rojo); font-size: .9rem; min-height: 1.2em; margin: .6rem 0; }
 
 /* Ingreso */
-.ingreso { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: center; min-height: calc(100vh - 140px); }
-.ingreso-foto { position: relative; display: flex; justify-content: center; align-items: flex-end; min-height: 230px; }
-.arco { position: absolute; inset: 4% 14% 0; border-radius: 999px 999px 24px 24px; border: 1px solid rgba(201, 162, 74, .55); box-shadow: var(--sombra-fuerte);
+.ingreso { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: center; }
+@media (min-width: 900px) { .ingreso { min-height: calc(100vh - 140px); } }
+.ingreso-foto { position: relative; display: flex; justify-content: center; align-items: flex-end; width: fit-content; margin: 0 auto; padding-top: 12px; }
+.arco { position: absolute; inset: 8% 6% 0; border-radius: 999px 999px 24px 24px; border: 1px solid rgba(201, 162, 74, .55); box-shadow: var(--sombra-fuerte);
   background: linear-gradient(rgba(255, 255, 255, .25), rgba(255, 255, 255, .25)), url('../img/marmol-800.webp') center / cover; }
-.ingreso-foto img { position: relative; width: min(300px, 64vw); filter: drop-shadow(0 18px 30px rgba(27, 22, 16, .22)); }
+.ingreso-foto img { position: relative; display: block; width: auto; height: auto; max-height: 32vh; max-width: min(260px, 62vw); aspect-ratio: 540 / 768; object-fit: cover; object-position: top center; filter: drop-shadow(0 18px 30px rgba(27, 22, 16, .22)); }
 .ingreso h1 { text-align: center; }
 .ingreso .bajada { text-align: center; color: var(--suave); margin-top: 0; }
 .pestanas { display: grid; grid-template-columns: 1fr 1fr; background: var(--marfil-2); border-radius: 999px; padding: 4px; margin-bottom: .4rem; }
@@ -95,7 +96,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--o
 .portada h1 { color: #fff7e3; margin: .2rem 0 .3rem; }
 .portada p { margin: 0; color: #e2d6bd; }
 .portada .eyebrow { font-size: .72rem; letter-spacing: .22em; text-transform: uppercase; color: var(--oro-brillo); }
-.portada img { width: 110px; height: auto; margin: -1rem -.4rem -1.4rem 0; filter: drop-shadow(0 10px 20px rgba(0, 0, 0, .4)); }
+.portada img { width: 110px; height: auto; aspect-ratio: 280 / 398; object-fit: cover; margin: -1rem -.4rem -1.4rem 0; filter: drop-shadow(0 10px 20px rgba(0, 0, 0, .4)); }
 .estadisticas { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin: 1rem 0 1.4rem; }
 .dato { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: .8rem; text-align: center; }
 .dato strong { display: block; font-family: var(--titulos); font-size: 1.5rem; color: var(--tinta); }
@@ -218,7 +219,7 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
   main { padding: 2rem 1.5rem 4rem; }
   .grilla { grid-template-columns: repeat(3, 1fr); }
   .ingreso { grid-template-columns: 1fr 1fr; gap: 3rem; }
-  .ingreso-foto { min-height: 520px; } .ingreso-foto img { width: min(400px, 36vw); }
+  .ingreso-foto img { max-height: 72vh; max-width: min(400px, 36vw); }
   .ingreso h1, .ingreso .bajada { text-align: left; }
   .portada { padding: 2rem 2.2rem; } .portada img { width: 170px; }
   .estadisticas { grid-template-columns: repeat(3, 1fr); max-width: 720px; }

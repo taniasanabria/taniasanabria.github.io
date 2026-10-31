@@ -102,7 +102,7 @@ function pintar(html) { app().innerHTML = html; window.scrollTo(0, 0); }
 function vistaIngreso(modo = 'entrar') {
   $('#nav-movil').hidden = true; $('#nav-escritorio').innerHTML = ''; $('#btn-perfil').hidden = true;
   pintar(`<section class="ingreso">
-    <div class="ingreso-foto"><div class="arco"></div><img src="../img/retrato-540.webp" width="540" height="675" alt="Tania Sanabria, maquilladora profesional"></div>
+    <div class="ingreso-foto"><div class="arco"></div><img src="../img/retrato-540.webp" width="540" height="768" alt="Tania Sanabria, maquilladora profesional"></div>
     <div>
       <h1>Tu <span class="acento">sala de clases</span></h1>
       <p class="bajada">Materiales, trabajos prácticos, notas y comentarios de la profesora Tania Sanabria, en tu celular o computadora.</p>
@@ -195,7 +195,7 @@ function vistaSala() {
   const notas = E.entregas.filter((e) => e.calificacion);
   const prom = notas.length ? (notas.reduce((a, e) => a + e.calificacion, 0) / notas.length).toFixed(1) : '–';
   pintar(`<section class="portada"><div><span class="eyebrow">Academia Tania Sanabria</span><h1>¡Hola, ${esc(nombreCorto())}!</h1><p>Bienvenida a tu sala de clases. Acá tenés tus cursos, materiales y las devoluciones de la profe.</p></div>
-      <img src="../img/retrato-280.webp" width="280" height="350" alt=""></section>
+      <img src="../img/retrato-280.webp" width="280" height="398" alt=""></section>
     <div class="estadisticas"><div class="dato"><strong>${E.misCursos.length}</strong><span>Cursos</span></div><div class="dato"><strong>${E.entregas.length}</strong><span>Trabajos</span></div><div class="dato"><strong>${prom}</strong><span>Promedio</span></div></div>
     ${pend.length ? `<div class="tarjeta" style="border-color:#f0d896;background:#fffaf0">${pend.map((i) => `<p style="margin:.2rem 0"><span class="etiqueta ambar">En revisión</span> <strong>${esc(i.curso_nombre)}</strong> · Ref. ${esc(i.referencia)}</p>`).join('')}
       <p class="chico suave" style="margin:.5rem 0 0">Tania habilita tu acceso cuando confirma tu inscripción (matrícula). Te va a aparecer acá abajo automáticamente.</p></div>` : ''}

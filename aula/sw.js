@@ -1,5 +1,5 @@
 // Service worker del Aula: la app abre aunque la señal sea mala (los datos siempre se piden en línea).
-const CACHE = 'aula-tania-v1';
+const CACHE = 'aula-tania-v2';
 const BASE = ['./', 'index.html', 'aula.css', 'aula.js', 'camara.js', 'manifest.webmanifest', '../admin/vendor/supabase.js',
   '../js/config.js', '../img/logo-96.webp', '../img/logo-192.webp', '../img/retrato-540.webp', '../img/marmol-800.webp',
   '../fonts/cinzel-latin.woff2', '../fonts/montserrat-latin.woff2'];
