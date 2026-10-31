@@ -297,7 +297,29 @@ async function cargarAgenda() {
   $('#agenda').innerHTML = html;
 }
 
-async function cargarCitas() { await Promise.all([cargarPendientes(), cargarAgenda()]); }
+async function cargarCitas() { await Promise.all([cargarPendientes(), cargarAgenda(), cargarCodigos()]); }
+
+// Códigos de acceso de alumnas (tabla alumnos: solo la admin la puede leer, RLS de cursos.sql).
+async function cargarCodigos() {
+  const lista = $('#lista-codigos'); if (!lista) return;
+  const [al, ins] = await Promise.all([sb.from('alumnos').select('email,codigo,user_id'),
+    sb.from('inscripciones').select('id,cliente_email,cliente_nombre,cliente_telefono,curso_nombre,acceso,estado').eq('acceso', true).neq('estado', 'cancelada').order('creado', { ascending: false })]);
+  if (al.error) { lista.innerHTML = `<p class="vacio">${esc(errorLegible(al.error))}</p>`; return; }
+  const porEmail = {}; for (const i of ins.data || []) (porEmail[i.cliente_email] ||= []).push(i);
+  const filas = (al.data || []).filter((a) => porEmail[a.email]).map((a) => ({ ...a, ins: porEmail[a.email] }))
+    .sort((x, y) => x.ins[0].cliente_nombre.localeCompare(y.ins[0].cliente_nombre, 'es'));
+  $('#n-codigos').textContent = `(${filas.length})`;
+  lista.innerHTML = filas.length ? filas.map((a) => `<article class="cita codigo-alumna" data-q="${esc((a.ins[0].cliente_nombre + ' ' + a.email).toLowerCase())}">
+      <div class="cita-servicio">${esc(a.ins[0].cliente_nombre)}</div>
+      <div class="cita-cliente">${esc(a.email)} · ${esc(a.ins.map((i) => i.curso_nombre).join(', '))}</div>
+      <p style="margin:.4rem 0;font-size:1.25rem;letter-spacing:.12em"><code>${esc(a.codigo)}</code> <span class="suave" style="font-size:.8rem;letter-spacing:0">${a.user_id ? '· ya entró' : '· todavía no entró'}</span></p>
+      <div class="cita-acciones"><button type="button" class="btn btn-borde" data-copiar-codigo="${esc(a.codigo)}">📋 Copiar código</button>
+      <button type="button" class="btn btn-wa" data-reenviar-codigo="${esc(a.email)}">💬 Reenviar por WhatsApp</button></div></article>`).join('')
+    : '<p class="vacio">Todavía no hay alumnas con acceso.</p>';
+  for (const b of lista.querySelectorAll('[data-copiar-codigo]')) b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copiarCodigo); toast('Código copiado ✓'); } catch { prompt('Copiá el código:', b.dataset.copiarCodigo); } };
+  for (const b of lista.querySelectorAll('[data-reenviar-codigo]')) b.onclick = () => { const a = filas.find((x) => x.email === b.dataset.reenviarCodigo); enviarAcceso(a.ins[0], a.codigo, null); };
+  const buscar = $('#buscar-codigo'); buscar.oninput = () => { const q = buscar.value.toLowerCase().trim(); for (const el of lista.querySelectorAll('.codigo-alumna')) el.hidden = !!q && !el.dataset.q.includes(q); };
+}
 
 async function cambiarEstado(r, nuevo) {
   const { error } = await sb.from('reservas').update({ estado: nuevo }).eq('id', r.id);
@@ -1209,7 +1231,7 @@ async function cargarCursos() {
 function abrirWa(ventana, tel, texto) { abrirWhatsApp(ventana, urlWhatsApp(tel, texto)); }
 
 async function enviarAcceso(i, codigo, ventana) {
-  abrirWa(ventana, i.cliente_telefono, rellenarAcceso(estado.privados.mensaje_acceso, i, codigo));
+  abrirWa(ventana, i.cliente_telefono, rellenarAcceso(estado.privados?.mensaje_acceso, i, codigo));
 }
 
 let insPago = null;
