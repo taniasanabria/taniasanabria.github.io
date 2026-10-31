@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1b1610">
+  <meta name="description" content="Aula virtual de la Academia Tania Sanabria: tus cursos, materiales, trabajos, notas y comentarios de la profesora.">
+  <title>Aula Virtual · Tania Sanabria Makeup Academy</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Aula Tania">
+  <link rel="preload" href="../fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="aula.css">
+  <script src="../admin/vendor/supabase.js" defer></script>
+  <script type="module" src="aula.js"></script>
+</head>
+<body>
+  <header class="cabecera">
+    <a class="marca" href="#/"><img src="../img/logo-96.webp" srcset="../img/logo-96.webp 1x, ../img/logo-192.webp 2x" width="34" height="40" alt="">
+      <span><strong class="marca-nombre">Tania Sanabria</strong><small id="marca-sub">Aula Virtual</small></span></a>
+    <nav class="nav-escritorio" id="nav-escritorio" aria-label="Secciones"></nav>
+    <button type="button" class="avatar" id="btn-perfil" hidden aria-label="Mi perfil"></button>
+  </header>
+  <main id="app" tabindex="-1"><p class="cargando"><span class="giro"></span>Cargando tu aula…</p></main>
+  <nav class="nav-movil" id="nav-movil" aria-label="Secciones" hidden></nav>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Cámara (pantalla completa) -->
+  <div class="camara" id="camara" hidden role="dialog" aria-modal="true" aria-label="Cámara">
+    <video id="cam-video" playsinline muted autoplay></video>
+    <img id="cam-preview" alt="Foto tomada" hidden>
+    <div class="cam-guia" aria-hidden="true"></div>
+    <div class="cam-arriba">
+      <button type="button" class="cam-btn" id="cam-cerrar" aria-label="Cerrar cámara">✕</button>
+      <span id="cam-contador">0 / 6</span>
+      <button type="button" class="cam-btn" id="cam-girar" aria-label="Cambiar cámara">⟲</button>
+    </div>
+    <div class="cam-abajo" id="cam-abajo-disparo">
+      <div class="cam-miniaturas" id="cam-miniaturas"></div>
+      <button type="button" class="cam-disparo" id="cam-disparo" aria-label="Sacar foto"></button>
+      <button type="button" class="cam-listo" id="cam-listo">Listo</button>
+    </div>
+    <div class="cam-abajo cam-revisar" id="cam-abajo-revisar" hidden>
+      <button type="button" class="btn btn-claro" id="cam-repetir">Repetir</button>
+      <button type="button" class="btn btn-oro" id="cam-usar">Usar foto ✓</button>
+    </div>
+    <p class="cam-aviso" id="cam-aviso"></p>
+  </div>
+  <!-- Respaldo SOLO cámara (celulares sin acceso directo): capture="environment" abre la cámara, no la galería -->
+  <input type="file" id="cam-respaldo" accept="image/*" capture="environment" hidden>
+
+  <dialog class="visor" id="visor"><button type="button" class="visor-cerrar" aria-label="Cerrar">✕</button><div id="visor-cuerpo"></div></dialog>
+</body>
+</html>
