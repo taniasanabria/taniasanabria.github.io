@@ -141,11 +141,17 @@ async function iniciarSesion(e) {
   await entrarAlPanel();
 }
 
-async function entrarAlPanel() {
-  const { data: { user } } = await sb.auth.getUser();
+async function entrarAlPanel(intento = 0) {
+  // La sesión NO se cierra por errores de red: solo si la cuenta de verdad no es admin.
+  let { data: { user } } = await sb.auth.getUser().catch(() => ({ data: {} }));
+  if (!user) user = (await sb.auth.getSession()).data.session?.user || null;   // sin señal: usar la sesión guardada
   if (!user) { mostrarVista('login'); return; }
   const { data: esAdmin, error } = await sb.rpc('es_admin');
-  if (error || !esAdmin) {
+  if (error) {   // sin internet / servidor lento → reintentar sin cerrar sesión
+    if (intento < 30) { mostrarVista('login'); $('#login-error').textContent = 'Sin conexión. Reintentando… (tu sesión sigue abierta)'; setTimeout(() => entrarAlPanel(intento + 1), Math.min(30000, 2000 * (intento + 1))); }
+    return;
+  }
+  if (!esAdmin) {
     await sb.auth.signOut();
     mostrarVista('login');
     $('#login-error').textContent = error ? errorLegible(error) : 'Esta cuenta no tiene permiso para usar el panel.';
@@ -1851,7 +1857,28 @@ async function arrancar() {
   const { data: { session } } = await sb.auth.getSession();
   if (recuperando) { mostrarVista('clave'); return; }
   if (session) await entrarAlPanel(); else mostrarVista('login');
+  mantenerSesion();
 }
+
+// Sesión permanente en este dispositivo: al volver a la app (o recuperar internet) se renueva el token.
+// Los navegadores congelan los temporizadores en segundo plano; por eso se renueva al volver.
+function mantenerSesion() {
+  let ultimo = 0;
+  const renovar = async () => {
+    if (Date.now() - ultimo < 15000) return; ultimo = Date.now();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    sb.auth.startAutoRefresh();
+    if (!session.expires_at || session.expires_at * 1000 - Date.now() < 10 * 60 * 1000) await sb.auth.refreshSession().catch(() => {});
+    if ($('#vista-login') && !$('#vista-login').hidden && !recuperandoClave()) entrarAlPanel();
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renovar(); else sb.auth.stopAutoRefresh(); });
+  window.addEventListener('focus', renovar);
+  window.addEventListener('online', renovar);
+  window.addEventListener('pageshow', renovar);
+  setInterval(renovar, 20 * 60 * 1000);
+}
+function recuperandoClave() { return !!$('#vista-clave') && !$('#vista-clave').hidden; }
 
 arrancar().catch((err) => {
   console.warn('No se pudo iniciar el panel:', err);

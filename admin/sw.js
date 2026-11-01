@@ -1,3 +1,4 @@
+// versión 2026-10-31b (sesión permanente)
 /*
  * Service worker del Panel de Tania (alcance: /admin/).
  * - Muestra las notificaciones push de solicitudes nuevas, aunque el panel esté cerrado.
