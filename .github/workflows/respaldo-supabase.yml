@@ -17,8 +17,11 @@ jobs:
     steps:
       - name: Verificar secretos
         id: s
-        env: { DB: '${{ secrets.SUPABASE_DB_URL }}', K: '${{ secrets.RESPALDO_CLAVE }}' }
-        run: if [ -n "$DB" ] && [ -n "$K" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "::warning::Faltan los secretos SUPABASE_DB_URL / RESPALDO_CLAVE: no se hace respaldo."; fi
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          K: ${{ secrets.RESPALDO_CLAVE }}
+        run: |
+          if [ -n "$DB" ] && [ -n "$K" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "::warning::Faltan los secretos SUPABASE_DB_URL y RESPALDO_CLAVE, no se hace respaldo."; fi
       - name: Instalar pg_dump 17
         if: steps.s.outputs.ok == '1'
         run: |
@@ -28,7 +31,9 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
       - name: Volcar y cifrar
         if: steps.s.outputs.ok == '1'
-        env: { DB: '${{ secrets.SUPABASE_DB_URL }}', K: '${{ secrets.RESPALDO_CLAVE }}' }
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          K: ${{ secrets.RESPALDO_CLAVE }}
         run: |
           F=respaldo-$(TZ=America/Asuncion date +%F).sql.gz
           /usr/lib/postgresql/17/bin/pg_dump "$DB" --no-owner --no-privileges --schema=public --schema=auth --data-only --exclude-table-data=public.limite_ip | gzip -9 > "$F"
@@ -38,4 +43,7 @@ jobs:
           rm -f "$F" esquema.sql.gz; ls -la
       - uses: actions/upload-artifact@v4
         if: steps.s.outputs.ok == '1'
-        with: { name: respaldo-supabase, path: '*.gpg', retention-days: 30 }
+        with:
+          name: respaldo-supabase
+          path: '*.gpg'
+          retention-days: 30
