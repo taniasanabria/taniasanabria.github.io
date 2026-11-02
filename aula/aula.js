@@ -6,7 +6,7 @@
  * Seguridad: todo pasa por RLS de Supabase (supabase/aula.sql + cursos.sql).
  */
 import { SUPABASE } from '../js/config.js';
-import { tomarFotos } from './camara.js';
+import { tomarFotos, grabarVideo, huellaDispositivo } from './camara.js';
 
 // Vista previa local (solo en localhost apunta a la base de pruebas; en producción usa la real)
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).get('base') !== 'real';
@@ -17,7 +17,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let sb;
 const E = { user: null, perfil: null, admin: false, servicios: [], misCursos: [], inscripciones: [], entregas: [], urls: new Map(),
-  v2: false, avance: [], examenes: [], pagos: [], whatsapp: '595976122979' };
+  v2: false, v3: false, config: [], avance: [], examenes: [], pagos: [], whatsapp: '595976122979' };
 // v2 = la base ya tiene supabase/migracion-aula-2026-11-02.sql (meses por pago, niveles, pagos, exámenes). Sin ella el aula funciona como antes.
 
 // ---------- Íconos (trazo fino, estilo del sitio) ----------
@@ -54,6 +54,11 @@ function errorTxt(e) {
     SIN_ACCESO_AL_CURSO: 'Todavía no tenés acceso a este curso.', FOTO_INVALIDA: 'La foto no es válida. Volvé a sacarla.', DEMASIADAS_ENTREGAS: 'Llegaste al máximo de entregas por hoy.',
     NO_AUTORIZADO: 'No tenés permiso para esto.', MES_BLOQUEADO: 'Ese mes todavía no está habilitado. Primero la profe tiene que confirmar tu pago.',
     PAGO_YA_ENVIADO: 'Ya enviaste un comprobante. Esperá que la profe lo confirme.', COMPROBANTE_INVALIDO: 'No se pudo registrar el comprobante. Volvé a subirlo.',
+    FALTAN_CLASES_APROBADAS: 'Primero tienen que estar aprobadas todas las clases del mes.', FALTA_CUESTIONARIO: 'Primero respondé el cuestionario de la clase.',
+    SIN_INTENTOS: 'Ya usaste todos los intentos de examen de este mes. Hablá con la profe.', EXAMEN_YA_APROBADO: 'Ya aprobaste el examen de este mes.',
+    CODIGO_VENCIDO: 'El código venció o todavía no empezó la videollamada. Pedile a la profe un código nuevo.', CODIGO_BLOQUEADO: 'Demasiados intentos con código incorrecto. Pedile a la profe uno nuevo.',
+    CODIGO_INVALIDO: 'Código incorrecto.', FALTAN_FOTOS: 'Faltan fotos: se necesitan las tres.', FALTA_VIDEO: 'Falta el video de la técnica.', RUBRICA_INVALIDA: 'La rúbrica va de 1 a 5.',
+    'row-level security': 'No se pudo subir: el código del examen venció. Pedile a la profe uno nuevo.',
     EXAMEN_YA_PEDIDO: 'Ya pediste tu examen. La profe te va a escribir para agendar la videollamada.', REENTREGA_INVALIDA: 'Solo podés volver a presentar trabajos anulados o para rehacer.', 'Invalid login': 'Email o contraseña incorrectos.', 'already registered': 'Ese email ya tiene cuenta. Tocá "Entrar".',
     'Email not confirmed': 'Confirmá tu email: te enviamos un enlace a tu correo.', 'Password should': 'La contraseña debe tener al menos 6 caracteres.', fetch: 'Sin conexión. Revisá internet e intentá de nuevo.' };
   for (const k in T) if (m.includes(k)) return T[k];
@@ -76,7 +81,7 @@ const servicio = (id) => E.servicios.find((s) => s.id === id);
 async function cargarAlumna() {
   const [c, i, e, av] = await Promise.all([sb.rpc('mis_cursos'), sb.rpc('aula_mis_inscripciones'), sb.from('entregas').select('*').order('creado', { ascending: false }), sb.rpc('aula_mi_avance')]);
   E.misCursos = c.data || []; E.inscripciones = i.data || []; E.entregas = e.data || [];
-  E.v2 = !av.error; E.avance = av.data || [];
+  E.v2 = !av.error; E.avance = av.data || []; if (E.v2) await cargarConfig();
   if (E.v2) {
     const [x, p] = await Promise.all([sb.from('aula_examenes').select('*').order('creado', { ascending: false }), sb.from('aula_pagos').select('*').order('creado', { ascending: false })]);
     E.examenes = x.data || []; E.pagos = p.data || [];
@@ -88,7 +93,7 @@ let canalAula = null;
 function escucharCambios() {
   if (canalAula || !E.v2) return;
   let t = null; const refrescar = () => { clearTimeout(t); t = setTimeout(async () => {
-    if (E.admin) { await contarPendientes(); navegacion(); marcarNav(); if (/^#\/admin(\/pagos)?$/.test(location.hash || '#/admin')) router(); return; }
+    if (E.admin) { await contarPendientes(); navegacion(); marcarNav(); if (/^#\/admin(\/(pagos|examenes|seguimiento))?$/.test(location.hash || '#/admin')) router(); return; }
     // No repintar si la alumna está a mitad de una entrega o de un pago
     await cargarAlumna(); if (!/^#\/(entregar|pagar)/.test(location.hash)) router(); }, 400); };
   canalAula = sb.channel('aula-alumna')
@@ -112,7 +117,8 @@ function navegacion() {
   const al = [['#/', 'casa', 'Mi sala'], ['#/cursos', 'libro', 'Cursos'], ['#/notas', 'estrella', 'Mis notas'], ['#/perfil', 'usuario', 'Perfil']];
   const pend = E.adminPend || 0;
   const ad = [['#/admin', 'check', 'Corregir', pend], ['#/admin/materiales', 'subir', 'Materiales'], ['#/admin/alumnas', 'alumnas', 'Alumnas'],
-    ...(E.v2 ? [['#/admin/pagos', 'lista', 'Pagos y exámenes', E.adminPagos || 0]] : []), ['#/perfil', 'usuario', 'Perfil']];
+    ...(E.v3 ? [['#/admin/examenes', 'video', 'Exámenes', E.adminExam || 0], ['#/admin/pagos', 'lista', 'Pagos', E.adminPagos || 0], ['#/admin/seguimiento', 'estrella', 'Seguimiento']]
+      : E.v2 ? [['#/admin/pagos', 'lista', 'Pagos y exámenes', E.adminPagos || 0]] : []), ['#/perfil', 'usuario', 'Perfil']];
   const items = E.admin ? ad : al;
   const html = items.map(([h, i, t, n]) => `<a href="${h}" data-ruta="${h}">${ic(i)}<span>${t}</span>${n ? `<span class="globo">${n}</span>` : ''}</a>`).join('');
   $('#nav-escritorio').innerHTML = html; $('#nav-movil').innerHTML = html; $('#nav-movil').hidden = false;
@@ -213,6 +219,7 @@ async function iniciarSesion() {
 async function contarPendientes() {
   const [r, p] = await Promise.all([sb.rpc('admin_entregas', { p_curso: null, p_estado: 'enviada' }), sb.rpc('admin_pagos_aula', { p_estado: 'pendiente' })]);
   E.adminPend = (r.data || []).length; E.v2 = !p.error; E.adminPagos = (p.data || []).length;
+  if (E.v2) { await cargarConfig(); if (E.v3) { const x = await sb.rpc('admin_examenes_aula2'); E.adminExam = (x.data || []).filter((e) => ['entregado', 'solicitado'].includes(e.estado)).length; } }
 }
 
 // ---------- Alumna: Mi sala ----------
@@ -359,7 +366,7 @@ async function vistaPagar(inscId) {
   const volver = `<a class="volver" href="#/curso/${esc(av.servicio_id)}">‹ ${esc(av.curso_nombre)}</a>`;
   if (pend) { pintar(`${volver}<div class="vacio"><span class="grande">⏳</span>Ya enviaste el comprobante del mes ${pend.mes}. La profe lo está revisando; apenas lo confirme, el mes se abre solo.</div>`); return; }
   pintar(`${volver}<h1>Pagar el mes ${mes}</h1><div class="tarjeta" style="max-width:620px">
-    <p>El acceso a cada mes se habilita <strong>solo con pago por transferencia</strong>, cuando la profe confirma que recibió el pago.</p>
+    <p>El acceso a cada mes se habilita <strong>solo con pago por transferencia</strong>, cuando la profe confirma que recibió el pago${E.v3 ? ' <strong>y</strong> aprobaste las clases y el examen del mes anterior' : ''}.</p>
     ${av.cuota_gs ? `<p>Cuota del curso: <strong>${gs(av.cuota_gs)}</strong></p>` : ''}
     <div id="pago-paso1"><button class="btn btn-oro btn-ancho" id="pago-quiero">Sí, quiero pagar el mes ${mes} — ver datos para transferir</button></div>
     <div id="pago-paso2" hidden></div></div>`);
@@ -413,6 +420,8 @@ function tarjetaEntrega(e, conCurso = false) {
     ${e.calificacion ? `<div class="nota"><span class="nota-num">${e.calificacion}</span><div><div class="estrellas">${estrellas(e.calificacion)}</div><strong>${NOTA_TXT[e.calificacion]}</strong></div></div>` : ''}
     ${e.estado === 'anulada_ia' ? `<p class="chico" style="margin:.3rem 0;color:var(--rojo)">La profe detectó uso de inteligencia artificial en las respuestas o en las fotos, por eso la clase quedó anulada. Podés volver a presentarla.</p>` : ''}
     ${e.comentario ? `<div class="comentario"><b><img src="../img/retrato-280.webp" alt="">Comentario de la profe Tania</b>${esc(e.comentario).replace(/\n/g, '<br>')}</div>` : ''}
+    ${E.v3 ? rubricaHtml(e.rubrica) : ''}
+    ${E.v3 && !E.admin && e.estado === 'corregida' ? `<label class="interruptor chico"><input type="checkbox" data-porta="${e.id}" ${e.portafolio ? 'checked' : ''}> En mi portafolio</label>` : ''}
     ${e.reemplaza_id ? '<p class="chico suave" style="margin:.2rem 0">↻ Reentrega de una clase anterior</p>' : ''}${reentregar ? `<div class="acciones">${reentregar}</div>` : ''}</article>`;
 }
 document.addEventListener('click', async (ev) => {
@@ -425,6 +434,7 @@ function vistaEntregar(id, q = '') {
   const s = servicio(id); if (!E.misCursos.some((c) => c.servicio_id === id)) { location.hash = '#/'; return; }
   const fotos = []; const mods = [...new Set((s.extra?.detalles || []).map((d) => d.texto))];
   const reemplaza = new URLSearchParams(q).get('reemplaza'); const previa = reemplaza && E.entregas.find((x) => x.id === reemplaza);
+  const leccionId = new URLSearchParams(q).get('leccion') || previa?.leccion_id || null;
   const hab = avanceDe(id)?.meses_habilitados || 1;
   pintar(`<a class="volver" href="#/curso/${esc(id)}">‹ ${esc(s.nombre)}</a><h1>${previa ? 'Volver a presentar' : 'Entregar trabajo práctico'}</h1>
     ${previa ? `<p class="suave">Reentrega de <strong>${esc(previa.titulo)}</strong>.</p>` : ''}${AVISO_IA}
@@ -462,8 +472,9 @@ function vistaEntregar(id, q = '') {
       }
       btn.textContent = 'Enviando…';
       const fila = { servicio_id: id, titulo: f.titulo.value.trim(), modulo: f.modulo?.value || null, mensaje: f.mensaje.value.trim(), fotos: rutas };
+      if (E.v3 && leccionId) fila.leccion_id = leccionId;
       if (E.v2) Object.assign(fila, { mes: +(f.mes?.value || hab), reemplaza_id: previa ? previa.id : null,
-        captura: { origen: 'camara-en-vivo', fotos: fotos.map((x) => x.blob.meta || null), enviada: new Date().toISOString(), agente: navigator.userAgent.slice(0, 200) } });
+        captura: { origen: 'camara-en-vivo', dispositivo: await huellaDispositivo(), fotos: fotos.map((x) => x.blob.meta || null), enviada: new Date().toISOString(), agente: navigator.userAgent.slice(0, 200) } });
       const { error } = await sb.from('entregas').insert(fila);
       if (error) throw error;
       await cargarAlumna(); toast('¡Trabajo enviado! La profe te va a dejar su devolución.'); location.hash = `#/curso/${id}?trabajos`;
@@ -481,7 +492,9 @@ function vistaNotas() {
       ${prom ? `<div class="barra" style="margin-top:.7rem"><i style="width:${prom / 5 * 100}%"></i></div>` : ''}</div>`;
   }).join('');
   const corr = E.entregas.filter((e) => e.estado !== 'enviada');
-  pintar(`<h1>Mis notas</h1><p class="suave">Escala de 1 a 5 · tus promedios y los comentarios de la profe para seguir mejorando.</p>
+  setTimeout(() => { for (const c of $$('[data-porta]')) c.onchange = async () => { const { error } = await sb.rpc('aula_portafolio', { p_entrega: c.dataset.porta, p_incluir: c.checked });
+    if (error) { c.checked = !c.checked; return toast(errorTxt(error), true); } const e = E.entregas.find((x) => x.id === c.dataset.porta); if (e) e.portafolio = c.checked; toast(c.checked ? 'Agregado a tu portafolio ✓' : 'Quitado del portafolio'); }; }, 0);
+  pintar(`<h1>Mis notas</h1><p class="suave">Escala de 1 a 5 · tus promedios y los comentarios de la profe para seguir mejorando.${E.v3 ? ' <a href="#/portafolio">Ver mi portafolio →</a>' : ''}</p>
     <div class="dos-columnas"><div>${corr.length ? corr.map((e) => tarjetaEntrega(e, true)).join('') : '<div class="vacio"><span class="grande">⭐</span>Todavía no hay trabajos corregidos.</div>'}</div><div>${porCurso || ''}</div></div>`);
   hidratarFotos();
 }
@@ -518,27 +531,39 @@ function capturaTxt(e) {
 }
 async function vistaAdminCorregir() {
   const filtro = JSON.parse(sessionStorage.getItem('aula-filtro') || '{"estado":"enviada","curso":""}');
-  const { data, error } = await sb.rpc(E.v2 ? 'admin_entregas2' : 'admin_entregas', { p_curso: filtro.curso || null, p_estado: filtro.estado || null });
+  let { data, error } = await sb.rpc(E.v3 ? 'admin_entregas3' : E.v2 ? 'admin_entregas2' : 'admin_entregas', { p_curso: filtro.curso || null, p_estado: filtro.estado || null });
+  if (E.v3 && data) data = data.map((d) => d.admin_entregas3 || d);
   if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
   pintar(`<h1>Trabajos para corregir</h1><p class="suave">Mirá las fotos, poné la nota (1 a 5) y dejale un comentario para que mejore.</p>
     <div class="filtros"><select id="f-estado"><option value="enviada">Sin corregir</option><option value="corregida">Corregidos</option><option value="rehacer">Para rehacer</option>${E.v2 ? '<option value="anulada_ia">Anuladas por IA</option>' : ''}<option value="">Todos</option></select>
       <select id="f-curso"><option value="">Todos los cursos</option>${E.servicios.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></div>
-    <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map((e) => `<article class="entrega" data-id="${e.id}">
+    <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map((e) => `<article class="entrega" data-id="${e.id}" data-curso="${esc(e.servicio_id)}">
       <div class="entrega-cab"><div><h3>${esc(e.titulo)}</h3><span class="chico"><strong>${esc(e.nombre)}</strong> · ${esc(e.curso)}</span><br><span class="chico suave">${e.modulo ? esc(e.modulo) + ' · ' : ''}${fechaHora(e.creado)}</span>${capturaTxt(e)}</div>
       ${e.estado === 'enviada' ? '<span class="etiqueta ambar">Nuevo</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Rehacer</span>' : e.estado === 'anulada_ia' ? '<span class="etiqueta rojo">Anulada IA</span>' : `<span class="nota-num" style="width:44px;height:44px;font-size:1.2rem">${e.calificacion ?? '–'}</span>`}</div>
       <div class="fotos">${e.fotos.map((f) => `<button data-ver="${esc(f)}"><img data-bucket="entregas" data-ruta="${esc(f)}" alt="Foto del trabajo"></button>`).join('')}</div>
       ${e.mensaje ? `<p class="chico" style="margin:.2rem 0">💬 ${esc(e.mensaje)}</p>` : ''}
-      <div class="calificar"><div class="escala" role="group" aria-label="Nota">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-nota="${n}" aria-pressed="${e.calificacion === n}">${n}</button>`).join('')}</div>
+      ${E.v3 ? `${e.leccion ? `<p class="chico" style="margin:.2rem 0">📘 Clase: <b>${esc(e.leccion)}</b></p>` : ''}${flagsHtml(e.flags)}
+        <div class="rubrica">${criteriosDe(e.servicio_id).map((c) => `<span>${esc(c)}</span><span class="escala" data-crit="${esc(c)}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-pressed="${(e.rubrica || {})[c] == n}">${n}</button>`).join('')}</span>`).join('')}</div>` : ''}
+      <div class="calificar"><div class="escala" role="group" aria-label="Nota" ${E.v3 ? 'hidden' : ''}>${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-nota="${n}" aria-pressed="${e.calificacion === n}">${n}</button>`).join('')}</div>
         <div class="escala-txt" data-txt>${e.calificacion ? NOTA_TXT[e.calificacion] : '1 Insuficiente · 3 Bueno · 5 Excelente'}</div>
         <textarea data-com placeholder="Comentario para la alumna: qué salió bien y qué mejorar…" maxlength="3000">${esc(e.comentario || '')}</textarea>
-        <div class="fila"><button class="btn btn-oro" data-guardar style="flex:1">Guardar corrección</button><button class="btn btn-borde btn-chico" data-rehacer>Pedir que lo rehaga</button>${E.v2 ? '<button class="btn btn-peligro btn-chico" data-ia title="Anular por uso de inteligencia artificial">Anular por IA</button>' : ''}</div></div></article>`).join('')
+        <div class="fila"><button class="btn btn-oro" data-guardar style="flex:1">${E.v3 ? '✅ Aprobar clase' : 'Guardar corrección'}</button><button class="btn btn-borde btn-chico" data-rehacer>Pedir que lo rehaga</button>${E.v2 ? '<button class="btn btn-peligro btn-chico" data-ia title="Anular por uso de inteligencia artificial">Anular por IA</button>' : ''}</div></div></article>`).join('')
       || '<div class="vacio" style="grid-column:1/-1"><span class="grande">🎉</span>No hay trabajos en esta lista.</div>'}</div>`);
   $('#f-estado').value = filtro.estado; $('#f-curso').value = filtro.curso;
   for (const id of ['#f-estado', '#f-curso']) $(id).onchange = () => { sessionStorage.setItem('aula-filtro', JSON.stringify({ estado: $('#f-estado').value, curso: $('#f-curso').value })); vistaAdminCorregir(); };
   for (const art of $$('.entrega[data-id]')) {
-    let nota = +(art.querySelector('[aria-pressed="true"]')?.dataset.nota || 0);
+    let nota = +(art.querySelector('[data-nota][aria-pressed="true"]')?.dataset.nota || 0);
+    const rub = {}; for (const g of $$('[data-crit]', art)) { const pre = g.querySelector('[aria-pressed="true"]'); if (pre) rub[g.dataset.crit] = +pre.dataset.n;
+      for (const b of $$('[data-n]', g)) b.onclick = () => { rub[g.dataset.crit] = +b.dataset.n; for (const y of $$('[data-n]', g)) y.setAttribute('aria-pressed', y === b); }; }
     for (const b of $$('[data-nota]', art)) b.onclick = () => { nota = +b.dataset.nota; for (const x of $$('[data-nota]', art)) x.setAttribute('aria-pressed', x === b); art.querySelector('[data-txt]').textContent = NOTA_TXT[nota]; };
     const guardar = async (estado) => {
+      if (E.v3) {
+        const crit = criteriosDe(art.dataset.curso || ''); if (estado === 'corregida' && crit.some((c) => !rub[c])) return toast('Completá la rúbrica (1 a 5 en cada criterio).', true);
+        if (estado === 'anulada_ia' && !confirm('¿Anular esta clase por uso de IA? La alumna va a ver el aviso y podrá volver a presentarla.')) return;
+        const { error: e3 } = await sb.rpc('admin_calificar_rubrica', { p_id: art.dataset.id, p_estado: estado, p_rubrica: Object.keys(rub).length ? rub : null, p_comentario: art.querySelector('[data-com]').value });
+        if (e3) return toast(errorTxt(e3), true);
+        toast(estado === 'rehacer' ? 'Le pediste que lo rehaga ✓' : estado === 'anulada_ia' ? 'Clase anulada por IA ✓' : 'Clase aprobada ✓'); await contarPendientes(); navegacion(); marcarNav(); return vistaAdminCorregir();
+      }
       if (estado === 'corregida' && !nota) return toast('Elegí una nota del 1 al 5.', true);
       if (estado === 'anulada_ia' && !confirm('¿Anular esta clase por uso de IA? La alumna va a ver el aviso y podrá volver a presentarla.')) return;
       const { error } = await sb.rpc('admin_calificar', { p_id: art.dataset.id, p_calificacion: estado === 'rehacer' ? (nota || null) : nota, p_comentario: art.querySelector('[data-com]').value, p_estado: estado });
@@ -559,7 +584,7 @@ async function vistaAdminMateriales() {
   const { data: lecciones } = await sb.from('lecciones').select('*').eq('servicio_id', cur).order(E.v2 ? 'mes' : 'orden').order('orden').order('creado');
   const modsCat = (s?.extra?.detalles || []).map((d) => d.texto); const modsUsados = [...new Set((lecciones || []).map((l) => l.modulo).filter(Boolean))];
   const vars = s?.extra?.variantes || []; const nivelTxt = (v) => v ? (vars.find((x) => x.id === v)?.etiqueta || v) : 'Todos los niveles';
-  pintar(`<h1>Materiales de los cursos</h1><p class="suave">Subí los PDF por mes/módulo y por nivel. Cada alumna ve solo los de su nivel y solo de los meses que ya tiene pagos y confirmados.</p>
+  pintar(`${E.v3 ? '<p class="chico" style="float:right"><a href="#/admin/config">⚙️ Rúbrica, plazos y cuestionarios</a></p>' : ''}<h1>Materiales de los cursos</h1><p class="suave">Subí los PDF por mes/módulo y por nivel. Cada alumna ve solo los de su nivel y solo de los meses que ya tiene pagos y confirmados.</p>
     <div class="filtros"><select id="m-curso">${E.servicios.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></div>
     <div class="dos-columnas"><div><h2>Clases cargadas (${(lecciones || []).length})</h2>
       ${(lecciones || []).length ? (lecciones || []).map((l) => `<div class="clase" style="cursor:default"><span class="clase-ic">${/\.(jpg|png|webp)$/.test(l.archivo || '') ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo])}</span>
@@ -672,6 +697,306 @@ async function vistaAdminPagos() {
   };
 }
 
+// =====================================================================
+// PROGRESIÓN POR MÉRITO (v3: supabase/migracion-aula-merito-2026-11-02.sql)
+// =====================================================================
+const CRITERIOS_DEF = ['Prolijidad', 'Difuminado', 'Piel', 'Cejas', 'Ojos'];
+const criteriosDe = (curso) => E.config.find((c) => c.servicio_id === curso)?.criterios || CRITERIOS_DEF;
+const FLAG_TXT = { fotos_separadas: (v) => `Fotos tomadas con ${v} h de diferencia`, fotos_viejas: () => 'Fotos tomadas hace más de 6 h', otro_dispositivo: () => 'Desde un dispositivo distinto al habitual', varios_dispositivos: () => 'Fotos de dispositivos distintos' };
+const flagsHtml = (f) => Object.entries(f || {}).map(([k, v]) => `<span class="alerta-foto">⚠️ ${esc(FLAG_TXT[k] ? FLAG_TXT[k](v) : k)}</span>`).join('');
+const rubricaHtml = (r) => r && Object.keys(r).length ? `<div class="rubrica">${Object.entries(r).map(([k, v]) => `<span>${esc(k)}</span><span class="estrellas">${estrellas(+v)} <b>${v}</b></span>`).join('')}</div>` : '';
+const EXAMEN_TXT = { solicitado: 'pedido', agendado: 'agendado', en_curso: 'en curso', entregado: 'en corrección', aprobado: 'aprobado ✓', desaprobado: 'no aprobado' };
+function textoProgreso(m) {
+  const ex = m.examen_estado ? `examen ${EXAMEN_TXT[m.examen_estado] || m.examen_estado}` : m.completo ? 'examen pendiente' : 'examen al completar las clases';
+  return `${m.aprobadas} de ${m.clases} clases aprobadas · ${ex}`;
+}
+
+async function vistaCursoMerito(id, pestana = 'clases') {
+  const s = servicio(id);
+  const [{ data: lecciones }, pr, qr] = await Promise.all([
+    sb.from('lecciones').select('*').eq('servicio_id', id).eq('activo', true).order('mes').order('orden').order('creado'),
+    sb.rpc('aula_progreso', { p_curso: id }), sb.from('aula_quiz_resultados').select('leccion_id,correctas,total')]);
+  const prog = pr.data || []; const av = avanceDe(id); const hab = av?.meses_habilitados || 1;
+  const quiz = new Set((qr.data || []).map((r) => r.leccion_id));
+  const ent = E.entregas.filter((e) => e.servicio_id === id);
+  const estadoClase = (l) => { const es = ent.filter((e) => e.leccion_id === l.id);
+    if (es.some((e) => e.estado === 'corregida')) return ['verde', 'Aprobada'];
+    if (es.some((e) => e.estado === 'enviada')) return ['gris', 'En corrección'];
+    if (es.length) return ['rojo', es[0].estado === 'anulada_ia' ? 'Anulada (IA)' : 'Rehacer'];
+    return ['ambar', 'Pendiente']; };
+  const clase = (l) => {
+    const img = l.tipo === 'archivo' && /\.(jpg|png|webp)$/.test(l.archivo);
+    const icono = img ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo]);
+    const [c, t] = estadoClase(l);
+    return `<div class="clase-fila"><button class="clase" data-leccion="${l.id}"><span class="clase-ic">${icono}</span><span><strong>${esc(l.titulo)}</strong><small>${esc(l.modulo || '')}${l.requiere_entrega === false ? ' · teoría' : ''}</small></span><span class="flecha">›</span></button>
+      ${l.requiere_entrega !== false ? `<div class="fila chico" style="margin:.2rem 0 .6rem 3.2rem"><span class="etiqueta ${c}">${t}</span>${t === 'Aprobada' || t === 'En corrección' ? '' : `<a class="btn btn-oro btn-chico" href="#/clase/${l.id}">${quiz.has(l.id) ? 'Entregar práctica' : 'Cuestionario + práctica'}</a>`}</div>` : ''}</div>`;
+  };
+  const pendPago = E.pagos.find((p) => p.inscripcion_id === av?.inscripcion_id && p.estado === 'pendiente');
+  const tabClases = prog.map((m) => {
+    const pct = m.clases ? Math.round(m.aprobadas / m.clases * 100) : 100;
+    const cab = `<h3><span class="modulo-num">${m.abierto ? m.mes : '🔒'}</span>Mes ${m.mes}</h3>
+      <div class="barra-mes" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+      <p class="chico" style="margin:.1rem 0 .5rem">${textoProgreso(m)}${m.plazo ? ` · plazo: <b>${fecha(m.plazo + 'T12:00:00')}</b>` : ''}</p>`;
+    if (!m.abierto) {
+      const sig = m.mes === hab + 1;
+      return `<section class="modulo bloqueado">${cab}<p class="chico">${sig ? `Se abre cuando: ✔ aprobás todas las clases del mes ${hab}, ✔ aprobás el examen del mes ${hab} por videollamada y ✔ la profe confirma el pago del mes ${m.mes}.` : 'Se habilita después del mes anterior.'}</p>
+        ${sig ? (m.pago_estado === 'confirmado' ? '<span class="etiqueta verde">Pago confirmado</span>' : pendPago ? '<span class="etiqueta ambar">Comprobante en revisión</span>' : av ? `<a class="btn btn-borde btn-chico" href="#/pagar/${esc(av.inscripcion_id)}">Pagar el mes ${m.mes}</a>` : '') : ''}</section>`;
+    }
+    const ls = (lecciones || []).filter((l) => (l.mes || 1) === m.mes);
+    return `<section class="modulo">${cab}${ls.map(clase).join('') || '<p class="chico suave">La profe todavía no subió clases a este mes.</p>'}
+      ${m.mes === hab && m.puede_pedir_examen ? `<a class="btn btn-oro btn-chico" href="#/curso/${esc(id)}?examen">Pedir examen del mes ${m.mes}</a>` : ''}</section>`;
+  }).join('') || '<div class="vacio"><span class="grande">📚</span>La profe todavía no subió clases a tu nivel.</div>';
+  const cert = prog.find((m) => m.certificado)?.certificado;
+  const actual = prog.find((m) => m.mes === hab) || {};
+  const ex = E.examenes.filter((x) => x.servicio_id === id && x.estado !== 'cancelado');
+  const exAct = ex.find((x) => ['solicitado', 'agendado', 'en_curso'].includes(x.estado));
+  const tabExamen = `<div class="tarjeta"><h2 style="margin-top:0">${ic('video')} Examen del mes ${hab}</h2>
+    <p>El examen se rinde <strong>por videollamada de WhatsApp</strong> con la profe. Durante la llamada la profe te dicta un <strong>código de 4 dígitos</strong> (vale 15 minutos) y con él subís desde acá:</p>
+    <ol class="modulos"><li>Foto de tu cara <b>sin maquillaje</b></li><li>Foto a <b>mitad del trabajo</b></li><li>Foto del <b>resultado final</b></li><li>Un <b>video de 30 a 60 segundos</b> aplicando una técnica</li></ol>
+    <p class="chico suave">Las tres fotos con el mismo encuadre: el celular apoyado en el mismo lugar. Todo se saca con la cámara del aula en ese momento.</p>
+    <p class="chico">Requisitos: ${actual.completo ? '✔' : '✖'} todas las clases del mes aprobadas (${actual.aprobadas ?? 0} de ${actual.clases ?? 0}) · intentos usados ${actual.intentos ?? 0} de ${actual.max_intentos ?? 3}</p>
+    ${ex.map((x) => `<div class="paso-examen ${x.estado === 'aprobado' ? 'hecho' : ''}"><strong>Mes ${x.mes} · intento ${x.intento || 1}</strong> — ${EXAMEN_TXT[x.estado] || esc(x.estado)}${x.fecha ? ' · ' + fechaHora(x.fecha) : ''}
+      ${rubricaHtml(x.rubrica)}${x.nota_profe ? `<div class="comentario"><b>Comentario de la profe</b>${esc(x.nota_profe)}</div>` : ''}</div>`).join('')}
+    ${actual.puede_pedir_examen ? `<form id="f-examen" novalidate><label for="x-pref">¿Qué días y horarios te quedan bien para la videollamada?</label><input id="x-pref" maxlength="300" placeholder="Ej: martes o jueves de tarde">
+      <button class="btn btn-oro" style="margin-top:.6rem">Pedir examen del mes ${hab}</button></form>` : ''}
+    ${exAct ? `<div class="paso-examen"><strong>¿Ya estás en la videollamada?</strong><p class="chico">Escribí el código que te dicta la profe.</p>
+      <div class="fila"><input id="x-codigo" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="max-width:8rem;font-size:1.4rem;letter-spacing:.3em;text-align:center">
+      <button class="btn btn-oro" id="x-entrar" data-examen="${exAct.id}">Empezar a subir</button></div></div>` : ''}
+    <div class="fila" style="margin-top:.8rem"><a class="btn btn-borde" target="_blank" rel="noopener" href="${esc(waUrl(`Hola profe Tania, soy ${E.perfil?.nombre || ''}, alumna online de ${s.nombre}. Quiero coordinar mi examen del mes ${hab} por videollamada.`))}">${ic('video')} Coordinar por WhatsApp</a></div></div>
+    ${cert ? `<div class="tarjeta"><h2>🎓 ¡Curso aprobado!</h2><p>Tu certificado tiene el código <strong>${esc(cert)}</strong>.</p><a class="btn btn-oro" href="#/certificado/${esc(id)}">Ver e imprimir certificado</a></div>` : ''}`;
+  const tabTrabajos = (ent.length ? ent.map((e) => tarjetaEntrega(e)).join('') : '<div class="vacio"><span class="grande">📷</span>Todavía no entregaste trabajos en este curso.</div>');
+  const tabs = [['clases', 'libro', 'Clases'], ['trabajos', 'camara', `Mis trabajos (${ent.length})`], ['examen', 'video', 'Examen']];
+  pintar(`<a class="volver" href="#/">‹ Mi sala</a>
+    <div class="cabeza-curso" style="background-image:url('${portada(id, 1440)}')"><span class="etiqueta" style="align-self:flex-start">Mes ${hab}${actual.clases != null ? ' · ' + esc(textoProgreso(actual)) : ''}</span><h1>${esc(s.extra?.tituloDetalle || s.nombre)}</h1><p style="margin:0;opacity:.9">${esc(av?.curso_nombre || '')}</p></div>
+    ${AVISO_IA}
+    <div class="subpestanas" role="tablist">${tabs.map(([t, i, n]) => `<button role="tab" data-tab="${t}" aria-selected="${pestana === t}">${ic(i)} ${n}</button>`).join('')}</div>
+    <div id="tab-clases" data-panel ${pestana === 'clases' ? '' : 'hidden'}>${tabClases}</div><div id="tab-trabajos" data-panel ${pestana === 'trabajos' ? '' : 'hidden'}>${tabTrabajos}</div>
+    <div id="tab-examen" data-panel ${pestana === 'examen' ? '' : 'hidden'}>${tabExamen}</div>`);
+  for (const b of $$('[data-tab]')) b.onclick = () => { for (const x of $$('[data-tab]')) x.setAttribute('aria-selected', x === b); for (const p of $$('[data-panel]')) p.hidden = p.id !== 'tab-' + b.dataset.tab; };
+  for (const b of $$('[data-leccion]')) b.onclick = () => abrirLeccion((lecciones || []).find((l) => l.id === b.dataset.leccion));
+  $('#f-examen')?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const btn = e.target.querySelector('button'); btn.disabled = true;
+    const { error } = await sb.rpc('aula_pedir_examen', { p_curso: id, p_preferencia: $('#x-pref').value.trim() });
+    if (error) { btn.disabled = false; return toast(errorTxt(error), true); }
+    await cargarAlumna(); toast('¡Listo! La profe te va a escribir para agendar la videollamada.'); vistaCursoMerito(id, 'examen');
+  });
+  $('#x-entrar')?.addEventListener('click', async (e) => {
+    const cod = $('#x-codigo').value.trim(); if (!/^\d{4}$/.test(cod)) return toast('El código tiene 4 números.', true);
+    const { data, error } = await sb.rpc('aula_examen_validar', { p_id: e.target.dataset.examen, p_codigo: cod });
+    if (error) return toast(errorTxt(error), true); if (!data.ok) return toast('Código incorrecto. Pedile a la profe que te lo repita.', true);
+    vistaExamenSubir(id, e.target.dataset.examen, cod, data);
+  });
+  hidratarFotos();
+}
+
+// Examen: 3 fotos con el mismo encuadre + video corto, todo con la cámara en vivo y con el código vigente
+function vistaExamenSubir(curso, examenId, codigo, info) {
+  const pasos = [['sin', 'Cara SIN maquillaje'], ['mitad', 'MITAD del trabajo'], ['final', 'RESULTADO FINAL']];
+  const fotos = {}; let video = null; const vence = new Date(info.vence);
+  const sello = `${E.perfil?.nombre || E.user.email} · Examen`;
+  const pintarPasos = () => {
+    pintar(`<a class="volver" href="#/curso/${esc(curso)}?examen">‹ Volver</a><h1>Examen por videollamada</h1>
+      <p class="suave">El código vence a las <strong>${vence.toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}</strong>. Sacá todo ahora, con el celular apoyado siempre en el mismo lugar.</p>${AVISO_IA}
+      ${pasos.map(([k, t], i) => `<div class="paso-examen ${fotos[k] ? 'hecho' : ''}"><strong>${i + 1}. ${t}</strong>
+        ${fotos[k] ? `<div class="tomadas"><div class="tomada"><img src="${fotos[k].url}" alt=""></div></div>` : ''}
+        <button type="button" class="btn ${fotos[k] ? 'btn-borde' : 'btn-oro'} btn-chico" data-foto="${k}" ${i && !fotos[pasos[i - 1][0]] ? 'disabled' : ''}>${ic('camara')} ${fotos[k] ? 'Repetir' : 'Sacar foto'}</button></div>`).join('')}
+      <div class="paso-examen ${video ? 'hecho' : ''}"><strong>4. Video de 30 a 60 segundos aplicando una técnica${info.video_requerido ? '' : ' (opcional)'}</strong>
+        ${video ? `<p class="chico">✔ ${video.segundos} s grabados (${(video.blob.size / 1048576).toFixed(1)} MB)</p>` : ''}
+        <button type="button" class="btn ${video ? 'btn-borde' : 'btn-oro'} btn-chico" id="x-video">${ic('video')} ${video ? 'Grabar de nuevo' : 'Grabar video'}</button></div>
+      <p class="error" id="x-error"></p><button class="btn btn-oro btn-ancho" id="x-enviar">Enviar examen a la profe</button>`);
+    for (const b of $$('[data-foto]')) b.onclick = async () => {
+      const k = b.dataset.foto; const t = pasos.find((p) => p[0] === k)[1];
+      try { const r = await tomarFotos({ max: 1, sello, titulo: t, fantasma: k === 'sin' ? null : fotos.sin?.url });
+        if (r[0]) fotos[k] = { blob: r[0], url: URL.createObjectURL(r[0]) }; pintarPasos(); }
+      catch (x) { toast(x.message === 'PERMISO_CAMARA' ? 'Permití el acceso a la cámara.' : 'No pudimos abrir la cámara en vivo. Usá Chrome o Safari actualizado.', true); }
+    };
+    $('#x-video').onclick = async () => {
+      try { const r = await grabarVideo({ min: 30, max: 60, titulo: 'Aplicá una técnica (30–60 s)' }); if (r) { if (r.blob.size > 15728640) return toast('El video pesa demasiado. Grabalo más corto.', true); video = r; } pintarPasos(); }
+      catch (x) { toast('Este navegador no permite grabar video. Usá Chrome o Safari actualizado.', true); }
+    };
+    $('#x-enviar').onclick = async () => {
+      const err = $('#x-error'); err.textContent = '';
+      if (!pasos.every(([k]) => fotos[k])) return (err.textContent = 'Faltan fotos: se necesitan las tres.');
+      if (info.video_requerido && !video) return (err.textContent = 'Falta el video de la técnica.');
+      if (Date.now() > vence.getTime()) return (err.textContent = 'El código venció. Pedile a la profe uno nuevo.');
+      const btn = $('#x-enviar'); btn.disabled = true;
+      try {
+        const base = `${E.user.id}/${examenId}/`; const rutas = [];
+        for (const [i, [k]] of pasos.entries()) { btn.textContent = `Subiendo foto ${i + 1} de 3…`; const r = base + crypto.randomUUID() + '.jpg';
+          const up = await sb.storage.from('examenes').upload(r, fotos[k].blob, { contentType: 'image/jpeg', upsert: false }); if (up.error) throw up.error; rutas.push(r); }
+        let rv = null;
+        if (video) { btn.textContent = 'Subiendo video…'; const ext = /mp4/.test(video.tipo) ? 'mp4' : 'webm'; rv = base + crypto.randomUUID() + '.' + ext;
+          const up = await sb.storage.from('examenes').upload(rv, video.blob, { contentType: ext === 'mp4' ? 'video/mp4' : 'video/webm', upsert: false }); if (up.error) throw up.error; }
+        btn.textContent = 'Enviando…';
+        const captura = { origen: 'camara-en-vivo', dispositivo: await huellaDispositivo(), agente: navigator.userAgent.slice(0, 200),
+          fotos: pasos.map(([k]) => fotos[k].blob.meta || null), video: video?.meta || null };
+        const { error } = await sb.rpc('aula_examen_subir', { p_id: examenId, p_codigo: codigo, p_fotos: rutas, p_video: rv, p_captura: captura }); if (error) throw error;
+        await cargarAlumna(); toast('¡Examen enviado! La profe lo corrige y te avisa.'); location.hash = `#/curso/${curso}?examen`;
+      } catch (x) { err.textContent = errorTxt(x); btn.disabled = false; btn.textContent = 'Enviar examen a la profe'; }
+    };
+  };
+  pintarPasos();
+}
+
+// Clase práctica: primero el mini cuestionario, después la entrega con cámara
+async function vistaClase(lid) {
+  const { data: l } = await sb.from('lecciones').select('*').eq('id', lid).maybeSingle();
+  if (!l) { pintar('<div class="vacio"><span class="grande">🔒</span>Esta clase no está disponible.</div>'); return; }
+  const { data: hecho } = await sb.from('aula_quiz_resultados').select('correctas,total').eq('leccion_id', lid).order('creado', { ascending: false }).limit(1);
+  const { data: qs, error } = await sb.rpc('aula_quiz', { p_leccion: lid }); if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
+  const ir = () => { location.hash = `#/entregar/${l.servicio_id}?leccion=${lid}`; };
+  if (!(qs || []).length || (hecho || []).length) return ir();
+  pintar(`<a class="volver" href="#/curso/${esc(l.servicio_id)}">‹ Volver</a><h1>${esc(l.titulo)}</h1><p class="suave">Antes de la práctica respondé estas ${qs.length} preguntas cortas de teoría.</p>${AVISO_IA}
+    <form id="f-quiz" class="tarjeta" novalidate>${qs.map((q, i) => `<fieldset class="paso-examen" style="border-style:solid"><legend><strong>${i + 1}. ${esc(q.pregunta)}</strong>${q.tema ? ` <span class="chico suave">· ${esc(q.tema)}</span>` : ''}</legend>
+      ${q.opciones.map((o, j) => `<label class="fila" style="gap:.5rem;font-weight:500"><input type="radio" name="q${i}" value="${j}" data-q="${q.id}" required> ${esc(o)}</label>`).join('')}</fieldset>`).join('')}
+      <p class="error" id="q-error"></p><button class="btn btn-oro btn-ancho">Enviar respuestas</button></form>`);
+  $('#f-quiz').onsubmit = async (e) => {
+    e.preventDefault(); const resp = {}; for (const r of $$('#f-quiz input:checked')) resp[r.dataset.q] = +r.value;
+    if (Object.keys(resp).length < qs.length) return ($('#q-error').textContent = 'Respondé todas las preguntas.');
+    const { data, error: e2 } = await sb.rpc('aula_responder_quiz', { p_leccion: lid, p_respuestas: resp }); if (e2) return toast(errorTxt(e2), true);
+    const det = new Map((data.detalle || []).map((d) => [d.id, d]));
+    pintar(`<a class="volver" href="#/curso/${esc(l.servicio_id)}">‹ Volver</a><h1>Resultado: ${data.correctas} de ${data.total}</h1>
+      <div class="tarjeta">${qs.map((q, i) => { const d = det.get(q.id); return `<p><strong>${i + 1}. ${esc(q.pregunta)}</strong><br>${d?.bien ? '✅ Bien' : `❌ Respuesta correcta: <b>${esc(q.opciones[d?.correcta] ?? '')}</b>`}</p>`; }).join('')}</div>
+      <button class="btn btn-oro btn-ancho" id="q-seguir">${ic('camara')} Seguir con la práctica</button>`);
+    $('#q-seguir').onclick = ir;
+  };
+}
+
+function vistaPortafolio() {
+  const mios = E.entregas.filter((e) => e.portafolio);
+  pintar(`<a class="volver" href="#/notas">‹ Mis notas</a><h1>Mi portafolio</h1><p class="suave">Tus mejores trabajos aprobados. Es privado: solo lo ven vos y la profe. Elegí cuáles mostrar desde "Mis notas".</p>
+    ${mios.length ? `<div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${mios.map((e) => tarjetaEntrega(e, true)).join('')}</div>` : '<div class="vacio"><span class="grande">🖼️</span>Todavía no elegiste trabajos para tu portafolio.</div>'}`);
+  hidratarFotos();
+}
+
+async function vistaCertificado(curso) {
+  const { data } = await sb.from('aula_certificados').select('*').order('creado', { ascending: false });
+  const c = (data || []).find((x) => E.avance.some((a) => a.inscripcion_id === x.inscripcion_id && a.servicio_id === curso)) || (data || [])[0];
+  if (!c) { pintar('<div class="vacio">Todavía no tenés certificado.</div>'); return; }
+  const url = new URL(`../verificar/?codigo=${encodeURIComponent(c.codigo)}`, location.href).href;
+  pintar(`<a class="volver no-imprimir" href="#/curso/${esc(curso)}?examen">‹ Volver</a>
+    <div class="cert"><img src="../img/logo-192.webp" width="80" alt=""><p class="eyebrow">Tania Sanabria Makeup Academy</p><h1>Certificado</h1>
+      <p>Se certifica que</p><h2 style="font-size:2rem;margin:.2rem 0">${esc(c.nombre)}</h2><p>aprobó el curso</p><h3>${esc(c.curso)}</h3>
+      <p>el ${new Date(c.fecha + 'T12:00:00').toLocaleDateString('es-PY', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
+      <p class="chico">Código de verificación: <strong>${esc(c.codigo)}</strong><br>${esc(url)}</p><p style="margin-top:2rem">______________________<br>Tania Sanabria</p></div>
+    <div class="fila no-imprimir" style="margin-top:1rem"><button class="btn btn-oro" onclick="print()">Imprimir / guardar PDF</button><a class="btn btn-borde" href="${esc(url)}" target="_blank" rel="noopener">Ver página de verificación</a></div>`);
+}
+
+// ---------- Admin: exámenes (código, fotos, video, rúbrica) ----------
+async function vistaAdminExamenes() {
+  const { data, error } = await sb.rpc('admin_examenes_aula2'); if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
+  const fila = (x) => {
+    const crit = criteriosDe(x.servicio_id); const abierto = ['solicitado', 'agendado', 'en_curso'].includes(x.estado);
+    return `<article class="entrega" data-ex="${x.id}" data-curso="${esc(x.servicio_id)}"><div class="entrega-cab"><div><h3>${esc(x.nombre || x.email)}</h3>
+      <span class="chico">${esc(x.curso || '')} · mes ${x.mes} · intento ${x.intento || 1}</span><br><span class="chico suave">${x.preferencia ? 'Prefiere: ' + esc(x.preferencia) + ' · ' : ''}${x.fecha ? 'Agendado ' + fechaHora(x.fecha) : ''}</span></div>
+      <span class="etiqueta ${x.estado === 'entregado' ? 'ambar' : x.estado === 'aprobado' ? 'verde' : x.estado === 'desaprobado' ? 'rojo' : ''}">${EXAMEN_TXT[x.estado] || esc(x.estado)}</span></div>
+      ${abierto ? `<div class="fila chico"><input type="datetime-local" data-fecha style="max-width:14rem"><button class="btn btn-borde btn-chico" data-agendar>Agendar</button>
+        ${x.telefono ? `<a href="https://wa.me/${esc(x.telefono.replace(/\D/g, '').replace(/^0/, '595'))}?text=${encodeURIComponent(`Hola ${(x.nombre || '').split(' ')[0]}, soy Tania. Te escribo por tu examen por videollamada.`)}" target="_blank" rel="noopener">${ic('video')} WhatsApp</a>` : ''}</div>
+        <button class="btn btn-oro" data-codigo>🔑 Empezó la videollamada: generar código</button><div data-cod-caja>${x.codigo_vence && new Date(x.codigo_vence) > new Date() ? `<p class="chico">Hay un código vigente hasta ${fechaHora(x.codigo_vence)}. Generá otro si lo necesitás.</p>` : ''}</div>` : ''}
+      ${x.fotos ? `<div class="fotos">${x.fotos.map((f, i) => `<button data-ver-ex="${esc(f)}" title="${['Sin maquillaje', 'Mitad', 'Final'][i]}"><img data-bucket="examenes" data-ruta="${esc(f)}" alt=""></button>`).join('')}</div>
+        <p class="chico suave">1 Sin maquillaje · 2 Mitad · 3 Final${x.entregado_en ? ' · enviado ' + fechaHora(x.entregado_en) : ''}</p>${flagsHtml(x.flags)}
+        ${x.video ? `<video data-video="${esc(x.video)}" controls playsinline preload="none" style="width:100%;max-height:320px;border-radius:12px;background:#000"></video>` : '<p class="chico">Sin video.</p>'}` : ''}
+      ${x.estado === 'entregado' || x.estado === 'aprobado' || x.estado === 'desaprobado' ? `<div class="rubrica">${crit.map((c) => `<span>${esc(c)}</span><span class="escala" data-crit="${esc(c)}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-pressed="${(x.rubrica || {})[c] == n}">${n}</button>`).join('')}</span>`).join('')}</div>
+        <textarea data-com maxlength="1000" placeholder="Comentario para la alumna">${esc(x.nota_profe || '')}</textarea>
+        <div class="fila"><button class="btn btn-oro" data-aprobar style="flex:1">✅ Aprobado</button><button class="btn btn-peligro" data-desaprobar>No aprobado</button></div>` : ''}</article>`;
+  };
+  pintar(`<h1>Exámenes por videollamada</h1><p class="suave">Cuando empiece la videollamada generá el código (vale 15 minutos) y dictáselo: con él la alumna sube las 3 fotos y el video desde el aula. Al aprobar, el mes siguiente se abre si el pago ya está confirmado.</p>
+    <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map(fila).join('') || '<div class="vacio">No hay exámenes.</div>'}</div>`);
+  for (const v of $$('video[data-video]')) urlFirmada('examenes', v.dataset.video).then((u) => { if (u) v.src = u; });
+  for (const b of $$('[data-ver-ex]')) b.onclick = async () => { const u = await urlFirmada('examenes', b.dataset.verEx); if (u) visor(`<img src="${u}" alt="">`); };
+  for (const art of $$('[data-ex]')) {
+    const id = art.dataset.ex; const rub = {};
+    for (const g of $$('[data-crit]', art)) { const pre = g.querySelector('[aria-pressed="true"]'); if (pre) rub[g.dataset.crit] = +pre.dataset.n;
+      for (const b of $$('[data-n]', g)) b.onclick = () => { rub[g.dataset.crit] = +b.dataset.n; for (const y of $$('[data-n]', g)) y.setAttribute('aria-pressed', y === b); }; }
+    art.querySelector('[data-codigo]')?.addEventListener('click', async () => {
+      const { data: c, error: e } = await sb.rpc('admin_examen_codigo', { p_id: id }); if (e) return toast(errorTxt(e), true);
+      const caja = art.querySelector('[data-cod-caja]'); const fin = new Date(c.vence);
+      caja.innerHTML = `<p class="codigo-grande" data-codigo-valor>${esc(c.codigo)}</p><p class="chico" style="text-align:center">Dictáselo a la alumna. Vence en <b data-rest>15:00</b></p>`;
+      const t = setInterval(() => { const r = Math.max(0, fin - Date.now()); const el = caja.querySelector('[data-rest]'); if (!el) return clearInterval(t);
+        el.textContent = `${Math.floor(r / 60000)}:${String(Math.floor(r / 1000) % 60).padStart(2, '0')}`; if (!r) { clearInterval(t); el.textContent = 'vencido'; } }, 1000);
+    });
+    art.querySelector('[data-agendar]')?.addEventListener('click', async () => {
+      const v = art.querySelector('[data-fecha]').value; if (!v) return toast('Elegí día y hora.', true);
+      const { error: e } = await sb.rpc('admin_examen', { p_id: id, p_estado: 'agendado', p_fecha: new Date(v + ':00-03:00').toISOString(), p_nota: null });
+      if (e) return toast(errorTxt(e), true); toast('Examen agendado ✓'); vistaAdminExamenes();
+    });
+    const calificar = async (ok) => {
+      const crit = criteriosDe(art.dataset.curso); if (crit.some((c) => !rub[c])) return toast('Completá la rúbrica (1 a 5 en cada criterio).', true);
+      const { error: e } = await sb.rpc('admin_examen_calificar', { p_id: id, p_aprobado: ok, p_rubrica: rub, p_comentario: art.querySelector('[data-com]').value });
+      if (e) return toast(errorTxt(e), true); toast(ok ? 'Examen aprobado ✓' : 'Examen no aprobado (puede volver a rendir)'); vistaAdminExamenes();
+    };
+    art.querySelector('[data-aprobar]')?.addEventListener('click', () => calificar(true));
+    art.querySelector('[data-desaprobar]')?.addEventListener('click', () => calificar(false));
+  }
+  hidratarFotos();
+}
+
+// ---------- Admin: seguimiento (atrasadas), plazos, configuración y cuestionarios ----------
+async function vistaAdminSeguimiento() {
+  const { data, error } = await sb.rpc('admin_aula_seguimiento'); if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
+  const atr = (data || []).filter((a) => a.atrasada);
+  pintar(`<h1>Seguimiento de alumnas</h1><p class="suave">Mes actual de cada alumna, clases aprobadas, última entrega y plazo. En rojo las que están atrasadas. <a href="#/admin/config">Plazos y configuración →</a></p>
+    <div class="estadisticas"><div class="dato"><strong>${(data || []).length}</strong><span>Alumnas activas</span></div><div class="dato"><strong>${atr.length}</strong><span>Atrasadas</span></div><div class="dato"><strong>${(data || []).filter((a) => a.certificado).length}</strong><span>Certificadas</span></div></div>
+    ${(data || []).map((a) => `<div class="alumna" ${a.atrasada ? 'style="border-color:#e7b2ab;background:#fdf1ef"' : ''}><div class="fila entre"><div><strong>${esc(a.nombre)}</strong> <span class="chico suave">· ${esc(a.curso)}</span><br>
+      <span class="chico">Mes ${a.mes} · ${a.aprobadas} de ${a.clases} clases aprobadas (${a.enviadas} entregadas) · examen ${esc(EXAMEN_TXT[a.examen_estado] || 'sin pedir')}</span><br>
+      <span class="chico suave">Última entrega: ${a.ultima_entrega ? fechaHora(a.ultima_entrega) : 'nunca'}${a.plazo ? ' · plazo ' + fecha(a.plazo + 'T12:00:00') : ''}</span></div>
+      ${a.atrasada ? '<span class="etiqueta rojo">Atrasada</span>' : a.certificado ? `<span class="etiqueta verde">${esc(a.certificado)}</span>` : ''}</div>
+      <div class="fila chico">${a.telefono ? `<a href="https://wa.me/${esc(a.telefono.replace(/\D/g, '').replace(/^0/, '595'))}?text=${encodeURIComponent(`Hola ${a.nombre.split(' ')[0]}, soy Tania. ¿Cómo vas con las clases del mes ${a.mes}? El plazo es ${a.plazo || 'pronto'}.`)}" target="_blank" rel="noopener">Escribirle por WhatsApp</a>` : ''}
+      ${a.certificado ? '' : `<button class="btn btn-borde btn-chico" data-cert="${a.inscripcion_id}">Emitir certificado a mano</button>`}</div></div>`).join('') || '<div class="vacio">No hay alumnas con acceso.</div>'}`);
+  for (const b of $$('[data-cert]')) b.onclick = async () => { if (!confirm('¿Emitir el certificado aunque no haya aprobado todo por el aula?')) return;
+    const { data: c, error: e } = await sb.rpc('admin_emitir_certificado', { p_insc: b.dataset.cert }); if (e) return toast(errorTxt(e), true); toast('Certificado ' + c + ' ✓'); vistaAdminSeguimiento(); };
+}
+
+async function vistaAdminConfig() {
+  const cur = sessionStorage.getItem('aula-curso-cfg') || E.servicios[0]?.id; const s = servicio(cur);
+  const [cf, pl, pq, ls] = await Promise.all([sb.from('aula_config_curso').select('*').eq('servicio_id', cur).maybeSingle(), sb.from('aula_plazos').select('*').eq('servicio_id', cur).order('mes'),
+    sb.from('aula_preguntas').select('*').or(`servicio_id.eq.${cur},servicio_id.is.null`).order('creado'), sb.from('lecciones').select('id,titulo,mes,requiere_entrega').eq('servicio_id', cur).order('mes').order('orden')]);
+  const c = cf.data || { max_intentos: 3, criterios: CRITERIOS_DEF, video_requerido: true, meses_total: null };
+  const meses = Math.max(c.meses_total || 0, ...(ls.data || []).map((l) => l.mes || 1), 1);
+  const plazo = (m) => (pl.data || []).find((p) => p.mes === m)?.vence || '';
+  pintar(`<h1>Configuración del curso</h1><div class="filtros"><select id="c-curso">${E.servicios.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></div>
+    <div class="dos-columnas"><div>
+    <form id="f-cfg" class="tarjeta"><h2>Examen y rúbrica</h2>
+      <label>Intentos de examen por mes</label><input name="max" type="number" min="1" max="10" value="${c.max_intentos}">
+      <label>Criterios de la rúbrica (separados por coma)</label><input name="crit" value="${esc((c.criterios || CRITERIOS_DEF).join(', '))}">
+      <label>Meses del curso (vacío = según las clases cargadas)</label><input name="meses" type="number" min="1" max="36" value="${c.meses_total || ''}">
+      <label class="interruptor"><input type="checkbox" name="video" ${c.video_requerido ? 'checked' : ''}> Video de 30–60 s obligatorio en el examen</label>
+      <button class="btn btn-oro" style="margin-top:.6rem">Guardar</button></form>
+    <form id="f-plazos" class="tarjeta"><h2>Plazo de cada mes</h2>${Array.from({ length: meses }, (_, i) => i + 1).map((m) => `<label>Mes ${m}</label><input type="date" data-plazo="${m}" value="${plazo(m)}">`).join('')}
+      <button class="btn btn-oro" style="margin-top:.6rem">Guardar plazos</button></form>
+    <div class="tarjeta"><h2>Clases que piden entrega</h2><p class="chico suave">Las clases de teoría (solo PDF) no cuentan para aprobar el mes.</p>
+      ${(ls.data || []).map((l) => `<label class="interruptor"><input type="checkbox" data-req="${l.id}" ${l.requiere_entrega !== false ? 'checked' : ''}> Mes ${l.mes || 1} · ${esc(l.titulo)}</label>`).join('') || '<p class="chico">Sin clases.</p>'}</div>
+    </div><div class="tarjeta"><h2>Preguntas del cuestionario</h2><p class="chico suave">Antes de cada práctica la alumna responde 4 preguntas: primero las de esa clase, después las del curso, después las generales.</p>
+      ${(pq.data || []).map((q) => `<div class="alumna"><strong>${esc(q.pregunta)}</strong><br><span class="chico">${q.opciones.map((o, j) => j === q.correcta ? `<b>✔ ${esc(o)}</b>` : esc(o)).join(' · ')}</span><br>
+        <span class="chico suave">${esc(q.tema)} · ${q.leccion_id ? 'clase: ' + esc((ls.data || []).find((l) => l.id === q.leccion_id)?.titulo || '') : q.servicio_id ? 'este curso' : 'todos los cursos'}</span>
+        <div class="fila"><button class="btn btn-borde btn-chico" data-qact="${q.id}" data-v="${q.activa}">${q.activa ? 'Desactivar' : 'Activar'}</button><button class="btn btn-peligro btn-chico" data-qdel="${q.id}">✕</button></div></div>`).join('')}
+      <form id="f-preg"><h3>Agregar pregunta</h3><label>Pregunta</label><input name="p" maxlength="400" required>
+        <label>Opciones (una por línea; marcá la correcta con * al principio)</label><textarea name="o" rows="4" placeholder="*Limpiarlas y desinfectarlas&#10;Guardarlas así"></textarea>
+        <label>Tema</label><input name="t" maxlength="80" placeholder="Higiene, Colorimetría…">
+        <label>¿Para qué?</label><select name="d"><option value="curso">Este curso</option><option value="todos">Todos los cursos</option>${(ls.data || []).map((l) => `<option value="${l.id}">Clase: ${esc(l.titulo)}</option>`).join('')}</select>
+        <p class="error" id="p-err"></p><button class="btn btn-oro" style="margin-top:.6rem">Agregar</button></form></div></div>`);
+  $('#c-curso').value = cur; $('#c-curso').onchange = (e) => { sessionStorage.setItem('aula-curso-cfg', e.target.value); vistaAdminConfig(); };
+  $('#f-cfg').onsubmit = async (e) => { e.preventDefault(); const f = e.target;
+    const crit = f.crit.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 10); if (!crit.length) return toast('Poné al menos un criterio.', true);
+    const { error: er } = await sb.from('aula_config_curso').upsert({ servicio_id: cur, max_intentos: +f.max.value || 3, criterios: crit, video_requerido: f.video.checked, meses_total: +f.meses.value || null, actualizado: new Date().toISOString() });
+    if (er) return toast(errorTxt(er), true); await cargarConfig(); toast('Configuración guardada ✓'); };
+  $('#f-plazos').onsubmit = async (e) => { e.preventDefault();
+    for (const i of $$('[data-plazo]')) { const m = +i.dataset.plazo;
+      const r = i.value ? await sb.from('aula_plazos').upsert({ servicio_id: cur, mes: m, vence: i.value }) : await sb.from('aula_plazos').delete().eq('servicio_id', cur).eq('mes', m);
+      if (r.error) return toast(errorTxt(r.error), true); }
+    toast('Plazos guardados ✓'); };
+  for (const c2 of $$('[data-req]')) c2.onchange = async () => { const { error: er } = await sb.from('lecciones').update({ requiere_entrega: c2.checked }).eq('id', c2.dataset.req); if (er) toast(errorTxt(er), true); };
+  for (const b of $$('[data-qact]')) b.onclick = async () => { await sb.from('aula_preguntas').update({ activa: b.dataset.v !== 'true' }).eq('id', b.dataset.qact); vistaAdminConfig(); };
+  for (const b of $$('[data-qdel]')) b.onclick = async () => { if (confirm('¿Borrar la pregunta?')) { await sb.from('aula_preguntas').delete().eq('id', b.dataset.qdel); vistaAdminConfig(); } };
+  $('#f-preg').onsubmit = async (e) => { e.preventDefault(); const f = e.target; const lineas = f.o.value.split('\n').map((x) => x.trim()).filter(Boolean);
+    const cor = lineas.findIndex((x) => x.startsWith('*')); const ops = lineas.map((x) => x.replace(/^\*\s*/, ''));
+    if (f.p.value.trim().length < 5) return ($('#p-err').textContent = 'Escribí la pregunta.');
+    if (ops.length < 2 || ops.length > 5 || cor < 0) return ($('#p-err').textContent = 'Entre 2 y 5 opciones, y marcá la correcta con *.');
+    const d = f.d.value; const fila = { pregunta: f.p.value.trim(), opciones: ops, correcta: cor, tema: f.t.value.trim(), servicio_id: d === 'todos' ? null : cur, leccion_id: d === 'curso' || d === 'todos' ? null : d };
+    const { error: er } = await sb.from('aula_preguntas').insert(fila); if (er) return ($('#p-err').textContent = errorTxt(er)); toast('Pregunta agregada ✓'); vistaAdminConfig(); };
+}
+async function cargarConfig() { const { data, error } = await sb.from('aula_config_curso').select('*'); E.v3 = !error; E.config = data || []; }
+
 // ---------- Router ----------
 async function router() {
   if (!E.user) return;
@@ -684,10 +1009,16 @@ async function router() {
       if (p[1] === 'materiales') return await vistaAdminMateriales();
       if (p[1] === 'alumnas') return await vistaAdminAlumnas();
       if (p[1] === 'pagos' && E.v2) return await vistaAdminPagos();
+      if (p[1] === 'examenes' && E.v3) return await vistaAdminExamenes();
+      if (p[1] === 'seguimiento' && E.v3) return await vistaAdminSeguimiento();
+      if (p[1] === 'config' && E.v3) return await vistaAdminConfig();
       return await vistaAdminCorregir();
     }
     if (p[0] === 'cursos') return vistaCatalogo();
-    if (p[0] === 'curso') return await vistaCurso(p[1], ['trabajos', 'examen'].includes(q) ? q : 'clases');
+    if (p[0] === 'curso') { const t = ['trabajos', 'examen'].includes(q) ? q : 'clases'; if (E.v3 && E.misCursos.some((c) => c.servicio_id === p[1])) return await vistaCursoMerito(p[1], t); return await vistaCurso(p[1], t); }
+    if (p[0] === 'clase' && E.v3) return await vistaClase(p[1]);
+    if (p[0] === 'portafolio') return vistaPortafolio();
+    if (p[0] === 'certificado' && E.v3) return await vistaCertificado(p[1]);
     if (p[0] === 'entregar') return vistaEntregar(p[1], q);
     if (p[0] === 'pagar') return await vistaPagar(p[1]);
     if (p[0] === 'notas') return vistaNotas();

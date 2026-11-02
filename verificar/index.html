@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Verificar certificado · Tania Sanabria Makeup Academy</title>
+  <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="stylesheet" href="../aula/aula.css?v=4">
+</head>
+<body>
+  <header class="cabecera"><a class="marca" href="../"><img src="../img/logo-96.webp" width="34" height="40" alt=""><span><strong class="marca-nombre">Tania Sanabria</strong><small>Verificación de certificados</small></span></a></header>
+  <main id="app" style="max-width:560px;margin:2rem auto;padding:0 1rem">
+    <h1>Verificar certificado</h1>
+    <form id="f" class="tarjeta"><label for="c">Código del certificado</label><input id="c" placeholder="TS-XXXX-XXXX" maxlength="12" autocomplete="off" style="text-transform:uppercase">
+      <button class="btn btn-oro btn-ancho" style="margin-top:.6rem">Verificar</button></form>
+    <div id="r" role="status" aria-live="polite"></div>
+  </main>
+  <script type="module">
+    import { SUPABASE } from '../js/config.js';
+    const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).get('base') !== 'real';
+    const url = LOCAL ? `${location.protocol}//${location.hostname}:54321` : SUPABASE.url;
+    const key = LOCAL ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvY2FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjEwNzgyNTM1OH0.HWC5pvLe-zSXO_aly5bXUlczRRvITVmeSHg3ViR0KCk' : SUPABASE.anonKey;
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const r = document.getElementById('r'), c = document.getElementById('c');
+    async function verificar(codigo) {
+      codigo = codigo.trim().toUpperCase(); if (!/^TS-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(codigo)) { r.innerHTML = '<p class="error">El código tiene la forma TS-XXXX-XXXX.</p>'; return; }
+      r.innerHTML = '<p class="cargando"><span class="giro"></span>Verificando…</p>';
+      try {
+        const res = await fetch(`${url}/rest/v1/rpc/verificar_certificado`, { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + key, 'content-type': 'application/json' }, body: JSON.stringify({ p_codigo: codigo }) });
+        const d = await res.json();
+        r.innerHTML = d && d.ok
+          ? `<div class="tarjeta" style="border-color:#9cc99c;background:#f3faf3"><h2 style="margin-top:0">✅ Certificado válido</h2><p><strong>${esc(d.nombre)}</strong><br>aprobó <strong>${esc(d.curso)}</strong><br>el ${new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-PY', { day: 'numeric', month: 'long', year: 'numeric' })}.</p><p class="chico suave">Código ${esc(d.codigo)} · Tania Sanabria Makeup Academy</p></div>`
+          : '<div class="tarjeta" style="border-color:#e7b2ab;background:#fdf1ef"><h2 style="margin-top:0">❌ No encontramos ese certificado</h2><p>Revisá el código.</p></div>';
+      } catch { r.innerHTML = '<p class="error">Sin conexión. Intentá de nuevo.</p>'; }
+    }
+    document.getElementById('f').onsubmit = (e) => { e.preventDefault(); history.replaceState(null, '', '?codigo=' + encodeURIComponent(c.value.trim().toUpperCase())); verificar(c.value); };
+    const q = new URLSearchParams(location.search).get('codigo'); if (q) { c.value = q; verificar(q); }
+  </script>
+</body>
+</html>

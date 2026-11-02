@@ -14,6 +14,10 @@ async function cargar() {
   if (p.error) { caja.hidden = true; return; }
   caja.hidden = false;
   const ex = (x.data || []).filter((r) => r.estado === 'solicitado' || r.estado === 'agendado');
+  // Progresión por mérito (si ya está la migración): exámenes para corregir y alumnas atrasadas
+  const [x2, sg] = await Promise.all([sb.rpc('admin_examenes_aula2'), sb.rpc('admin_aula_seguimiento')]);
+  const exCorr = x2.error ? [] : (x2.data || []).filter((r) => r.estado === 'entregado');
+  const atras = sg.error ? [] : (sg.data || []).filter((r) => r.atrasada);
   $('#aula-admin-cuerpo').innerHTML = `
     <p class="suave">Pagos por confirmar: <strong>${p.data.length}</strong> · Exámenes pedidos/agendados: <strong>${ex.length}</strong> · Trabajos sin corregir: <strong>${(e.data || []).length}</strong></p>
     ${p.data.map((r) => `<div class="tarjeta-simple" style="border:1px solid var(--linea,#e8dfcf);border-radius:12px;padding:.6rem .8rem;margin:.4rem 0">
@@ -21,12 +25,15 @@ async function cargar() {
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem"><button type="button" class="btn btn-borde" data-aula-ver="${esc(r.ruta)}">🔍 Ver comprobante</button>
       <button type="button" class="btn btn-aprobar" data-aula-ok="${r.id}">✅ Pago recibido: abrir mes ${r.mes}</button><button type="button" class="btn btn-borde" data-aula-no="${r.id}">No llegó</button></div></div>`).join('')}
     ${ex.map((r) => `<p>🎥 <strong>${esc(r.nombre || r.email)}</strong> · examen ${esc(r.curso || '')} (mes ${r.mes}) · ${r.estado === 'agendado' && r.fecha ? 'agendado ' + fh(r.fecha) : 'pidió fecha' + (r.preferencia ? ': ' + esc(r.preferencia) : '')}</p>`).join('')}
+    ${exCorr.map((r) => `<p>📝 <strong>${esc(r.nombre || r.email)}</strong> subió su examen de ${esc(r.curso || '')} (mes ${r.mes}): <a href="../aula/#/admin/examenes" target="_blank" rel="noopener">corregir</a></p>`).join('')}
+    ${atras.length ? `<p>⏰ Atrasadas: ${atras.map((r) => `<strong>${esc(r.nombre)}</strong> (${esc(r.curso)}, mes ${r.mes}: ${r.aprobadas}/${r.clases})`).join(', ')} · <a href="../aula/#/admin/seguimiento" target="_blank" rel="noopener">ver seguimiento</a></p>` : ''}
     <p><a class="btn btn-borde" href="../aula/#/admin/pagos" target="_blank" rel="noopener">Abrir pagos y exámenes</a> <a class="btn btn-borde" href="../aula/#/admin/materiales" target="_blank" rel="noopener">Subir PDF por mes y nivel</a> <a class="btn btn-borde" href="../aula/#/admin" target="_blank" rel="noopener">Corregir trabajos</a></p>`;
   if (!canal) {
     const refrescar = () => { clearTimeout(t); t = setTimeout(cargar, 300); };
     canal = sb.channel('panel-aula').on('postgres_changes', { event: '*', schema: 'public', table: 'aula_pagos' }, refrescar)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_examenes' }, refrescar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'entregas' }, refrescar).subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'entregas' }, refrescar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_certificados' }, refrescar).subscribe();
   }
 }
 

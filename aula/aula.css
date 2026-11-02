@@ -237,3 +237,15 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
 .modulo.bloqueado { opacity: .92; background: repeating-linear-gradient(135deg, #fff, #fff 12px, #faf6ee 12px, #faf6ee 24px); border: 1.5px dashed var(--linea); border-radius: 16px; padding: .8rem 1rem; }
 .modulo-sub { margin: .6rem 0 .2rem; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); }
 .datos-pago { white-space: pre-wrap; background: var(--marfil, #faf6ee); padding: .8rem; border-radius: 12px; font-family: inherit; user-select: all; }
+.cam-fantasma { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .32; pointer-events: none; z-index: 1; }
+.cam-titulo { position: absolute; top: 4.2rem; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; text-shadow: 0 1px 4px #000; z-index: 2; margin: 0; }
+.cam-disparo.grabando { background: #d33; box-shadow: 0 0 0 6px rgba(221, 51, 51, .35); }
+.nav-movil { overflow-x: auto; grid-auto-columns: minmax(64px, 1fr); }
+.barra-mes { height: 10px; border-radius: 6px; background: #ece6db; overflow: hidden; margin: .3rem 0; } .barra-mes i { display: block; height: 100%; background: var(--foil, #c9a24a); }
+.rubrica { display: grid; grid-template-columns: 1fr auto; gap: .25rem .8rem; align-items: center; font-size: .85rem; margin: .4rem 0; }
+.rubrica .escala button { width: 30px; height: 30px; }
+.alerta-foto { display: inline-block; background: #fbecc8; color: #8a5a00; border-radius: 8px; padding: .1rem .45rem; font-size: .75rem; margin: .15rem .2rem 0 0; }
+.codigo-grande { font-size: 3rem; letter-spacing: .4em; font-weight: 800; text-align: center; margin: .4rem 0; color: var(--tinta); }
+.paso-examen { border: 1.5px solid var(--linea); border-radius: 14px; padding: .7rem; margin: .5rem 0; } .paso-examen.hecho { border-color: #9cc99c; background: #f3faf3; }
+.cert { border: 6px double #c9a24a; padding: 2rem; text-align: center; background: #fffdf7; border-radius: 8px; }
+@media print { .no-imprimir, .cabecera, .nav-movil, .nav-escritorio, .toast { display: none !important; } .cert { border-width: 8px; } }
