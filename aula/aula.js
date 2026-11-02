@@ -588,12 +588,13 @@ async function vistaAdminMateriales() {
     <div class="filtros"><select id="m-curso">${E.servicios.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></div>
     <div class="dos-columnas"><div><h2>Clases cargadas (${(lecciones || []).length})</h2>
       ${(lecciones || []).length ? (lecciones || []).map((l) => `<div class="clase" style="cursor:default"><span class="clase-ic">${/\.(jpg|png|webp)$/.test(l.archivo || '') ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo])}</span>
-        <span><strong>${esc(l.titulo)}</strong><small>${E.v2 ? `Mes ${l.mes || 1} · ${esc(nivelTxt(l.variante_id))} · ` : ''}${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
+        <span><strong>${esc(l.titulo)}</strong><small>${E.v2 ? `Mes ${l.mes || 1}${l.semana ? ' · semana ' + l.semana : ''} · ${esc(nivelTxt(l.variante_id))} · ` : ''}${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
         <span class="fila" style="margin-left:auto;flex-wrap:nowrap"><button class="btn btn-borde btn-chico" data-ocultar="${l.id}" data-activo="${l.activo}">${l.activo ? 'Ocultar' : 'Mostrar'}</button><button class="btn btn-peligro btn-chico" data-borrar="${l.id}" data-archivo="${esc(l.archivo || '')}" aria-label="Borrar">✕</button></span></div>`).join('')
         : '<div class="vacio">Este curso todavía no tiene materiales.</div>'}</div>
     <div class="tarjeta"><h2>Agregar material</h2><form id="f-mat" novalidate>
       ${E.v2 ? `<div class="fila" style="gap:.6rem;flex-wrap:nowrap"><div style="flex:0 0 7rem"><label for="m-mes">Mes</label><input id="m-mes" name="mes" type="number" min="1" max="36" value="1" required></div>
-        <div style="flex:1"><label for="m-nivel">Nivel / categoría</label><select id="m-nivel" name="nivel"><option value="">Todos los niveles</option>${vars.map((v) => `<option value="${esc(v.id)}">${esc(v.etiqueta || v.id)}</option>`).join('')}</select></div></div>` : ''}
+        <div style="flex:1"><label for="m-nivel">Nivel / categoría</label><select id="m-nivel" name="nivel"><option value="">Todos los niveles</option>${vars.map((v) => `<option value="${esc(v.id)}">${esc(v.etiqueta || v.id)}</option>`).join('')}</select></div></div>
+        <label for="m-semana">Semana del curso (opcional)</label><input id="m-semana" name="semana" type="number" min="1" max="160" placeholder="Ej: 1 = se ve apenas aprobás; 2 = a los 7 días…">` : ''}
       <label for="m-modulo">Módulo</label><input id="m-modulo" name="modulo" list="m-mods" maxlength="120" placeholder="Ej: Módulo 1 – Teoría del color"><datalist id="m-mods">${[...new Set([...modsUsados, ...modsCat])].map((m) => `<option value="${esc(m)}">`).join('')}</datalist>
       <label for="m-titulo">Título</label><input id="m-titulo" name="titulo" required maxlength="160">
       <label for="m-desc">Descripción (opcional)</label><textarea id="m-desc" name="descripcion" maxlength="4000"></textarea>
@@ -615,7 +616,8 @@ async function vistaAdminMateriales() {
     e.preventDefault(); const f = e.target, err = $('#m-error'); err.textContent = ''; const tipo = f.tipo.value;
     if (f.titulo.value.trim().length < 1) { err.textContent = 'Escribí un título.'; return; }
     const fila = { servicio_id: cur, modulo: f.modulo.value.trim() || null, titulo: f.titulo.value.trim(), descripcion: f.descripcion.value.trim(), tipo, orden: (lecciones || []).length };
-    if (E.v2) { const m = +f.mes.value; if (!(m >= 1 && m <= 36)) { err.textContent = 'El mes va de 1 a 36.'; return; } Object.assign(fila, { mes: m, variante_id: f.nivel.value || null }); }
+    if (E.v2) { const m = +f.mes.value; if (!(m >= 1 && m <= 36)) { err.textContent = 'El mes va de 1 a 36.'; return; } Object.assign(fila, { mes: m, variante_id: f.nivel.value || null });
+      if (f.semana.value) { const w = +f.semana.value; if (!(w >= 1 && w <= 160)) { err.textContent = 'La semana va de 1 a 160.'; return; } fila.semana = w; } }
     const btn = $('#m-btn'); btn.disabled = true; btn.textContent = 'Publicando…';
     try {
       if (tipo === 'archivo') {
@@ -716,6 +718,7 @@ async function vistaCursoMerito(id, pestana = 'clases') {
   const [{ data: lecciones }, pr, qr] = await Promise.all([
     sb.from('lecciones').select('*').eq('servicio_id', id).eq('activo', true).order('mes').order('orden').order('creado'),
     sb.rpc('aula_progreso', { p_curso: id }), sb.from('aula_quiz_resultados').select('leccion_id,correctas,total')]);
+  const sem = await sb.rpc('aula_semanas', { p_curso: id }); const semanas = sem.error ? [] : (sem.data || []);
   const prog = pr.data || []; const av = avanceDe(id); const hab = av?.meses_habilitados || 1;
   const quiz = new Set((qr.data || []).map((r) => r.leccion_id));
   const ent = E.entregas.filter((e) => e.servicio_id === id);
@@ -743,7 +746,11 @@ async function vistaCursoMerito(id, pestana = 'clases') {
         ${sig ? (m.pago_estado === 'confirmado' ? '<span class="etiqueta verde">Pago confirmado</span>' : pendPago ? '<span class="etiqueta ambar">Comprobante en revisión</span>' : av ? `<a class="btn btn-borde btn-chico" href="#/pagar/${esc(av.inscripcion_id)}">Pagar el mes ${m.mes}</a>` : '') : ''}</section>`;
     }
     const ls = (lecciones || []).filter((l) => (l.mes || 1) === m.mes);
-    return `<section class="modulo">${cab}${ls.map(clase).join('') || '<p class="chico suave">La profe todavía no subió clases a este mes.</p>'}
+    const prox = semanas.filter((w) => w.mes === m.mes && !w.abierta);
+    const filas = [...ls.map((l) => ({ semana: l.semana || 0, html: (l.semana ? `<p class="semana-tit chico">Semana ${l.semana}</p>` : '') + clase(l) })),
+      ...prox.map((w) => ({ semana: w.semana, html: `<div class="clase-fila semana-bloqueada"><div class="clase" aria-disabled="true"><span class="clase-ic">🔒</span><span><strong>Semana ${w.semana} · ${esc(w.titulo)}</strong><small>Se abre el ${w.abre ? fecha(w.abre + 'T12:00:00') : 'cuando la profe te habilite'}</small></span></div></div>` }))]
+      .sort((a, b) => a.semana - b.semana).map((x) => x.html).join('');
+    return `<section class="modulo">${cab}${filas || '<p class="chico suave">La profe todavía no subió clases a este mes.</p>'}${prox.length ? '<p class="chico suave">Las clases se liberan una por semana desde que la profe aprobó tu inscripción.</p>' : ''}
       ${m.mes === hab && m.puede_pedir_examen ? `<a class="btn btn-oro btn-chico" href="#/curso/${esc(id)}?examen">Pedir examen del mes ${m.mes}</a>` : ''}</section>`;
   }).join('') || '<div class="vacio"><span class="grande">📚</span>La profe todavía no subió clases a tu nivel.</div>';
   const cert = prog.find((m) => m.certificado)?.certificado;
@@ -884,12 +891,17 @@ async function vistaCertificado(curso) {
 
 // ---------- Admin: exámenes (código, fotos, video, rúbrica) ----------
 async function vistaAdminExamenes() {
-  const { data, error } = await sb.rpc('admin_examenes_aula2'); if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
+  const [{ data, error }, gq] = await Promise.all([sb.rpc('admin_examenes_aula2'), sb.from('aula_examen_guia').select('*').order('orden')]);
+  if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
+  const guia = gq.error ? [] : (gq.data || []);
+  const guiaDe = (cur, mes, v) => guia.filter((g) => g.servicio_id === cur && g.mes === mes && (!v || !g.variante_id || g.variante_id === v));
+  const guiaHtml = (gs, abierta) => gs.length ? `<details class="guia-oral"${abierta ? ' open' : ''}><summary>🗣️ Preguntas orales para la videollamada (${gs.length})</summary><ol>${gs.map((g) => `<li><strong>${esc(g.pregunta)}</strong>${g.puntos_clave ? `<br><span class="chico suave">Puntos clave: ${esc(g.puntos_clave)}</span>` : ''}</li>`).join('')}</ol></details>` : '';
   const fila = (x) => {
     const crit = criteriosDe(x.servicio_id); const abierto = ['solicitado', 'agendado', 'en_curso'].includes(x.estado);
     return `<article class="entrega" data-ex="${x.id}" data-curso="${esc(x.servicio_id)}"><div class="entrega-cab"><div><h3>${esc(x.nombre || x.email)}</h3>
       <span class="chico">${esc(x.curso || '')} · mes ${x.mes} · intento ${x.intento || 1}</span><br><span class="chico suave">${x.preferencia ? 'Prefiere: ' + esc(x.preferencia) + ' · ' : ''}${x.fecha ? 'Agendado ' + fechaHora(x.fecha) : ''}</span></div>
       <span class="etiqueta ${x.estado === 'entregado' ? 'ambar' : x.estado === 'aprobado' ? 'verde' : x.estado === 'desaprobado' ? 'rojo' : ''}">${EXAMEN_TXT[x.estado] || esc(x.estado)}</span></div>
+      ${guiaHtml(guiaDe(x.servicio_id, x.mes, x.variante_id), abierto)}
       ${abierto ? `<div class="fila chico"><input type="datetime-local" data-fecha style="max-width:14rem"><button class="btn btn-borde btn-chico" data-agendar>Agendar</button>
         ${x.telefono ? `<a href="https://wa.me/${esc(x.telefono.replace(/\D/g, '').replace(/^0/, '595'))}?text=${encodeURIComponent(`Hola ${(x.nombre || '').split(' ')[0]}, soy Tania. Te escribo por tu examen por videollamada.`)}" target="_blank" rel="noopener">${ic('video')} WhatsApp</a>` : ''}</div>
         <button class="btn btn-oro" data-codigo>🔑 Empezó la videollamada: generar código</button><div data-cod-caja>${x.codigo_vence && new Date(x.codigo_vence) > new Date() ? `<p class="chico">Hay un código vigente hasta ${fechaHora(x.codigo_vence)}. Generá otro si lo necesitás.</p>` : ''}</div>` : ''}
@@ -901,7 +913,9 @@ async function vistaAdminExamenes() {
         <div class="fila"><button class="btn btn-oro" data-aprobar style="flex:1">✅ Aprobado</button><button class="btn btn-peligro" data-desaprobar>No aprobado</button></div>` : ''}</article>`;
   };
   pintar(`<h1>Exámenes por videollamada</h1><p class="suave">Cuando empiece la videollamada generá el código (vale 15 minutos) y dictáselo: con él la alumna sube las 3 fotos y el video desde el aula. Al aprobar, el mes siguiente se abre si el pago ya está confirmado.</p>
-    <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map(fila).join('') || '<div class="vacio">No hay exámenes.</div>'}</div>`);
+    <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map(fila).join('') || '<div class="vacio">No hay exámenes.</div>'}</div>
+    ${guia.length ? `<h2 id="guia-oral">Guía de preguntas orales (solo la ves vos)</h2>${[...new Set(guia.map((g) => g.servicio_id + '|' + (g.variante_id || '') + '|' + g.mes))].map((k) => { const [c, v, m] = k.split('|');
+      return `<div class="tarjeta" style="margin-bottom:.6rem"><h3 style="margin:0">${esc(servicio(c)?.nombre || c)}${v ? ' · ' + esc(servicio(c)?.extra?.variantes?.find((x) => x.id === v)?.etiqueta || v) : ''} · Mes ${m}</h3>${guiaHtml(guia.filter((g) => g.servicio_id === c && (g.variante_id || '') === v && g.mes === +m), false)}</div>`; }).join('')}` : ''}`);
   for (const v of $$('video[data-video]')) urlFirmada('examenes', v.dataset.video).then((u) => { if (u) v.src = u; });
   for (const b of $$('[data-ver-ex]')) b.onclick = async () => { const u = await urlFirmada('examenes', b.dataset.verEx); if (u) visor(`<img src="${u}" alt="">`); };
   for (const art of $$('[data-ex]')) {

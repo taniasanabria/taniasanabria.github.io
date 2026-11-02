@@ -249,3 +249,5 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
 .paso-examen { border: 1.5px solid var(--linea); border-radius: 14px; padding: .7rem; margin: .5rem 0; } .paso-examen.hecho { border-color: #9cc99c; background: #f3faf3; }
 .cert { border: 6px double #c9a24a; padding: 2rem; text-align: center; background: #fffdf7; border-radius: 8px; }
 @media print { .no-imprimir, .cabecera, .nav-movil, .nav-escritorio, .toast { display: none !important; } .cert { border-width: 8px; } }
+.semana-bloqueada .clase{opacity:.6;cursor:default}.semana-tit{margin:.6rem 0 0;color:var(--oro,#7a5b16);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.72rem}
+.guia-oral{margin:.5rem 0;background:#faf7f2;border:1px solid #e6dccb;border-radius:12px;padding:.5rem .8rem}.guia-oral summary{cursor:pointer;font-weight:600}.guia-oral ol{margin:.5rem 0 0;padding-left:1.2rem}.guia-oral li{margin-bottom:.45rem}
