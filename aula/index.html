@@ -14,9 +14,9 @@
   <meta name="apple-mobile-web-app-title" content="Aula Tania">
   <link rel="preload" href="../fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../fonts/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="aula.css?v=2">
+  <link rel="stylesheet" href="aula.css?v=3">
   <script src="../admin/vendor/supabase.js" defer></script>
-  <script type="module" src="aula.js?v=2"></script>
+  <script type="module" src="aula.js?v=3"></script>
 </head>
 <body>
   <header class="cabecera">
@@ -50,8 +50,6 @@
     </div>
     <p class="cam-aviso" id="cam-aviso"></p>
   </div>
-  <!-- Respaldo SOLO cámara (celulares sin acceso directo): capture="environment" abre la cámara, no la galería -->
-  <input type="file" id="cam-respaldo" accept="image/*" capture="environment" hidden>
 
   <dialog class="visor" id="visor"><button type="button" class="visor-cerrar" aria-label="Cerrar">✕</button><div id="visor-cuerpo"></div></dialog>
 </body>

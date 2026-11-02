@@ -1,8 +1,9 @@
 /*
  * Cámara del Aula: las alumnas SOLO pueden entregar fotos sacadas en el momento.
  * - Usa la cámara en vivo (getUserMedia). No hay selector de galería.
- * - Si el navegador no permite la cámara en vivo, usa <input capture="environment">, que en celulares
- *   abre directamente la cámara (no la galería) y además se descartan fotos con fecha vieja.
+ * - NO hay selector de archivos ni respaldo con <input type=file>: en algunos celulares ese respaldo deja
+ *   elegir de la galería. Si el navegador no da cámara en vivo, se pide abrir el aula en Chrome o Safari.
+ * - Cada foto lleva metadatos de la toma (blob.meta): fecha/hora, cámara usada, resolución del video.
  * - Cada foto se marca con la fecha y hora de la toma y el nombre de la alumna (sello en la imagen).
  */
 const $ = (s) => document.querySelector(s);
@@ -36,26 +37,9 @@ function cerrarFlujo() { if (flujo) { flujo.getTracks().forEach((t) => t.stop())
 
 export function camaraEnVivoDisponible() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && window.isSecureContext; }
 
-// Respaldo: input con capture (abre la cámara del celular). Rechaza fotos que no sean de recién.
-function respaldo(sello) {
-  return new Promise((ok) => {
-    const inp = $('#cam-respaldo'); inp.value = '';
-    inp.onchange = async () => {
-      const f = inp.files && inp.files[0]; if (!f) return ok([]);
-      if (f.lastModified && Date.now() - f.lastModified > 5 * 60 * 1000) { alert('Solo se aceptan fotos sacadas en este momento con la cámara.'); return ok([]); }
-      const img = await createImageBitmap(f).catch(() => null); if (!img) return ok([]);
-      ok([await sellar(img, img.width, img.height, sello)]);
-    };
-    inp.click();
-  });
-}
-
 /** Abre la cámara y devuelve hasta `max` fotos (Blob JPEG). */
 export async function tomarFotos({ max = 6, sello = 'Aula Tania Sanabria' } = {}) {
-  if (!camaraEnVivoDisponible()) {
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return respaldo(sello);
-    throw new Error('SIN_CAMARA');
-  }
+  if (!camaraEnVivoDisponible()) throw new Error('SIN_CAMARA');
   const cam = $('#camara'), v = $('#cam-video'), prev = $('#cam-preview'), aviso = $('#cam-aviso');
   const fotos = []; let pendiente = null;
   const contar = () => { $('#cam-contador').textContent = `${fotos.length} / ${max}`;
@@ -76,6 +60,9 @@ export async function tomarFotos({ max = 6, sello = 'Aula Tania Sanabria' } = {}
       if (!v.videoWidth) return;
       if (fotos.length >= max) { aviso.textContent = `Máximo ${max} fotos.`; setTimeout(() => (aviso.textContent = ''), 1800); return; }
       const blob = await sellar(v, v.videoWidth, v.videoHeight, sello);
+      const pista = flujo && flujo.getVideoTracks()[0]; const aj = pista && pista.getSettings ? pista.getSettings() : {};
+      blob.meta = { origen: 'camara-en-vivo', tomada: new Date().toISOString(), camara: frente ? 'frontal' : 'trasera',
+        etiqueta: String(pista?.label || '').slice(0, 80), ancho: v.videoWidth, alto: v.videoHeight, fps: aj.frameRate || null };
       pendiente = { blob, url: URL.createObjectURL(blob) }; prev.src = pendiente.url; modo(true);
       if (navigator.vibrate) navigator.vibrate(30);
     };

@@ -230,3 +230,10 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
   .subpestanas { top: 68px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---- Aula 2026-11: aviso IA, meses bloqueados, pagos ---- */
+.aviso-ia { margin: 1rem 0; padding: .8rem 1rem; border: 1.5px solid #e7b2ab; background: #fdf1ef; border-radius: 14px; color: var(--tinta); }
+.aviso-ia strong { color: var(--rojo); } .aviso-ia p { margin: .3rem 0 0; font-size: .88rem; }
+.modulo.bloqueado { opacity: .92; background: repeating-linear-gradient(135deg, #fff, #fff 12px, #faf6ee 12px, #faf6ee 24px); border: 1.5px dashed var(--linea); border-radius: 16px; padding: .8rem 1rem; }
+.modulo-sub { margin: .6rem 0 .2rem; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); }
+.datos-pago { white-space: pre-wrap; background: var(--marfil, #faf6ee); padding: .8rem; border-radius: 12px; font-family: inherit; user-select: all; }

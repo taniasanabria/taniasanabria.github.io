@@ -103,6 +103,18 @@ export function nombreCorto(s) {
     .trim() || s.nombre;
 }
 
+/** Acceso al Aula Virtual (cursos online para quienes no pueden asistir presencialmente). */
+export function bannerAula() {
+  return `<aside class="banner-aula" aria-labelledby="titulo-aula">
+      <div class="banner-aula-texto">
+        <p class="sobretitulo">Cursos online</p>
+        <h3 id="titulo-aula">Aula Virtual <span class="acento">Tania Sanabria</span></h3>
+        <p>¿No podés asistir a las clases presenciales? Cursá desde tu casa: materiales en PDF por módulo y nivel, entregas de cada clase con fotos tomadas con la cámara, correcciones de la profe y exámenes por videollamada.</p>
+      </div>
+      <a class="btn btn-primario btn-grande" href="aula/">Entrar al Aula Virtual</a>
+    </aside>`;
+}
+
 export function seccionCategoria(cat, servicios, manifiesto) {
   const lista = servicios.filter((s) => s.categoria === cat.id);
   const subs = lista.length > 2
@@ -118,6 +130,7 @@ export function seccionCategoria(cat, servicios, manifiesto) {
       <h2 id="titulo-${esc(cat.id)}">${esc(cat.tituloSeccion)} <span class="acento">${esc(cat.resaltado)}</span></h2>
       <p class="seccion-bajada">${esc(cat.descripcion)}</p>
     </header>
+    ${cat.id === 'academia' ? bannerAula() : ''}
     ${subs}
     <div class="grilla">${lista.map((s) => tarjetaServicio(s, manifiesto)).join('')}
     </div>

@@ -18,6 +18,7 @@
   <script src="mensajes-aprobacion.js"></script>
   <script type="module" src="admin.js?v=20261102"></script>
   <script type="module" src="extras.js?v=20261102"></script>
+  <script type="module" src="aula-admin.js?v=20261102"></script>
 </head>
 <body>
   <div class="cargando" id="vista-cargando"><img src="../img/logo-completo-320.webp" width="120" height="105" alt=""><p>Cargando…</p></div>
@@ -171,6 +172,11 @@
         </div>
         <div id="lista-inscripciones" class="lista"></div>
         <p class="suave">Al inscribirse se paga <strong>solo la matrícula</strong>. El curso se abona aparte, durante el curso.</p>
+
+        <section id="aula-admin" hidden>
+          <h3 class="subtitulo">🎓 Aula Virtual (cursos online)</h3>
+          <div id="aula-admin-cuerpo"></div>
+        </section>
 
         <div class="tab-cabecera">
           <h3 class="subtitulo">Mis cursos</h3>

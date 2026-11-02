@@ -591,3 +591,14 @@ html { scroll-padding-top: calc(var(--alto-cabecera) + 70px); }
 .dialogo-comprobante .dialogo-cuerpo { position: relative; }
 .dialogo-comprobante [data-x] { position: absolute; top: .4rem; right: .4rem; border: 0; background: none; font-size: 1.2rem; cursor: pointer; padding: .5rem; }
 #reserva-ok-registrada.con-pago p:has(.btn-wa-texto), #reserva-ok-registrada.con-pago p:has(+ p .btn-wa-texto) { display: none; }
+
+/* ---------- Acceso al Aula Virtual (cursos online) ---------- */
+.cabecera-acciones { display: flex; align-items: center; gap: .5rem; }
+.enlace-aula { white-space: nowrap; }
+@media (max-width: 420px) { .marca-sub { display: none; } .enlace-aula { padding-inline: .7rem; font-size: .8rem; } }
+.banner-aula { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem;
+  margin: 0 0 1.6rem; padding: clamp(1.1rem, 3vw, 1.8rem); border: 1px solid var(--oro-claro); border-radius: 20px;
+  background: linear-gradient(135deg, #fffaf0, rgba(233, 209, 140, .28)); }
+.banner-aula-texto { flex: 1 1 320px; }
+.banner-aula h3 { font-family: var(--titulos); font-size: clamp(1.3rem, 3vw, 1.7rem); margin: .2rem 0 .4rem; color: var(--tinta); }
+.banner-aula p { margin: 0; }

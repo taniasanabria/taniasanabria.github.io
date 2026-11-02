@@ -59,7 +59,7 @@ function cargarCss() {
 
 const whatsapp = () => api.catalogo().negocio.whatsapp;
 const urlWa = (texto) => `https://api.whatsapp.com/send?phone=${whatsapp()}&text=${encodeURIComponent(texto)}`;
-const urlAula = () => new URL((api.catalogo().alumnas || 'alumnas/'), URL_SITIO || location.href).href;
+const urlAula = () => new URL((api.catalogo().aula || 'aula/'), URL_SITIO || location.href).href;
 
 function construir() {
   dlg = document.createElement('dialog');
@@ -352,7 +352,7 @@ function mostrarOk(d) {
     ${aparte}
     <ol class="ins-pasos">
       ${pasos}
-      <li>Cuando Tania confirme tu ${conMatricula ? 'matrícula' : 'inscripción'}, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el aula de alumnas</a>.</li>
+      <li>Cuando Tania confirme tu ${conMatricula ? 'matrícula' : 'inscripción'}, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el Aula Virtual</a>.</li>
     </ol>
     <div id="ins-comprobante" hidden></div>
     <a class="btn btn-primario btn-grande btn-ancho" id="ins-wa" href="${esc(urlWa(mensajeComprobante(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} ${d.modo === 'online' && conMatricula ? 'Enviar comprobante por WhatsApp' : d.modo === 'online' ? 'Avisar a Tania por WhatsApp' : 'Escribir a Tania por WhatsApp'}</a>

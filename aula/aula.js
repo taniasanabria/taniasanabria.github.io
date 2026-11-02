@@ -16,7 +16,9 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let sb;
-const E = { user: null, perfil: null, admin: false, servicios: [], misCursos: [], inscripciones: [], entregas: [], urls: new Map() };
+const E = { user: null, perfil: null, admin: false, servicios: [], misCursos: [], inscripciones: [], entregas: [], urls: new Map(),
+  v2: false, avance: [], examenes: [], pagos: [], whatsapp: '595976122979' };
+// v2 = la base ya tiene supabase/migracion-aula-2026-11-02.sql (meses por pago, niveles, pagos, exámenes). Sin ella el aula funciona como antes.
 
 // ---------- Íconos (trazo fino, estilo del sitio) ----------
 const I = {
@@ -50,11 +52,19 @@ function errorTxt(e) {
   const m = `${e?.code || ''} ${e?.message || e || ''}`;
   const T = { COMPLETA_TU_PERFIL: 'Completá tu nombre y celular en tu perfil para inscribirte.', YA_INSCRIPTA: 'Ya te inscribiste a este curso.', DEMASIADAS_SOLICITUDES: 'Ya hay solicitudes pendientes. Esperá la confirmación de Tania.',
     SIN_ACCESO_AL_CURSO: 'Todavía no tenés acceso a este curso.', FOTO_INVALIDA: 'La foto no es válida. Volvé a sacarla.', DEMASIADAS_ENTREGAS: 'Llegaste al máximo de entregas por hoy.',
-    NO_AUTORIZADO: 'No tenés permiso para esto.', 'Invalid login': 'Email o contraseña incorrectos.', 'already registered': 'Ese email ya tiene cuenta. Tocá "Entrar".',
+    NO_AUTORIZADO: 'No tenés permiso para esto.', MES_BLOQUEADO: 'Ese mes todavía no está habilitado. Primero la profe tiene que confirmar tu pago.',
+    PAGO_YA_ENVIADO: 'Ya enviaste un comprobante. Esperá que la profe lo confirme.', COMPROBANTE_INVALIDO: 'No se pudo registrar el comprobante. Volvé a subirlo.',
+    EXAMEN_YA_PEDIDO: 'Ya pediste tu examen. La profe te va a escribir para agendar la videollamada.', REENTREGA_INVALIDA: 'Solo podés volver a presentar trabajos anulados o para rehacer.', 'Invalid login': 'Email o contraseña incorrectos.', 'already registered': 'Ese email ya tiene cuenta. Tocá "Entrar".',
     'Email not confirmed': 'Confirmá tu email: te enviamos un enlace a tu correo.', 'Password should': 'La contraseña debe tener al menos 6 caracteres.', fetch: 'Sin conexión. Revisá internet e intentá de nuevo.' };
   for (const k in T) if (m.includes(k)) return T[k];
   return e?.message || 'Ocurrió un error. Intentá de nuevo.';
 }
+const AVISO_IA = `<div class="aviso-ia" role="note"><strong>⚠️ Importante: no uses inteligencia artificial</strong>
+  <p>Si se detecta que usaste IA (ChatGPT, generadores o editores de imágenes, filtros, etc.) en tus respuestas o en tus fotos, <b>la clase queda anulada</b>.
+  Tenés derecho a <b>volver a presentarla</b>, hecha por vos y con fotos tomadas en el momento con la cámara del aula.</p></div>`;
+const waUrl = (texto) => `https://wa.me/${E.whatsapp}?text=${encodeURIComponent(texto)}`;
+const gs = (n) => 'Gs. ' + Number(n || 0).toLocaleString('es-PY');
+const avanceDe = (id) => E.avance.filter((a) => a.servicio_id === id).sort((a, b) => b.meses_habilitados - a.meses_habilitados)[0];
 const nombreCorto = () => (E.perfil?.nombre || E.user?.email || '').split(/[\s@]/)[0];
 
 // ---------- Datos ----------
@@ -64,8 +74,28 @@ async function cargarServicios() {
 }
 const servicio = (id) => E.servicios.find((s) => s.id === id);
 async function cargarAlumna() {
-  const [c, i, e] = await Promise.all([sb.rpc('mis_cursos'), sb.rpc('aula_mis_inscripciones'), sb.from('entregas').select('*').order('creado', { ascending: false })]);
+  const [c, i, e, av] = await Promise.all([sb.rpc('mis_cursos'), sb.rpc('aula_mis_inscripciones'), sb.from('entregas').select('*').order('creado', { ascending: false }), sb.rpc('aula_mi_avance')]);
   E.misCursos = c.data || []; E.inscripciones = i.data || []; E.entregas = e.data || [];
+  E.v2 = !av.error; E.avance = av.data || [];
+  if (E.v2) {
+    const [x, p] = await Promise.all([sb.from('aula_examenes').select('*').order('creado', { ascending: false }), sb.from('aula_pagos').select('*').order('creado', { ascending: false })]);
+    E.examenes = x.data || []; E.pagos = p.data || [];
+  }
+}
+async function cargarWhatsapp() { const { data } = await sb.from('ajustes').select('whatsapp').limit(1).maybeSingle(); if (data?.whatsapp) E.whatsapp = data.whatsapp; }
+// Tiempo real: cuando la profe confirma un pago, corrige o agenda el examen, el aula se actualiza sola.
+let canalAula = null;
+function escucharCambios() {
+  if (canalAula || !E.v2) return;
+  let t = null; const refrescar = () => { clearTimeout(t); t = setTimeout(async () => {
+    if (E.admin) { await contarPendientes(); navegacion(); marcarNav(); if (/^#\/admin(\/pagos)?$/.test(location.hash || '#/admin')) router(); return; }
+    // No repintar si la alumna está a mitad de una entrega o de un pago
+    await cargarAlumna(); if (!/^#\/(entregar|pagar)/.test(location.hash)) router(); }, 400); };
+  canalAula = sb.channel('aula-alumna')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_pagos' }, refrescar)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_examenes' }, refrescar)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'entregas' }, refrescar)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inscripciones' }, refrescar).subscribe();
 }
 async function urlFirmada(bucket, ruta) {
   const k = bucket + '/' + ruta; if (E.urls.has(k)) return E.urls.get(k);
@@ -81,7 +111,8 @@ async function hidratarFotos(raiz = document) {
 function navegacion() {
   const al = [['#/', 'casa', 'Mi sala'], ['#/cursos', 'libro', 'Cursos'], ['#/notas', 'estrella', 'Mis notas'], ['#/perfil', 'usuario', 'Perfil']];
   const pend = E.adminPend || 0;
-  const ad = [['#/admin', 'check', 'Corregir', pend], ['#/admin/materiales', 'subir', 'Materiales'], ['#/admin/alumnas', 'alumnas', 'Alumnas'], ['#/perfil', 'usuario', 'Perfil']];
+  const ad = [['#/admin', 'check', 'Corregir', pend], ['#/admin/materiales', 'subir', 'Materiales'], ['#/admin/alumnas', 'alumnas', 'Alumnas'],
+    ...(E.v2 ? [['#/admin/pagos', 'lista', 'Pagos y exámenes', E.adminPagos || 0]] : []), ['#/perfil', 'usuario', 'Perfil']];
   const items = E.admin ? ad : al;
   const html = items.map(([h, i, t, n]) => `<a href="${h}" data-ruta="${h}">${ic(i)}<span>${t}</span>${n ? `<span class="globo">${n}</span>` : ''}</a>`).join('');
   $('#nav-escritorio').innerHTML = html; $('#nav-movil').innerHTML = html; $('#nav-movil').hidden = false;
@@ -170,15 +201,19 @@ async function iniciarSesion() {
   const { data } = await sb.auth.getUser(); E.user = data.user;
   if (!E.user) return vistaIngreso();
   const a = await sb.rpc('es_admin'); E.admin = a.data === true;
-  await cargarServicios();
+  await Promise.all([cargarServicios(), cargarWhatsapp()]);
   if (E.admin) { await contarPendientes(); }
   else { await asegurarPerfil(); await cargarAlumna(); }
+  escucharCambios();
   navegacion();
   if (!E.admin && !E.perfil) location.hash = '#/perfil';
   else if (E.admin && !location.hash.startsWith('#/admin') && location.hash !== '#/perfil') location.hash = '#/admin';
   router();
 }
-async function contarPendientes() { const r = await sb.rpc('admin_entregas', { p_curso: null, p_estado: 'enviada' }); E.adminPend = (r.data || []).length; }
+async function contarPendientes() {
+  const [r, p] = await Promise.all([sb.rpc('admin_entregas', { p_curso: null, p_estado: 'enviada' }), sb.rpc('admin_pagos_aula', { p_estado: 'pendiente' })]);
+  E.adminPend = (r.data || []).length; E.v2 = !p.error; E.adminPagos = (p.data || []).length;
+}
 
 // ---------- Alumna: Mi sala ----------
 function tarjetaMiCurso(c) {
@@ -247,9 +282,12 @@ const TIPO_IC = { video: 'video', enlace: 'enlace' };
 async function vistaCurso(id, pestana = 'clases') {
   const s = servicio(id); const tiene = E.misCursos.some((c) => c.servicio_id === id);
   if (!s || !tiene) { pintar(`<a class="volver" href="#/">‹ Mi sala</a><div class="vacio"><span class="grande">🔒</span>Este curso todavía no está habilitado para vos.<br><br><a class="btn btn-oro" href="#/cursos">Ver cursos</a></div>`); return; }
-  const { data: lecciones } = await sb.from('lecciones').select('*').eq('servicio_id', id).eq('activo', true).order('orden').order('creado');
+  // La base solo devuelve las clases de tu nivel y de los meses ya habilitados (RLS). El programa dice qué meses existen.
+  const [{ data: lecciones }, prog] = await Promise.all([
+    sb.from('lecciones').select('*').eq('servicio_id', id).eq('activo', true).order('orden').order('creado'),
+    E.v2 ? sb.rpc('aula_programa', { p_curso: id }) : Promise.resolve({ data: [] })]);
+  const av = avanceDe(id); const hab = av?.meses_habilitados || 1;
   const ent = E.entregas.filter((e) => e.servicio_id === id);
-  const mods = new Map(); for (const l of lecciones || []) { const m = l.modulo || 'General'; if (!mods.has(m)) mods.set(m, []); mods.get(m).push(l); }
   const programa = (s.extra?.detalles || []).map((d) => d.texto);
   const clase = (l) => {
     const img = l.tipo === 'archivo' && /\.(jpg|png|webp)$/.test(l.archivo);
@@ -257,18 +295,97 @@ async function vistaCurso(id, pestana = 'clases') {
     const tipo = l.tipo === 'archivo' ? (img ? 'Foto' : 'PDF') : l.tipo === 'video' ? 'Video' : 'Enlace';
     return `<button class="clase" data-leccion="${l.id}"><span class="clase-ic">${icono}</span><span><strong>${esc(l.titulo)}</strong><small>${tipo}${l.descripcion ? ' · ' + esc(l.descripcion.slice(0, 80)) : ''}</small></span><span class="flecha">›</span></button>`;
   };
-  const tabClases = mods.size ? [...mods].map(([m, ls], i) => `<section class="modulo"><h3><span class="modulo-num">${i + 1}</span>${esc(m)}</h3>${ls.map(clase).join('')}</section>`).join('')
-    : `<div class="vacio"><span class="grande">📚</span>La profe todavía no subió materiales a este curso.<br>Te van a aparecer acá.</div>
-       ${programa.length ? `<div class="tarjeta" style="margin-top:1rem"><h3>${esc(s.extra?.detallesTitulo || 'Programa')}</h3><ul class="modulos">${programa.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}`;
+  const porModulo = (ls) => { const mods = new Map(); for (const l of ls) { const m = l.modulo || 'General'; if (!mods.has(m)) mods.set(m, []); mods.get(m).push(l); } return mods; };
+  let tabClases;
+  if (E.v2) {
+    const meses = new Map((prog.data || []).map((m) => [m.mes, m]));
+    for (const l of lecciones || []) if (!meses.has(l.mes || 1)) meses.set(l.mes || 1, { mes: l.mes || 1, abierto: true, clases: 0, modulos: [] });
+    const lista = [...meses.values()].sort((a, b) => a.mes - b.mes);
+    const pendiente = E.pagos.find((p) => p.inscripcion_id === av?.inscripcion_id && p.estado === 'pendiente');
+    const rechazado = E.pagos.find((p) => p.inscripcion_id === av?.inscripcion_id && p.estado === 'rechazado' && p.mes === hab + 1);
+    tabClases = lista.length ? lista.map((m) => {
+      if (m.abierto && m.mes <= hab) {
+        const ls = (lecciones || []).filter((l) => (l.mes || 1) === m.mes);
+        return `<section class="modulo"><h3><span class="modulo-num">${m.mes}</span>Mes ${m.mes}</h3>${[...porModulo(ls)].map(([mod, x]) => `<p class="modulo-sub">${esc(mod)}</p>${x.map(clase).join('')}`).join('') || '<p class="chico suave">Sin materiales todavía.</p>'}</section>`;
+      }
+      const siguiente = m.mes === hab + 1;
+      return `<section class="modulo bloqueado"><h3><span class="modulo-num">🔒</span>Mes ${m.mes} <span class="chico suave">· ${m.clases} clase${m.clases === 1 ? '' : 's'}</span></h3>
+        <p class="chico" style="margin:.3rem 0">${siguiente ? (pendiente ? '<span class="etiqueta ambar">Comprobante enviado</span> La profe lo está revisando. Apenas confirme el pago, este mes se abre solo.'
+          : `${rechazado ? `<span class="etiqueta rojo">Pago no confirmado</span> ${esc(rechazado.respuesta || 'Revisá el comprobante y volvé a enviarlo.')}<br>` : ''}Para entrar a este mes tenés que abonar la cuota por transferencia y que la profe confirme el pago.`) : 'Se habilita después del mes anterior.'}</p>
+        ${siguiente && !pendiente && av ? `<a class="btn btn-oro btn-chico" href="#/pagar/${esc(av.inscripcion_id)}">Pagar el mes ${m.mes}</a>` : ''}</section>`;
+    }).join('') : `<div class="vacio"><span class="grande">📚</span>La profe todavía no subió materiales a tu nivel.<br>Te van a aparecer acá.</div>`;
+    if (av && !lista.some((m) => m.mes === hab + 1) && !pendiente && hab < (av.meses_curso || 0) + 1 && lista.length) {
+      tabClases += `<div class="tarjeta chico">¿Ya tenés que pagar el mes ${hab + 1}? <a href="#/pagar/${esc(av.inscripcion_id)}">Enviar comprobante</a></div>`;
+    }
+  } else {
+    const mods = porModulo(lecciones || []);
+    tabClases = mods.size ? [...mods].map(([m, ls], i) => `<section class="modulo"><h3><span class="modulo-num">${i + 1}</span>${esc(m)}</h3>${ls.map(clase).join('')}</section>`).join('')
+      : `<div class="vacio"><span class="grande">📚</span>La profe todavía no subió materiales a este curso.<br>Te van a aparecer acá.</div>`;
+  }
+  if (!(lecciones || []).length && programa.length) tabClases += `<div class="tarjeta" style="margin-top:1rem"><h3>${esc(s.extra?.detallesTitulo || 'Programa')}</h3><ul class="modulos">${programa.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`;
   const tabTrabajos = (ent.length ? ent.map((e) => tarjetaEntrega(e)).join('') : '<div class="vacio"><span class="grande">📷</span>Todavía no entregaste trabajos en este curso.</div>');
+  const ex = E.examenes.filter((x) => x.servicio_id === id); const exAbierto = ex.find((x) => ['solicitado', 'agendado'].includes(x.estado));
+  const EX_TXT = { solicitado: ['ambar', 'Pedido: la profe te escribe para agendar'], agendado: ['', 'Agendado'], aprobado: ['verde', 'Aprobado'], desaprobado: ['rojo', 'No aprobado'] };
+  const tabExamen = `<div class="tarjeta"><h2 style="margin-top:0">${ic('video')} Examen por videollamada</h2>
+    <p>Las alumnas del curso online rinden el examen <strong>por videollamada de WhatsApp</strong> con la profe Tania. Vas a maquillar en vivo y la profe te va a ir pidiendo pasos y mirando el resultado.</p>
+    <ul class="modulos"><li>Tené buena luz, el celular apoyado y tus productos a mano.</li><li>Conectate desde el número de WhatsApp de tu perfil (${esc(E.perfil?.telefono || 'completalo en Perfil')}).</li><li>La profe te confirma el día y la hora por acá y por WhatsApp.</li></ul>
+    ${ex.map((x) => `<p class="chico"><span class="etiqueta ${EX_TXT[x.estado]?.[0] || 'gris'}">${EX_TXT[x.estado]?.[1] || esc(x.estado)}</span> Mes ${x.mes}${x.fecha ? ' · <strong>' + fechaHora(x.fecha) + '</strong>' : ''}${x.nota_profe ? ' · ' + esc(x.nota_profe) : ''}</p>`).join('')}
+    ${E.v2 && !exAbierto ? `<form id="f-examen" novalidate><label for="x-pref">¿Qué días y horarios te quedan bien?</label><input id="x-pref" maxlength="300" placeholder="Ej: martes o jueves de tarde">
+      <button class="btn btn-oro" style="margin-top:.6rem">Pedir mi examen</button></form>` : ''}
+    <div class="fila" style="margin-top:.8rem"><a class="btn btn-borde" target="_blank" rel="noopener" href="${esc(waUrl(`Hola profe Tania, soy ${E.perfil?.nombre || ''}, alumna online de ${s.nombre}. Quiero coordinar mi examen por videollamada.`))}">${ic('video')} Coordinar por WhatsApp</a></div></div>`;
+  const tabs = [['clases', 'libro', 'Clases'], ['trabajos', 'camara', `Mis trabajos (${ent.length})`], ['examen', 'video', 'Examen']];
   pintar(`<a class="volver" href="#/">‹ Mi sala</a>
-    <div class="cabeza-curso" style="background-image:url('${portada(id, 1440)}')"><span class="etiqueta" style="align-self:flex-start">${(lecciones || []).length} clases · ${mods.size || programa.length} módulos</span><h1>${esc(s.extra?.tituloDetalle || s.nombre)}</h1><p style="margin:0;opacity:.9">${esc(s.extra?.subtitulo || '')}</p></div>
-    <div class="subpestanas" role="tablist"><button role="tab" data-tab="clases" aria-selected="${pestana === 'clases'}">${ic('libro')} Clases</button><button role="tab" data-tab="trabajos" aria-selected="${pestana === 'trabajos'}">${ic('camara')} Mis trabajos (${ent.length})</button></div>
-    <div id="tab-clases" ${pestana === 'clases' ? '' : 'hidden'}>${tabClases}</div><div id="tab-trabajos" ${pestana === 'trabajos' ? '' : 'hidden'}>${tabTrabajos}</div>
+    <div class="cabeza-curso" style="background-image:url('${portada(id, 1440)}')"><span class="etiqueta" style="align-self:flex-start">${(lecciones || []).length} clases${E.v2 ? ` · Mes ${hab} habilitado` : ''}</span><h1>${esc(s.extra?.tituloDetalle || s.nombre)}</h1><p style="margin:0;opacity:.9">${esc(av?.curso_nombre || s.extra?.subtitulo || '')}</p></div>
+    ${AVISO_IA}
+    <div class="subpestanas" role="tablist">${tabs.map(([t, i, n]) => `<button role="tab" data-tab="${t}" aria-selected="${pestana === t}">${ic(i)} ${n}</button>`).join('')}</div>
+    <div id="tab-clases" data-panel ${pestana === 'clases' ? '' : 'hidden'}>${tabClases}</div><div id="tab-trabajos" data-panel ${pestana === 'trabajos' ? '' : 'hidden'}>${tabTrabajos}</div>
+    <div id="tab-examen" data-panel ${pestana === 'examen' ? '' : 'hidden'}>${tabExamen}</div>
     <a class="btn btn-oro fab" href="#/entregar/${esc(id)}">${ic('camara')} Entregar trabajo</a>`);
-  for (const b of $$('[data-tab]')) b.onclick = () => { for (const x of $$('[data-tab]')) x.setAttribute('aria-selected', x === b); $('#tab-clases').hidden = b.dataset.tab !== 'clases'; $('#tab-trabajos').hidden = b.dataset.tab !== 'trabajos'; };
+  for (const b of $$('[data-tab]')) b.onclick = () => { for (const x of $$('[data-tab]')) x.setAttribute('aria-selected', x === b); for (const p of $$('[data-panel]')) p.hidden = p.id !== 'tab-' + b.dataset.tab; };
   for (const b of $$('[data-leccion]')) b.onclick = () => abrirLeccion((lecciones || []).find((l) => l.id === b.dataset.leccion));
+  $('#f-examen')?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const btn = e.target.querySelector('button'); btn.disabled = true;
+    const { error } = await sb.rpc('aula_pedir_examen', { p_curso: id, p_preferencia: $('#x-pref').value.trim() });
+    if (error) { btn.disabled = false; return toast(errorTxt(error), true); }
+    await cargarAlumna(); toast('¡Listo! La profe te va a escribir para agendar la videollamada.'); vistaCurso(id, 'examen');
+  });
   hidratarFotos();
+}
+
+// ---------- Alumna: pagar el mes siguiente (transferencia) ----------
+async function vistaPagar(inscId) {
+  const av = E.avance.find((a) => a.inscripcion_id === inscId); if (!E.v2 || !av) { location.hash = '#/'; return; }
+  const mes = av.meses_habilitados + 1; const pend = E.pagos.find((p) => p.inscripcion_id === inscId && p.estado === 'pendiente');
+  const volver = `<a class="volver" href="#/curso/${esc(av.servicio_id)}">‹ ${esc(av.curso_nombre)}</a>`;
+  if (pend) { pintar(`${volver}<div class="vacio"><span class="grande">⏳</span>Ya enviaste el comprobante del mes ${pend.mes}. La profe lo está revisando; apenas lo confirme, el mes se abre solo.</div>`); return; }
+  pintar(`${volver}<h1>Pagar el mes ${mes}</h1><div class="tarjeta" style="max-width:620px">
+    <p>El acceso a cada mes se habilita <strong>solo con pago por transferencia</strong>, cuando la profe confirma que recibió el pago.</p>
+    ${av.cuota_gs ? `<p>Cuota del curso: <strong>${gs(av.cuota_gs)}</strong></p>` : ''}
+    <div id="pago-paso1"><button class="btn btn-oro btn-ancho" id="pago-quiero">Sí, quiero pagar el mes ${mes} — ver datos para transferir</button></div>
+    <div id="pago-paso2" hidden></div></div>`);
+  $('#pago-quiero').onclick = async () => {
+    const { data, error } = await sb.rpc('aula_datos_pago', { p_inscripcion: inscId }); if (error) return toast(errorTxt(error), true);
+    $('#pago-paso1').hidden = true; const d = $('#pago-paso2'); d.hidden = false;
+    d.innerHTML = `<h3>1. Transferí a esta cuenta</h3><pre class="datos-pago">${esc(data.datos_pago || 'La profe te pasa los datos por WhatsApp.')}</pre>
+      <p class="chico suave">En el concepto poné: <strong>Ref. ${esc(data.referencia)} – mes ${mes}</strong></p>
+      <h3>2. Subí el comprobante</h3><form id="f-pago" novalidate><label class="subir">${ic('subir')} <span id="pago-arch">Elegir captura o PDF del comprobante</span><input type="file" id="pago-file" accept="image/jpeg,image/png,image/webp,application/pdf"></label>
+      <label for="pago-nota">Nota (opcional)</label><input id="pago-nota" maxlength="500" placeholder="Ej: transferí desde la cuenta de mi mamá">
+      <p class="error" id="pago-error"></p><button class="btn btn-oro btn-ancho" id="pago-btn">Enviar comprobante a la profe</button></form>`;
+    $('#pago-file').onchange = (e) => { $('#pago-arch').textContent = e.target.files[0]?.name || 'Elegir comprobante'; };
+    $('#f-pago').onsubmit = async (e) => {
+      e.preventDefault(); const err = $('#pago-error'); err.textContent = ''; const file = $('#pago-file').files[0];
+      if (!file) return (err.textContent = 'Elegí la captura o el PDF del comprobante.');
+      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' }[file.type];
+      if (!ext) return (err.textContent = 'Solo JPG, PNG, WEBP o PDF.'); if (file.size > 8388608) return (err.textContent = 'El archivo pesa más de 8 MB.');
+      const btn = $('#pago-btn'); btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const ruta = `${E.user.id}/${crypto.randomUUID()}.${ext}`;
+        const up = await sb.storage.from('pagos-aula').upload(ruta, file, { contentType: file.type, upsert: false }); if (up.error) throw up.error;
+        const { error: e2 } = await sb.rpc('aula_enviar_pago', { p_inscripcion: inscId, p_ruta: ruta, p_nota: $('#pago-nota').value.trim() }); if (e2) throw e2;
+        await cargarAlumna(); toast('¡Comprobante enviado! Te avisamos acá cuando la profe lo confirme.'); location.hash = `#/curso/${av.servicio_id}`;
+      } catch (x) { err.textContent = errorTxt(x); btn.disabled = false; btn.textContent = 'Enviar comprobante a la profe'; }
+    };
+  };
 }
 async function abrirLeccion(l) {
   if (!l) return;
@@ -285,12 +402,18 @@ function visor(html) { const d = $('#visor'); $('#visor-cuerpo').innerHTML = htm
 
 function tarjetaEntrega(e, conCurso = false) {
   const s = servicio(e.servicio_id);
-  const est = e.estado === 'enviada' ? '<span class="etiqueta gris">Esperando corrección</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Para rehacer</span>' : '<span class="etiqueta verde">Corregido</span>';
+  const est = e.estado === 'enviada' ? '<span class="etiqueta gris">Esperando corrección</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Para rehacer</span>'
+    : e.estado === 'anulada_ia' ? '<span class="etiqueta rojo">Anulada por uso de IA</span>' : '<span class="etiqueta verde">Corregido</span>';
+  const yaRehecha = E.entregas.some((x) => x.reemplaza_id === e.id);
+  const reentregar = !E.admin && E.v2 && ['anulada_ia', 'rehacer'].includes(e.estado) && !yaRehecha
+    ? `<a class="btn btn-oro btn-chico" href="#/entregar/${esc(e.servicio_id)}?reemplaza=${esc(e.id)}">${ic('camara')} Volver a presentar</a>` : yaRehecha ? '<span class="chico suave">Ya la volviste a presentar ✓</span>' : '';
   return `<article class="entrega"><div class="entrega-cab"><div><h3>${esc(e.titulo)}</h3><span class="chico suave">${conCurso && s ? esc(s.nombre) + ' · ' : ''}${e.modulo ? esc(e.modulo) + ' · ' : ''}${fechaHora(e.creado)}</span></div>${est}</div>
     <div class="fotos">${e.fotos.map((f) => `<button data-ver="${esc(f)}"><img data-bucket="entregas" data-ruta="${esc(f)}" alt="Foto del trabajo"></button>`).join('')}</div>
     ${e.mensaje ? `<p class="chico" style="margin:.2rem 0">💬 ${esc(e.mensaje)}</p>` : ''}
     ${e.calificacion ? `<div class="nota"><span class="nota-num">${e.calificacion}</span><div><div class="estrellas">${estrellas(e.calificacion)}</div><strong>${NOTA_TXT[e.calificacion]}</strong></div></div>` : ''}
-    ${e.comentario ? `<div class="comentario"><b><img src="../img/retrato-280.webp" alt="">Comentario de la profe Tania</b>${esc(e.comentario).replace(/\n/g, '<br>')}</div>` : ''}</article>`;
+    ${e.estado === 'anulada_ia' ? `<p class="chico" style="margin:.3rem 0;color:var(--rojo)">La profe detectó uso de inteligencia artificial en las respuestas o en las fotos, por eso la clase quedó anulada. Podés volver a presentarla.</p>` : ''}
+    ${e.comentario ? `<div class="comentario"><b><img src="../img/retrato-280.webp" alt="">Comentario de la profe Tania</b>${esc(e.comentario).replace(/\n/g, '<br>')}</div>` : ''}
+    ${e.reemplaza_id ? '<p class="chico suave" style="margin:.2rem 0">↻ Reentrega de una clase anterior</p>' : ''}${reentregar ? `<div class="acciones">${reentregar}</div>` : ''}</article>`;
 }
 document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-ver]'); if (!b) return;
@@ -298,15 +421,19 @@ document.addEventListener('click', async (ev) => {
 });
 
 // ---------- Alumna: entregar trabajo (solo cámara) ----------
-function vistaEntregar(id) {
+function vistaEntregar(id, q = '') {
   const s = servicio(id); if (!E.misCursos.some((c) => c.servicio_id === id)) { location.hash = '#/'; return; }
   const fotos = []; const mods = [...new Set((s.extra?.detalles || []).map((d) => d.texto))];
-  pintar(`<a class="volver" href="#/curso/${esc(id)}">‹ ${esc(s.nombre)}</a><h1>Entregar trabajo práctico</h1>
+  const reemplaza = new URLSearchParams(q).get('reemplaza'); const previa = reemplaza && E.entregas.find((x) => x.id === reemplaza);
+  const hab = avanceDe(id)?.meses_habilitados || 1;
+  pintar(`<a class="volver" href="#/curso/${esc(id)}">‹ ${esc(s.nombre)}</a><h1>${previa ? 'Volver a presentar' : 'Entregar trabajo práctico'}</h1>
+    ${previa ? `<p class="suave">Reentrega de <strong>${esc(previa.titulo)}</strong>.</p>` : ''}${AVISO_IA}
     <div class="tarjeta"><form id="f-entrega" novalidate>
       <div class="paso"><span class="paso-num">1</span><div style="flex:1"><strong>¿Qué trabajo es?</strong>
-        <label for="e-titulo">Título</label><input id="e-titulo" name="titulo" required maxlength="160" placeholder="Ej: Smokey eyes – práctica 1">
+        <label for="e-titulo">Título</label><input id="e-titulo" name="titulo" required maxlength="160" placeholder="Ej: Smokey eyes – práctica 1" value="${esc(previa ? previa.titulo : '')}">
+        ${E.v2 ? `<label for="e-mes">Mes de la clase</label><select id="e-mes" name="mes">${Array.from({ length: hab }, (_, i) => hab - i).map((m) => `<option value="${m}" ${previa?.mes === m ? 'selected' : ''}>Mes ${m}</option>`).join('')}</select>` : ''}
         ${mods.length ? `<label for="e-modulo">Módulo (opcional)</label><select id="e-modulo" name="modulo"><option value="">—</option>${mods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>` : ''}</div></div>
-      <div class="paso"><span class="paso-num">2</span><div style="flex:1"><strong>Sacá las fotos con la cámara</strong><p class="chico suave" style="margin:.2rem 0">Solo se aceptan fotos sacadas ahora mismo (no de la galería), así la profe ve tu trabajo real. Hasta 6 fotos.</p>
+      <div class="paso"><span class="paso-num">2</span><div style="flex:1"><strong>Sacá las fotos con la cámara</strong><p class="chico suave" style="margin:.2rem 0">Solo se aceptan fotos sacadas ahora mismo con la cámara del aula: no se puede elegir de la galería ni subir fotos de otras aplicaciones. Hasta 6 fotos.</p>
         <div class="tomadas" id="tomadas"></div><div class="sello-camara">${ic('check')} Cada foto queda sellada con tu nombre, la fecha y la hora.</div></div></div>
       <div class="paso"><span class="paso-num">3</span><div style="flex:1"><label for="e-msj" style="margin-top:0">Mensaje para la profe (opcional)</label><textarea id="e-msj" name="mensaje" maxlength="1000" placeholder="Contale qué productos usaste o qué te costó…"></textarea></div></div>
       <p class="error" id="e-error" role="alert"></p><button class="btn btn-oro btn-ancho" id="e-btn">Enviar a la profe</button>
@@ -317,7 +444,7 @@ function vistaEntregar(id) {
   const abrirCam = async () => {
     try { const nuevas = await tomarFotos({ max: 6 - fotos.length, sello: `${E.perfil?.nombre || E.user.email} · Aula Tania Sanabria` });
       for (const b of nuevas) fotos.push({ blob: b, url: URL.createObjectURL(b) }); pintarFotos(); }
-    catch (x) { toast(x.message === 'PERMISO_CAMARA' ? 'Permití el acceso a la cámara para poder entregar.' : 'No encontramos una cámara en este dispositivo. Entregá desde tu celular.', true); }
+    catch (x) { toast(x.message === 'PERMISO_CAMARA' ? 'Permití el acceso a la cámara para poder entregar.' : 'No pudimos abrir la cámara en vivo. Abrí el aula en Chrome (Android) o Safari (iPhone) actualizado y volvé a intentar.', true); }
   };
   pintarFotos();
   $('#f-entrega').onsubmit = async (ev) => {
@@ -334,7 +461,10 @@ function vistaEntregar(id) {
         rutas.push(ruta);
       }
       btn.textContent = 'Enviando…';
-      const { error } = await sb.from('entregas').insert({ servicio_id: id, titulo: f.titulo.value.trim(), modulo: f.modulo?.value || null, mensaje: f.mensaje.value.trim(), fotos: rutas });
+      const fila = { servicio_id: id, titulo: f.titulo.value.trim(), modulo: f.modulo?.value || null, mensaje: f.mensaje.value.trim(), fotos: rutas };
+      if (E.v2) Object.assign(fila, { mes: +(f.mes?.value || hab), reemplaza_id: previa ? previa.id : null,
+        captura: { origen: 'camara-en-vivo', fotos: fotos.map((x) => x.blob.meta || null), enviada: new Date().toISOString(), agente: navigator.userAgent.slice(0, 200) } });
+      const { error } = await sb.from('entregas').insert(fila);
       if (error) throw error;
       await cargarAlumna(); toast('¡Trabajo enviado! La profe te va a dejar su devolución.'); location.hash = `#/curso/${id}?trabajos`;
     } catch (x) { err.textContent = errorTxt(x); btn.disabled = false; btn.textContent = 'Enviar a la profe'; }
@@ -380,22 +510,28 @@ function vistaPerfil() {
 }
 
 // ---------- Admin: corregir ----------
+// Datos de la toma (los manda el aula al sacar la foto con la cámara en vivo)
+function capturaTxt(e) {
+  const c = e.captura; if (!c || !c.origen) return '';
+  const f = (c.fotos || []).filter(Boolean); const t = f[0]?.tomada;
+  return `<br><span class="chico suave" title="${esc(c.agente || '')}">📷 Cámara en vivo${t ? ' · tomada ' + fechaHora(t) : ''}${f[0]?.ancho ? ` · ${f[0].ancho}×${f[0].alto}` : ''}</span>`;
+}
 async function vistaAdminCorregir() {
   const filtro = JSON.parse(sessionStorage.getItem('aula-filtro') || '{"estado":"enviada","curso":""}');
-  const { data, error } = await sb.rpc('admin_entregas', { p_curso: filtro.curso || null, p_estado: filtro.estado || null });
+  const { data, error } = await sb.rpc(E.v2 ? 'admin_entregas2' : 'admin_entregas', { p_curso: filtro.curso || null, p_estado: filtro.estado || null });
   if (error) return pintar(`<div class="vacio">${esc(errorTxt(error))}</div>`);
   pintar(`<h1>Trabajos para corregir</h1><p class="suave">Mirá las fotos, poné la nota (1 a 5) y dejale un comentario para que mejore.</p>
-    <div class="filtros"><select id="f-estado"><option value="enviada">Sin corregir</option><option value="corregida">Corregidos</option><option value="rehacer">Para rehacer</option><option value="">Todos</option></select>
+    <div class="filtros"><select id="f-estado"><option value="enviada">Sin corregir</option><option value="corregida">Corregidos</option><option value="rehacer">Para rehacer</option>${E.v2 ? '<option value="anulada_ia">Anuladas por IA</option>' : ''}<option value="">Todos</option></select>
       <select id="f-curso"><option value="">Todos los cursos</option>${E.servicios.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></div>
     <div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${(data || []).map((e) => `<article class="entrega" data-id="${e.id}">
-      <div class="entrega-cab"><div><h3>${esc(e.titulo)}</h3><span class="chico"><strong>${esc(e.nombre)}</strong> · ${esc(e.curso)}</span><br><span class="chico suave">${e.modulo ? esc(e.modulo) + ' · ' : ''}${fechaHora(e.creado)}</span></div>
-      ${e.estado === 'enviada' ? '<span class="etiqueta ambar">Nuevo</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Rehacer</span>' : `<span class="nota-num" style="width:44px;height:44px;font-size:1.2rem">${e.calificacion ?? '–'}</span>`}</div>
+      <div class="entrega-cab"><div><h3>${esc(e.titulo)}</h3><span class="chico"><strong>${esc(e.nombre)}</strong> · ${esc(e.curso)}</span><br><span class="chico suave">${e.modulo ? esc(e.modulo) + ' · ' : ''}${fechaHora(e.creado)}</span>${capturaTxt(e)}</div>
+      ${e.estado === 'enviada' ? '<span class="etiqueta ambar">Nuevo</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Rehacer</span>' : e.estado === 'anulada_ia' ? '<span class="etiqueta rojo">Anulada IA</span>' : `<span class="nota-num" style="width:44px;height:44px;font-size:1.2rem">${e.calificacion ?? '–'}</span>`}</div>
       <div class="fotos">${e.fotos.map((f) => `<button data-ver="${esc(f)}"><img data-bucket="entregas" data-ruta="${esc(f)}" alt="Foto del trabajo"></button>`).join('')}</div>
       ${e.mensaje ? `<p class="chico" style="margin:.2rem 0">💬 ${esc(e.mensaje)}</p>` : ''}
       <div class="calificar"><div class="escala" role="group" aria-label="Nota">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-nota="${n}" aria-pressed="${e.calificacion === n}">${n}</button>`).join('')}</div>
         <div class="escala-txt" data-txt>${e.calificacion ? NOTA_TXT[e.calificacion] : '1 Insuficiente · 3 Bueno · 5 Excelente'}</div>
         <textarea data-com placeholder="Comentario para la alumna: qué salió bien y qué mejorar…" maxlength="3000">${esc(e.comentario || '')}</textarea>
-        <div class="fila"><button class="btn btn-oro" data-guardar style="flex:1">Guardar corrección</button><button class="btn btn-borde btn-chico" data-rehacer>Pedir que lo rehaga</button></div></div></article>`).join('')
+        <div class="fila"><button class="btn btn-oro" data-guardar style="flex:1">Guardar corrección</button><button class="btn btn-borde btn-chico" data-rehacer>Pedir que lo rehaga</button>${E.v2 ? '<button class="btn btn-peligro btn-chico" data-ia title="Anular por uso de inteligencia artificial">Anular por IA</button>' : ''}</div></div></article>`).join('')
       || '<div class="vacio" style="grid-column:1/-1"><span class="grande">🎉</span>No hay trabajos en esta lista.</div>'}</div>`);
   $('#f-estado').value = filtro.estado; $('#f-curso').value = filtro.curso;
   for (const id of ['#f-estado', '#f-curso']) $(id).onchange = () => { sessionStorage.setItem('aula-filtro', JSON.stringify({ estado: $('#f-estado').value, curso: $('#f-curso').value })); vistaAdminCorregir(); };
@@ -404,12 +540,14 @@ async function vistaAdminCorregir() {
     for (const b of $$('[data-nota]', art)) b.onclick = () => { nota = +b.dataset.nota; for (const x of $$('[data-nota]', art)) x.setAttribute('aria-pressed', x === b); art.querySelector('[data-txt]').textContent = NOTA_TXT[nota]; };
     const guardar = async (estado) => {
       if (estado === 'corregida' && !nota) return toast('Elegí una nota del 1 al 5.', true);
+      if (estado === 'anulada_ia' && !confirm('¿Anular esta clase por uso de IA? La alumna va a ver el aviso y podrá volver a presentarla.')) return;
       const { error } = await sb.rpc('admin_calificar', { p_id: art.dataset.id, p_calificacion: estado === 'rehacer' ? (nota || null) : nota, p_comentario: art.querySelector('[data-com]').value, p_estado: estado });
       if (error) return toast(errorTxt(error), true);
-      toast(estado === 'rehacer' ? 'Le pediste que lo rehaga ✓' : 'Corrección guardada ✓'); await contarPendientes(); navegacion(); marcarNav(); vistaAdminCorregir();
+      toast(estado === 'rehacer' ? 'Le pediste que lo rehaga ✓' : estado === 'anulada_ia' ? 'Clase anulada por IA ✓' : 'Corrección guardada ✓'); await contarPendientes(); navegacion(); marcarNav(); vistaAdminCorregir();
     };
     art.querySelector('[data-guardar]').onclick = () => guardar('corregida');
     art.querySelector('[data-rehacer]').onclick = () => guardar('rehacer');
+    art.querySelector('[data-ia]')?.addEventListener('click', () => guardar('anulada_ia'));
   }
   hidratarFotos();
 }
@@ -418,16 +556,19 @@ async function vistaAdminCorregir() {
 async function vistaAdminMateriales() {
   const cur = sessionStorage.getItem('aula-curso-mat') || E.servicios[0]?.id;
   const s = servicio(cur);
-  const { data: lecciones } = await sb.from('lecciones').select('*').eq('servicio_id', cur).order('orden').order('creado');
+  const { data: lecciones } = await sb.from('lecciones').select('*').eq('servicio_id', cur).order(E.v2 ? 'mes' : 'orden').order('orden').order('creado');
   const modsCat = (s?.extra?.detalles || []).map((d) => d.texto); const modsUsados = [...new Set((lecciones || []).map((l) => l.modulo).filter(Boolean))];
-  pintar(`<h1>Materiales de los cursos</h1><p class="suave">Subí PDF, fotos, videos o enlaces. Solo los ven las alumnas con acceso a ese curso.</p>
+  const vars = s?.extra?.variantes || []; const nivelTxt = (v) => v ? (vars.find((x) => x.id === v)?.etiqueta || v) : 'Todos los niveles';
+  pintar(`<h1>Materiales de los cursos</h1><p class="suave">Subí los PDF por mes/módulo y por nivel. Cada alumna ve solo los de su nivel y solo de los meses que ya tiene pagos y confirmados.</p>
     <div class="filtros"><select id="m-curso">${E.servicios.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></div>
     <div class="dos-columnas"><div><h2>Clases cargadas (${(lecciones || []).length})</h2>
       ${(lecciones || []).length ? (lecciones || []).map((l) => `<div class="clase" style="cursor:default"><span class="clase-ic">${/\.(jpg|png|webp)$/.test(l.archivo || '') ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo])}</span>
-        <span><strong>${esc(l.titulo)}</strong><small>${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
+        <span><strong>${esc(l.titulo)}</strong><small>${E.v2 ? `Mes ${l.mes || 1} · ${esc(nivelTxt(l.variante_id))} · ` : ''}${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
         <span class="fila" style="margin-left:auto;flex-wrap:nowrap"><button class="btn btn-borde btn-chico" data-ocultar="${l.id}" data-activo="${l.activo}">${l.activo ? 'Ocultar' : 'Mostrar'}</button><button class="btn btn-peligro btn-chico" data-borrar="${l.id}" data-archivo="${esc(l.archivo || '')}" aria-label="Borrar">✕</button></span></div>`).join('')
         : '<div class="vacio">Este curso todavía no tiene materiales.</div>'}</div>
     <div class="tarjeta"><h2>Agregar material</h2><form id="f-mat" novalidate>
+      ${E.v2 ? `<div class="fila" style="gap:.6rem;flex-wrap:nowrap"><div style="flex:0 0 7rem"><label for="m-mes">Mes</label><input id="m-mes" name="mes" type="number" min="1" max="36" value="1" required></div>
+        <div style="flex:1"><label for="m-nivel">Nivel / categoría</label><select id="m-nivel" name="nivel"><option value="">Todos los niveles</option>${vars.map((v) => `<option value="${esc(v.id)}">${esc(v.etiqueta || v.id)}</option>`).join('')}</select></div></div>` : ''}
       <label for="m-modulo">Módulo</label><input id="m-modulo" name="modulo" list="m-mods" maxlength="120" placeholder="Ej: Módulo 1 – Teoría del color"><datalist id="m-mods">${[...new Set([...modsUsados, ...modsCat])].map((m) => `<option value="${esc(m)}">`).join('')}</datalist>
       <label for="m-titulo">Título</label><input id="m-titulo" name="titulo" required maxlength="160">
       <label for="m-desc">Descripción (opcional)</label><textarea id="m-desc" name="descripcion" maxlength="4000"></textarea>
@@ -449,6 +590,7 @@ async function vistaAdminMateriales() {
     e.preventDefault(); const f = e.target, err = $('#m-error'); err.textContent = ''; const tipo = f.tipo.value;
     if (f.titulo.value.trim().length < 1) { err.textContent = 'Escribí un título.'; return; }
     const fila = { servicio_id: cur, modulo: f.modulo.value.trim() || null, titulo: f.titulo.value.trim(), descripcion: f.descripcion.value.trim(), tipo, orden: (lecciones || []).length };
+    if (E.v2) { const m = +f.mes.value; if (!(m >= 1 && m <= 36)) { err.textContent = 'El mes va de 1 a 36.'; return; } Object.assign(fila, { mes: m, variante_id: f.nivel.value || null }); }
     const btn = $('#m-btn'); btn.disabled = true; btn.textContent = 'Publicando…';
     try {
       if (tipo === 'archivo') {
@@ -484,6 +626,52 @@ async function vistaAdminAlumnas() {
   };
 }
 
+// ---------- Admin: pagos mensuales y exámenes ----------
+async function vistaAdminPagos() {
+  const [p, x, ins] = await Promise.all([sb.rpc('admin_pagos_aula', { p_estado: null }), sb.rpc('admin_examenes_aula'),
+    sb.from('inscripciones').select('id,cliente_nombre,curso_nombre,variante_id,meses_habilitados,acceso').eq('acceso', true).neq('estado', 'cancelada').order('cliente_nombre')]);
+  if (p.error) return pintar(`<div class="vacio">${esc(errorTxt(p.error))}</div>`);
+  const pagos = p.data || []; const pend = pagos.filter((r) => r.estado === 'pendiente');
+  const fila = (r) => `<div class="alumna" data-pago="${r.id}"><div class="fila entre"><div><strong>${esc(r.nombre)}</strong> <span class="chico suave">· ${esc(r.curso)}</span><br>
+      <span class="chico">Mes ${r.mes}${r.monto_gs ? ' · ' + gs(r.monto_gs) : ''} · ${fechaHora(r.creado)}${r.nota ? ' · 💬 ' + esc(r.nota) : ''}</span></div>
+      ${r.estado === 'pendiente' ? '<span class="etiqueta ambar">Por confirmar</span>' : r.estado === 'confirmado' ? '<span class="etiqueta verde">Confirmado</span>' : '<span class="etiqueta rojo">Rechazado</span>'}</div>
+    <div class="fila chico"><button class="btn btn-borde btn-chico" data-comp="${esc(r.ruta)}">🔍 Ver comprobante</button>
+      ${r.estado === 'pendiente' ? `<button class="btn btn-oro btn-chico" data-ok="${r.id}">✅ Pago recibido: abrir mes ${r.mes}</button><button class="btn btn-peligro btn-chico" data-no="${r.id}">No llegó</button>` : ''}
+      ${r.telefono ? `<a href="https://wa.me/${esc(r.telefono.replace(/\D/g, '').replace(/^0/, '595'))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}</div></div>`;
+  const EXE = { solicitado: 'Pedido', agendado: 'Agendado', aprobado: 'Aprobado', desaprobado: 'No aprobado' };
+  pintar(`<h1>Pagos y exámenes del Aula</h1><p class="suave">Confirmá la transferencia y el mes siguiente se abre al instante para la alumna. Sin confirmar, sigue bloqueado.</p>
+    <div class="estadisticas"><div class="dato"><strong>${pend.length}</strong><span>Pagos por confirmar</span></div><div class="dato"><strong>${(x.data || []).filter((e) => e.estado === 'solicitado').length}</strong><span>Exámenes pedidos</span></div></div>
+    <div class="dos-columnas"><div><h2>Comprobantes</h2>${pagos.map(fila).join('') || '<div class="vacio">Todavía no hay comprobantes.</div>'}</div>
+    <div><h2>Exámenes por videollamada</h2>${(x.data || []).map((e) => `<div class="alumna" data-ex="${e.id}"><div class="fila entre"><div><strong>${esc(e.nombre || e.email)}</strong> <span class="chico suave">· ${esc(e.curso || '')} · mes ${e.mes}</span><br>
+        <span class="chico">${e.preferencia ? 'Prefiere: ' + esc(e.preferencia) : ''}${e.fecha ? ' · <b>' + fechaHora(e.fecha) + '</b>' : ''}</span></div><span class="etiqueta">${EXE[e.estado] || esc(e.estado)}</span></div>
+        <div class="fila chico"><input type="datetime-local" data-fecha style="max-width:14rem"><button class="btn btn-borde btn-chico" data-ex-agendar>Agendar</button>
+        <button class="btn btn-oro btn-chico" data-ex-estado="aprobado">Aprobado</button><button class="btn btn-borde btn-chico" data-ex-estado="desaprobado">No aprobado</button>
+        ${e.telefono ? `<a href="https://wa.me/${esc(e.telefono.replace(/\D/g, '').replace(/^0/, '595'))}?text=${encodeURIComponent(`Hola ${e.nombre?.split(' ')[0] || ''}, soy Tania. Te escribo por tu examen por videollamada de ${e.curso || 'tu curso'}.`)}" target="_blank" rel="noopener">${ic('video')} WhatsApp</a>` : ''}</div></div>`).join('') || '<div class="vacio">No hay exámenes pedidos.</div>'}
+      <h2>Meses habilitados por alumna</h2><p class="chico suave">Para pagos en efectivo o correcciones podés cambiar el número a mano.</p>
+      ${(ins.data || []).map((i) => `<div class="fila entre alumna"><span><strong>${esc(i.cliente_nombre)}</strong><br><span class="chico suave">${esc(i.curso_nombre)}</span></span>
+        <label class="chico">Hasta el mes <input type="number" min="1" max="36" value="${i.meses_habilitados || 1}" data-meses="${i.id}" style="width:4.5rem"></label></div>`).join('')}</div></div>`);
+  for (const b of $$('[data-comp]')) b.onclick = async () => {
+    const u = await urlFirmada('pagos-aula', b.dataset.comp); if (!u) return toast('No se pudo abrir.', true);
+    if (/\.pdf$/.test(b.dataset.comp)) return window.open(u, '_blank', 'noopener'); visor(`<img src="${u}" alt="Comprobante">`);
+  };
+  const revisar = async (id, ok) => {
+    const resp = ok ? null : prompt('¿Qué le decimos? (por ejemplo: "No me llegó la transferencia, revisá el comprobante")', 'No pudimos confirmar la transferencia. Revisá el comprobante y volvé a enviarlo.');
+    if (!ok && resp === null) return;
+    const { error } = await sb.rpc('admin_revisar_pago_aula', { p_id: id, p_ok: ok, p_respuesta: resp }); if (error) return toast(errorTxt(error), true);
+    toast(ok ? 'Pago confirmado: el mes ya está abierto ✓' : 'Comprobante rechazado'); await contarPendientes(); navegacion(); marcarNav(); vistaAdminPagos();
+  };
+  for (const b of $$('[data-ok]')) b.onclick = () => revisar(b.dataset.ok, true);
+  for (const b of $$('[data-no]')) b.onclick = () => revisar(b.dataset.no, false);
+  for (const d of $$('[data-ex]')) {
+    const enviar = async (estado, fecha) => { const { error } = await sb.rpc('admin_examen', { p_id: d.dataset.ex, p_estado: estado, p_fecha: fecha, p_nota: null }); if (error) return toast(errorTxt(error), true); toast('Examen actualizado ✓'); vistaAdminPagos(); };
+    d.querySelector('[data-ex-agendar]').onclick = () => { const v = d.querySelector('[data-fecha]').value; if (!v) return toast('Elegí día y hora.', true); enviar('agendado', new Date(v + ':00-03:00').toISOString()); };
+    for (const b of $$('[data-ex-estado]', d)) b.onclick = () => enviar(b.dataset.exEstado, null);
+  }
+  for (const c of $$('[data-meses]')) c.onchange = async () => {
+    const { error } = await sb.rpc('admin_meses_aula', { p_inscripcion: c.dataset.meses, p_meses: +c.value }); if (error) return toast(errorTxt(error), true); toast(`Habilitado hasta el mes ${c.value} ✓`);
+  };
+}
+
 // ---------- Router ----------
 async function router() {
   if (!E.user) return;
@@ -495,11 +683,13 @@ async function router() {
       if (p[0] === 'perfil') return vistaPerfil();
       if (p[1] === 'materiales') return await vistaAdminMateriales();
       if (p[1] === 'alumnas') return await vistaAdminAlumnas();
+      if (p[1] === 'pagos' && E.v2) return await vistaAdminPagos();
       return await vistaAdminCorregir();
     }
     if (p[0] === 'cursos') return vistaCatalogo();
-    if (p[0] === 'curso') return await vistaCurso(p[1], q === 'trabajos' ? 'trabajos' : 'clases');
-    if (p[0] === 'entregar') return vistaEntregar(p[1]);
+    if (p[0] === 'curso') return await vistaCurso(p[1], ['trabajos', 'examen'].includes(q) ? q : 'clases');
+    if (p[0] === 'entregar') return vistaEntregar(p[1], q);
+    if (p[0] === 'pagar') return await vistaPagar(p[1]);
     if (p[0] === 'notas') return vistaNotas();
     if (p[0] === 'perfil') return vistaPerfil();
     return vistaSala();
