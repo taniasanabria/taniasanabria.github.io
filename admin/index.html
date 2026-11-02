@@ -16,7 +16,8 @@
   <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
   <script src="vendor/supabase.js" defer></script>
   <script src="mensajes-aprobacion.js"></script>
-  <script type="module" src="admin.js?v=20261031b"></script>
+  <script type="module" src="admin.js?v=20261102"></script>
+  <script type="module" src="extras.js?v=20261102"></script>
 </head>
 <body>
   <div class="cargando" id="vista-cargando"><img src="../img/logo-completo-320.webp" width="120" height="105" alt=""><p>Cargando…</p></div>
@@ -98,6 +99,12 @@
           <input type="search" id="buscar-codigo" placeholder="Buscar por nombre o email…" aria-label="Buscar alumna">
           <div id="lista-codigos" class="lista"></div>
         </details>
+      </section>
+
+      <!-- Resumen: métricas, recordatorios, lista de espera, certificados (extras.js) -->
+      <section class="tab" id="tab-resumen" aria-labelledby="t-resumen" hidden>
+        <h2 tabindex="-1">Resumen</h2>
+        <div id="resumen-contenido"><p class="vacio">Cargando…</p></div>
       </section>
 
       <!-- Horarios -->
@@ -281,6 +288,7 @@
 
     <nav class="tabs" role="tablist" aria-label="Secciones del panel">
       <button type="button" role="tab" id="t-citas" data-tab="citas" aria-selected="true"><span aria-hidden="true">📅</span>Citas<span class="insignia" id="insignia" hidden>0</span></button>
+      <button type="button" role="tab" id="t-resumen" data-tab="resumen" aria-selected="false"><span aria-hidden="true">📊</span>Resumen</button>
       <button type="button" role="tab" id="t-horarios" data-tab="horarios" aria-selected="false"><span aria-hidden="true">🕒</span>Horarios</button>
       <button type="button" role="tab" id="t-fotos" data-tab="fotos" aria-selected="false"><span aria-hidden="true">📷</span>Fotos</button>
       <button type="button" role="tab" id="t-cursos" data-tab="cursos" aria-selected="false"><span aria-hidden="true">🎓</span>Cursos<span class="insignia" id="insignia-cursos" hidden>0</span></button>

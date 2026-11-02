@@ -7,7 +7,17 @@
  *    (lo que Tania cambia desde /admin/). Si no responde, se sigue con los datos embebidos.
  * Se usa la API REST de Supabase con fetch (sin librerías) para que el sitio siga liviano.
  */
-import { FUENTE_DATOS, SUPABASE } from './config.js';
+import * as CONFIG from './config.js';
+const { FUENTE_DATOS, SUPABASE } = CONFIG;
+const CAPTCHA = CONFIG.CAPTCHA || null;   // null en sitios viejos: todo sigue igual
+const CON_CAPTCHA = /^rpc\/(crear_reserva|crear_inscripcion|anotar_lista_espera)$/;
+
+/** Gancho de captcha: con CAPTCHA configurado, las altas pasan por la edge function verificar-captcha. */
+async function tokenCaptcha() {
+  if (!window.turnstile) await new Promise((ok, mal) => { const sc = document.createElement('script'); sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; sc.onload = ok; sc.onerror = mal; document.head.appendChild(sc); });
+  return new Promise((ok, mal) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:99'; document.body.appendChild(d);
+    window.turnstile.render(d, { sitekey: CAPTCHA.turnstileSiteKey, callback: (t) => { ok(t); setTimeout(() => d.remove(), 500); }, 'error-callback': () => { d.remove(); mal(new Error('CAPTCHA_INVALIDO')); } }); });
+}
 
 const ESPERA_MS = 6000;
 
@@ -32,6 +42,15 @@ export class ErrorDatos extends Error {
 }
 
 async function pedir(ruta, { metodo = 'GET', cuerpo } = {}) {
+  if (CAPTCHA && CAPTCHA.turnstileSiteKey && CAPTCHA.verificador && CON_CAPTCHA.test(ruta)) {
+    let token; try { token = await tokenCaptcha(); } catch { throw new ErrorDatos('CAPTCHA_INVALIDO'); }
+    const r = await fetch(CAPTCHA.verificador, { method: 'POST', headers: { apikey: SUPABASE.anonKey, Authorization: `Bearer ${SUPABASE.anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fn: ruta.slice(4), args: cuerpo || {}, token }) }).catch(() => null);
+    if (!r) throw new ErrorDatos('SIN_CONEXION');
+    const datos = await r.json().catch(() => null);
+    if (!r.ok) throw new ErrorDatos((datos && (datos.error || datos.message)) || `HTTP_${r.status}`, datos);
+    return datos;
+  }
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ESPERA_MS);
   try {

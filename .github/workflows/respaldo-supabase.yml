@@ -1,0 +1,41 @@
+# Respaldo automático de la base de Supabase (datos de clientas, turnos, alumnas, app_docs).
+# El repositorio es PÚBLICO: el respaldo se CIFRA (AES-256) antes de guardarse como artefacto privado del workflow.
+# Requiere 2 secretos en GitHub → Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL  = cadena de conexión (Supabase → Project Settings → Database → Connection string → "Session pooler", con la contraseña)
+#   RESPALDO_CLAVE   = una contraseña larga para cifrar (guardala aparte: sin ella no se puede abrir el respaldo)
+# Abrir un respaldo: gpg -d respaldo-AAAA-MM-DD.sql.gz.gpg | gunzip > respaldo.sql
+name: Respaldo Supabase
+on:
+  schedule:
+    - cron: '0 7 * * *'   # todos los días 04:00 hora de Paraguay
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar secretos
+        id: s
+        env: { DB: '${{ secrets.SUPABASE_DB_URL }}', K: '${{ secrets.RESPALDO_CLAVE }}' }
+        run: if [ -n "$DB" ] && [ -n "$K" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "::warning::Faltan los secretos SUPABASE_DB_URL / RESPALDO_CLAVE: no se hace respaldo."; fi
+      - name: Instalar pg_dump 17
+        if: steps.s.outputs.ok == '1'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+      - name: Volcar y cifrar
+        if: steps.s.outputs.ok == '1'
+        env: { DB: '${{ secrets.SUPABASE_DB_URL }}', K: '${{ secrets.RESPALDO_CLAVE }}' }
+        run: |
+          F=respaldo-$(TZ=America/Asuncion date +%F).sql.gz
+          /usr/lib/postgresql/17/bin/pg_dump "$DB" --no-owner --no-privileges --schema=public --schema=auth --data-only --exclude-table-data=public.limite_ip | gzip -9 > "$F"
+          /usr/lib/postgresql/17/bin/pg_dump "$DB" --no-owner --schema-only --schema=public | gzip -9 > esquema.sql.gz
+          echo "$K" | gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "$F.gpg" "$F"
+          echo "$K" | gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 -o esquema.sql.gz.gpg esquema.sql.gz
+          rm -f "$F" esquema.sql.gz; ls -la
+      - uses: actions/upload-artifact@v4
+        if: steps.s.outputs.ok == '1'
+        with: { name: respaldo-supabase, path: '*.gpg', retention-days: 30 }

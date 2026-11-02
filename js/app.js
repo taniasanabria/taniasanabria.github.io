@@ -132,6 +132,11 @@ function fechaLocalISO(d) {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 
+// Fechas SIEMPRE en la hora de Paraguay (aunque la clienta reserve desde otro país).
+const ZONA_PY = 'America/Asuncion';
+function hoyPY() { return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_PY }).format(new Date()); }
+function sumarDiasISO(iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+
 function horarioDelDia(fechaISO) {
   if (!fechaISO) return null;
   const [a, m, d] = fechaISO.split('-').map(Number);
@@ -214,8 +219,8 @@ async function pintarTiraDias(datos) {
   const caja = $('#r-dias-tira');
   const cont = $('#r-dias-tira-lista');
   const n = ++pedidoDias;
-  const hoy = new Date();
-  const fechas = Array.from({ length: 14 }, (_, k) => fechaLocalISO(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + k)));
+  const hoy = hoyPY();
+  const fechas = Array.from({ length: 14 }, (_, k) => sumarDiasISO(hoy, k));
   let mapa = null;
   if (modoSupabase && datos && datos.usaTurno) {
     const c = cacheDias.get(datos.id);
@@ -381,8 +386,7 @@ function abrirReserva(idServicio, origen, { forzar = false } = {}) {
   $$('.campo-invalido', form).forEach((el) => el.classList.remove('campo-invalido'));
   const sel = $('#r-servicio');
   sel.value = idServicio && reservas[idServicio] ? idServicio : '';
-  const hoy = new Date();
-  $('#r-fecha').min = fechaLocalISO(hoy);
+  $('#r-fecha').min = hoyPY();
   $('#r-enviar').disabled = false;
   aplicarModoReserva();
   actualizarServicio();

@@ -10,3 +10,5 @@ export const URL_SITIO = "https://taniasanabria.github.io/";
 export const CHAT = {"backend":null};
 // Cursos: pasarela de pago con tarjeta (null = todavía no; se paga por transferencia o QR).
 export const PAGOS = {"tarjeta":null};
+// Captcha (Cloudflare Turnstile): null = apagado. Con { turnstileSiteKey, verificador } el formulario pide el captcha y envía por la edge function verificar-captcha.
+export const CAPTCHA = null;

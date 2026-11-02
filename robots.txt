@@ -1,7 +1,9 @@
-# Permite que los buscadores indexen todo el sitio, salvo el panel de administración y el aula de alumnas.
+# Permite que los buscadores indexen todo el sitio, salvo el panel, las aulas y la página privada de turnos.
 User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /alumnas/
+Disallow: /aula/
+Disallow: /turno/
 
 Sitemap: https://taniasanabria.github.io/sitemap.xml

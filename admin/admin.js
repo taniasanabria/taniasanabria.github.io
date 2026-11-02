@@ -187,7 +187,9 @@ async function cargarBase() {
 }
 
 // ------------------------------------------------------------------ pestañas
-const cargadores = { citas: cargarCitas, horarios: cargarHorarios, fotos: cargarFotos, cursos: cargarCursos, servicios: pintarServicios, ajustes: pintarAjustes };
+const cargadores = { citas: cargarCitas, horarios: cargarHorarios, fotos: cargarFotos, cursos: cargarCursos, servicios: pintarServicios, ajustes: pintarAjustes, resumen: () => window.panelExtras && window.panelExtras.cargar() };
+// Módulo extras.js (Resumen: métricas, recordatorios, lista de espera, certificados) usa lo mismo que el panel.
+window.panelBase = { sb, estado, toast: (...a) => toast(...a), urlWhatsApp: (...a) => urlWhatsApp(...a), esc: (...a) => esc(...a) };
 function elegirTab(nombre, foco = true) {
   if (!cargadores[nombre]) nombre = 'citas';
   $$('.tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === nombre)));
@@ -1685,16 +1687,32 @@ async function pintarAvisos() {
 function suscribirse() {
   if (estado.canal) return;
   const marca = $('#estado-conexion');
+  // Tiempo real: TODO (altas, cambios y borrados) de reservas, inscripciones y lo demás que muestra el panel.
+  // Lo que hace la app de agenda o el otro celular aparece al instante. Se agrupan avisos seguidos (300 ms).
+  const recargar = (() => { const pend = new Set(); let t = null; return (que) => { pend.add(que); clearTimeout(t); t = setTimeout(() => {
+    const q = new Set(pend); pend.clear();
+    if (q.has('reservas')) { if (!$('#tab-citas').hidden) cargarAgenda(); }
+    if (q.has('inscripciones') || q.has('servicios')) { if (!$('#tab-cursos').hidden) { cargarInscripciones(); cargarCupos(); } }
+    if (q.has('bloqueos') && !$('#tab-horarios').hidden) cargarHorarios();
+    if (q.size && window.panelExtras) window.panelExtras.alCambiar(q);
+  }, 300); }; })();
   estado.canal = sb.channel('panel-reservas')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservas' }, () => {
       cargarPendientes({ avisar: true });
-      if (!$('#tab-citas').hidden) cargarAgenda();
+      recargar('reservas');
     })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservas' }, () => { cargarPendientes(); recargar('reservas'); })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reservas' }, () => { cargarPendientes(); recargar('reservas'); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inscripciones' }, () => { cargarPendientes(); recargar('inscripciones'); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'servicios' }, () => recargar('servicios'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bloqueos' }, () => recargar('bloqueos'))
     .subscribe((st) => {
       const vivo = st === 'SUBSCRIBED';
       marca.textContent = vivo ? 'Avisos en vivo' : 'Actualiza cada minuto';
       marca.classList.toggle('en-vivo', vivo);
     });
+  // Canal aparte: lista_espera existe recién con la migración 2026-11-02 (si falta, no afecta a los avisos de arriba).
+  sb.channel('panel-espera').on('postgres_changes', { event: '*', schema: 'public', table: 'lista_espera' }, () => recargar('lista_espera')).subscribe();
   // Respaldo por si el tiempo real se corta (o el celular estuvo dormido).
   estado.sondeo = setInterval(() => cargarPendientes(), 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarPendientes(); });

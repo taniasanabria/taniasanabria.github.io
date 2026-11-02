@@ -190,11 +190,13 @@ escribir('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
   <url><loc>${URL_SITIO}</loc><lastmod>${hoy}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
 </urlset>
 `);
-escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio, salvo el panel de administración y el aula de alumnas.
+escribir('robots.txt', `# Permite que los buscadores indexen todo el sitio, salvo el panel, las aulas y la página privada de turnos.
 User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /alumnas/
+Disallow: /aula/
+Disallow: /turno/
 
 Sitemap: ${URL_SITIO}sitemap.xml
 `);
@@ -224,6 +226,8 @@ export const URL_SITIO = ${JSON.stringify(URL_SITIO)};
 export const CHAT = ${JSON.stringify({ backend: (sitio.chat && sitio.chat.backend) || null })};
 // Cursos: pasarela de pago con tarjeta (null = todavía no; se paga por transferencia o QR).
 export const PAGOS = ${JSON.stringify({ tarjeta: (sitio.pagos && sitio.pagos.tarjeta) || null })};
+// Captcha (Cloudflare Turnstile): null = apagado. Con { turnstileSiteKey, verificador } el formulario pide el captcha y envía por la edge function verificar-captcha.
+export const CAPTCHA = ${JSON.stringify((sitio.captcha && sitio.captcha.turnstileSiteKey) ? sitio.captcha : null)};
 `);
 
 console.log(`Listo: index.html (${(html.length / 1024).toFixed(1)} KB), 404.html, sitemap.xml, robots.txt, site.webmanifest. URL: ${URL_SITIO}`);

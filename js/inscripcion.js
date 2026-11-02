@@ -175,16 +175,28 @@ async function pintarCupos(s) {
   const d = (todos || {})[s.id];
   const caja = $('#ins-cupos'); const hs = $('#ins-horarios'); const sin = $('#ins-sin-horarios');
   if (!d) { caja.hidden = true; hs.hidden = true; sin.innerHTML = horariosAConfirmar(); sin.hidden = false; $('#ins-enviar').disabled = false; return; }
-  const lleno = d.disponibles <= 0;
-  const ultimos = pocos(d.disponibles, d.cupo);
+  const lista0 = d.horarios || [];
+  // Con horarios, el cupo es POR horario (no la suma de todos): se resume cuántos horarios tienen lugar.
+  const conLugar = lista0.filter((h) => h.disponibles > 0);
+  const lleno = lista0.length ? !conLugar.length : d.disponibles <= 0;
+  const ultimos = lista0.length ? conLugar.length > 0 && conLugar.every((h) => pocos(h.disponibles, h.cupo)) : pocos(d.disponibles, d.cupo);
   caja.hidden = false;
   caja.classList.toggle('lleno', lleno);
   caja.classList.toggle('ultimos', !lleno && ultimos);
-  const pct = d.cupo ? Math.min(100, Math.round((d.ocupados / d.cupo) * 100)) : 0;
-  caja.innerHTML = (lleno
-    ? `${icono('xmark')} <span><strong>Curso completo</strong> · ${d.ocupados} de ${d.cupo} lugares ocupados. Escribile a Tania por el chat para la lista de espera.</span>`
-    : `${icono('check')} <span><strong>${ultimos ? '¡Últimos lugares! ' : ''}${lugares(d.disponibles)[0].toUpperCase() + lugares(d.disponibles).slice(1)}</strong> · ${d.ocupados} de ${d.cupo} ocupados</span>`)
-    + `<span class="ins-cupos-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>`;
+  const espera = `<button type="button" class="btn btn-borde btn-chico" id="ins-espera">Anotarme en la lista de espera</button><span class="ins-espera-msg" id="ins-espera-msg" role="status"></span>`;
+  if (lista0.length) {
+    const cupoMax = Math.max(...lista0.map((h) => h.cupo || 0));
+    caja.innerHTML = lleno
+      ? `${icono('xmark')} <span><strong>Todos los horarios están completos.</strong> Anotate y Tania te avisa cuando se libere un lugar.</span> ${espera}`
+      : `${icono('check')} <span><strong>${ultimos ? '¡Últimos lugares! ' : ''}${conLugar.length} de ${lista0.length} horarios con lugar</strong> · hasta ${cupoMax} alumnas por horario. Mirá los lugares libres de cada uno abajo.</span>`;
+  } else {
+    const pct = d.cupo ? Math.min(100, Math.round((d.ocupados / d.cupo) * 100)) : 0;
+    caja.innerHTML = (lleno
+      ? `${icono('xmark')} <span><strong>Curso completo</strong> · ${d.ocupados} de ${d.cupo} lugares ocupados.</span> ${espera}`
+      : `${icono('check')} <span><strong>${ultimos ? '¡Últimos lugares! ' : ''}${lugares(d.disponibles)[0].toUpperCase() + lugares(d.disponibles).slice(1)}</strong> · ${d.ocupados} de ${d.cupo} ocupados</span>`)
+      + `<span class="ins-cupos-barra" aria-hidden="true"><i style="width:${pct}%"></i></span>`;
+  }
+  const be = $('#ins-espera'); if (be) be.addEventListener('click', () => anotarEspera(s));
   const lista = d.horarios || [];
   hs.hidden = !lista.length;
   // Clases por semana: solo con la SQL 1.5.0 (disponibilidad_cursos trae clases_semana); si no, 1 día como antes.
@@ -195,6 +207,19 @@ async function pintarCupos(s) {
   sin.hidden = !!lista.length || lleno;
   sin.innerHTML = lista.length ? '' : horariosAConfirmar();
   $('#ins-enviar').disabled = lleno || (lista.length > 0 && lista.every((h) => h.disponibles <= 0));
+}
+
+// Lista de espera (public.anotar_lista_espera, migración 2026-11-02). Sin la función: se pide escribir por el chat.
+async function anotarEspera(s) {
+  const f = dlg.querySelector('form'); const msg = $('#ins-espera-msg');
+  const nombre = f.nombre.value.trim(); const tel = f.telefono.value.trim(); const email = f.email.value.trim().toLowerCase();
+  if (nombre.length < 3 || !telefonoValido(tel)) { msg.textContent = ' Completá tu nombre y WhatsApp abajo y volvé a tocar el botón.'; f.nombre.focus(); return; }
+  const o = opcionElegida();
+  msg.textContent = ' Anotando…';
+  try {
+    const r = await rpc('anotar_lista_espera', { p_curso: (o && o.id) || s.id, p_horario: null, p_nombre: nombre, p_telefono: tel, p_email: email || null });
+    msg.textContent = r && r.ok ? ` ✓ Listo, quedaste anotada (n.º ${r.posicion}). Tania te avisa por WhatsApp cuando haya lugar.` : ` No se pudo anotar (${(r && r.error) || 'error'}).`;
+  } catch { msg.textContent = ' Por ahora escribile a Tania por el chat para la lista de espera.'; }
 }
 
 let diasPorSemana = 1;
