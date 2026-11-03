@@ -577,6 +577,8 @@ const trozos = (arr, n) => { const r = []; for (let i = 0; i < arr.length; i += 
 function pintarSeleccion() {
   const g = $('#f-grilla'); g.classList.toggle('modo-sel', selF.activo);
   $('#f-sel-activar').hidden = selF.activo;
+  const esAlbum = ($('#f-destino').value || '').startsWith('a:');
+  $('#f-renombrar-album').hidden = $('#f-eliminar-album').hidden = selF.activo || !esAlbum;
   $('#f-barra-sel .barra-sel-acciones').hidden = !selF.activo;
   $('#f-barra-sel').classList.toggle('activa', selF.activo);
   $('#f-sel-contador').textContent = selF.activo ? `${selF.ids.size} de ${fotosActuales.length} seleccionadas` : '';
@@ -648,12 +650,8 @@ async function moverOCopiar(copiar) {
   toast(`${fotos.length} foto${fotos.length > 1 ? 's' : ''} ${copiar ? 'copiada' : 'movida'}${fotos.length > 1 ? 's' : ''} ✓`);
   activarSeleccion(false); cargarFotos();
 }
-async function eliminarSeleccion() {
-  const fotos = elegidas(); if (!fotos.length) return;
-  if (!confirm(`¿Eliminar ${fotos.length} foto${fotos.length > 1 ? 's' : ''}? Se dejan de mostrar en el sitio. No se puede deshacer.`)) return;
-  toast(`⏳ Eliminando ${fotos.length} fotos…`);
+async function borrarFotosLista(fotos) {
   const ids = fotos.map((f) => f.id); const borrar = new Set(ids);
-  try {
     // ¿Qué archivos siguen usados por fotos que NO se eliminan (copias en otros álbumes)?
     const rutas = [...new Set(fotos.filter((f) => f.origen === 'storage').map((f) => f.ruta))];
     const enUso = new Set();
@@ -665,6 +663,13 @@ async function eliminarSeleccion() {
     const archivos = []; const vistas = new Set();
     for (const f of fotos) if (f.origen === 'storage' && !enUso.has(f.ruta) && !vistas.has(f.ruta)) { vistas.add(f.ruta); for (const w of f.anchos) archivos.push(`${f.ruta}-${w}.${f.formato || 'webp'}`); }
     for (const t of trozos(archivos, 500)) { const { error } = await sb.storage.from('fotos').remove(t); if (error) console.warn('archivos sin borrar', error); }
+}
+async function eliminarSeleccion() {
+  const fotos = elegidas(); if (!fotos.length) return;
+  if (!confirm(`¿Eliminar ${fotos.length} foto${fotos.length > 1 ? 's' : ''}? Se dejan de mostrar en el sitio. No se puede deshacer.`)) return;
+  toast(`⏳ Eliminando ${fotos.length} fotos…`);
+  try {
+    await borrarFotosLista(fotos);
   } catch (e) { toast(errorLegible(e), true); cargarFotos(); return; }
   toast(`${fotos.length} foto${fotos.length > 1 ? 's' : ''} eliminada${fotos.length > 1 ? 's' : ''} ✓`);
   activarSeleccion(false); cargarFotos();
@@ -681,7 +686,56 @@ async function editarSeleccion() {
   if (ids.length > 30 && !confirm(`Vas a editar ${ids.length} fotos una por una. ¿Seguir?`)) return;
   for (const id of ids) { if (!fotosActuales.some((f) => f.id === id)) continue; await editarFotoExistente(id); }
 }
+const albumActual = () => { const v = $('#f-destino').value || ''; return v.startsWith('a:') ? estado.albumes.find((a) => a.id === v.slice(2)) : null; };
+async function renombrarAlbum() {
+  const a = albumActual(); if (!a) return;
+  const t = (prompt('Nuevo nombre del álbum:', a.titulo) || '').trim(); if (!t || t === a.titulo) return;
+  const { error } = await sb.from('albumes').update({ titulo: t }).eq('id', a.id);
+  if (error) { toast(errorLegible(error), true); return; }
+  a.titulo = t; toast('Álbum renombrado ✓'); cargarFotos();
+}
+async function eliminarAlbum() {
+  const a = albumActual(); if (!a) return;
+  const fotos = fotosActuales.slice(); const n = fotos.length;
+  const d = $('#dlg-borrar-album');
+  $('#ba-nombre').textContent = a.titulo;
+  $('#ba-cuenta').textContent = n ? `Tiene ${n} foto${n > 1 ? 's' : ''}. ¿Qué hacemos con ellas?` : 'El álbum está vacío.';
+  $('#ba-opciones').hidden = !n;
+  const primero = estado.albumes.slice().sort((x, y) => (x.orden || 0) - (y.orden || 0))[0];
+  const aviso = $('#ba-aviso'); aviso.hidden = !(primero && primero.id === a.id && n);
+  aviso.textContent = 'Este es el primer álbum: sus fotos son las que se muestran como “Trabajos destacados” en el inicio. Después se mostrará el siguiente álbum.';
+  $('#ba-destino').innerHTML = `<option value="__nuevo">➕ Crear álbum nuevo…</option>${opcionesDestino('')}`;
+  const op = $('#ba-destino').querySelector(`option[value="a:${CSS.escape(a.id)}"]`); if (op) op.remove();
+  $('#ba-destino').value = ($('#ba-destino').querySelector('option[value^="a:"]') || {}).value || '__nuevo';
+  const pedir = n > 20; $('#ba-escribir').hidden = !pedir; $('#ba-confirmar').value = '';
+  const okBtn = $('#ba-ok'); const revisar = () => { okBtn.disabled = pedir && $('#ba-confirmar').value.trim().toLowerCase() !== a.titulo.trim().toLowerCase(); };
+  $('#ba-confirmar').oninput = revisar; revisar();
+  d.returnValue = ''; d.showModal();
+  await new Promise((ok) => d.addEventListener('close', ok, { once: true }));
+  if (d.returnValue !== 'si') return;
+  const que = d.querySelector('input[name="ba-que"]:checked').value;
+  toast('⏳ Eliminando el álbum…');
+  try {
+    if (n && que === 'mover') {
+      let destino = $('#ba-destino').value;
+      if (destino === '__nuevo') { destino = await crearAlbum(); if (!destino) return; }
+      let orden = await siguienteOrden(destino); const campo = campoDestino(destino);
+      for (const t of trozos(fotos, 25)) {
+        const r = await Promise.all(t.map((f) => sb.from('fotos').update({ ...campo, orden: (orden += 10) }).eq('id', f.id)));
+        const e = r.find((x) => x.error); if (e) throw e.error;
+      }
+      $('#f-destino').innerHTML = opcionesDestino(destino); $('#f-destino').value = destino;
+    } else if (n) await borrarFotosLista(fotos);
+    const { error } = await sb.from('albumes').delete().eq('id', a.id); if (error) throw error;
+    estado.albumes = estado.albumes.filter((x) => x.id !== a.id);
+    if ($('#f-destino').value === 'a:' + a.id) $('#f-destino').value = '';
+  } catch (e) { toast(errorLegible(e), true); cargarFotos(); return; }
+  toast(`Álbum “${a.titulo}” eliminado ✓`); activarSeleccion(false); cargarFotos();
+}
+
 function prepararSeleccion() {
+  $('#f-renombrar-album').addEventListener('click', renombrarAlbum);
+  $('#f-eliminar-album').addEventListener('click', eliminarAlbum);
   const g = $('#f-grilla');
   $('#f-sel-activar').addEventListener('click', () => activarSeleccion(true));
   $('#f-nuevo-album').addEventListener('click', async () => { const d = await crearAlbum(); if (d) { $('#f-destino').innerHTML = opcionesDestino(d); $('#f-destino').value = d; activarSeleccion(false); cargarFotos(); } });
