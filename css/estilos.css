@@ -602,3 +602,15 @@ html { scroll-padding-top: calc(var(--alto-cabecera) + 70px); }
 .banner-aula-texto { flex: 1 1 320px; }
 .banner-aula h3 { font-family: var(--titulos); font-size: clamp(1.3rem, 3vw, 1.7rem); margin: .2rem 0 .4rem; color: var(--tinta); }
 .banner-aula p { margin: 0; }
+
+/* Vista en miniaturas (2 columnas) junto al carrusel 3D */
+.vista-toggle { display: flex; justify-content: center; gap: .4rem; margin: .4rem auto .2rem; padding: .25rem; width: max-content; border-radius: 99px; border: 1px solid rgba(201, 162, 74, .45); background: rgba(20, 16, 11, .55); backdrop-filter: blur(6px); }
+.vista-toggle button { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .95rem; border: 0; border-radius: 99px; background: transparent; color: var(--oro-claro, #e9d18c); font: inherit; font-size: .82rem; letter-spacing: .04em; cursor: pointer; transition: background-color .2s, color .2s; -webkit-tap-highlight-color: transparent; }
+.vista-toggle button[aria-pressed="true"] { background: linear-gradient(135deg, #f1dc9c, #c9a24a); color: #1b1610; box-shadow: 0 4px 14px rgba(201, 162, 74, .35); }
+.fotos-vistas[data-vista="grilla"] > .carrusel { display: none; }
+.fotos-vistas:not([data-vista="grilla"]) > .fotos-grilla { display: none; }
+.fotos-grilla { columns: 2; column-gap: .6rem; padding: .8rem .2rem 1rem; max-width: 760px; margin: 0 auto; }
+.grilla-item { display: block; width: 100%; margin: 0 0 .6rem; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #1b1610; cursor: zoom-in; break-inside: avoid; box-shadow: 0 8px 22px rgba(0, 0, 0, .3), 0 0 0 1px rgba(241, 220, 156, .25); -webkit-tap-highlight-color: transparent; transition: transform .25s, box-shadow .25s; }
+.grilla-item img { display: block; width: 100%; height: auto; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.grilla-item:hover, .grilla-item:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0, 0, 0, .4), 0 0 0 1px rgba(241, 220, 156, .7); }
+.dialogo .fotos-grilla { max-height: 70dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }

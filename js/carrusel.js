@@ -161,9 +161,43 @@ class Carrusel {
   tick() {
     if (!this.visible || this.encima || document.hidden || reducir() || this.n < 2) return;
     if (Date.now() - this.ultimoToque < 7000) return;
-    if (this.raiz.closest('[hidden]') || document.querySelector('dialog.visor[open]')) return;
+    if (this.raiz.closest('[hidden], .fotos-vistas[data-vista="grilla"]') || document.querySelector('dialog.visor[open]')) return;
     this.mover(1, false);
   }
+}
+
+/* Vista en miniaturas (2 columnas, foto completa a proporción) además del carrusel 3D.
+   La vista elegida se recuerda en localStorage para todos los álbumes. */
+const CLAVE_VISTA = 'ts-vista-fotos';
+const leerVista = () => { try { return localStorage.getItem(CLAVE_VISTA) === 'grilla' ? 'grilla' : 'carrusel'; } catch { return 'carrusel'; } };
+const IC_3D = '<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M2 7l4 1.5v7L2 17zM22 7l-4 1.5v7l4 1.5zM8 5h8v14H8z"/></svg>';
+const IC_GRILLA = '<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 4h7v9H4zM13 4h7v5h-7zM4 15h7v5H4zM13 11h7v9h-7z"/></svg>';
+function aplicarVista(raiz, vista) {
+  const caja = raiz.closest('.fotos-vistas'); if (!caja) return;
+  caja.dataset.vista = vista;
+  caja.querySelectorAll('[data-vista-btn]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.vistaBtn === vista)));
+  if (vista === 'carrusel' && raiz._carrusel) raiz._carrusel.pintar();
+}
+function agregarGrilla(raiz) {
+  const items = Array.from(raiz.querySelectorAll('.carrusel-item'));
+  if (items.length < 2 || raiz.closest('.fotos-vistas')) return;
+  const caja = document.createElement('div'); caja.className = 'fotos-vistas';
+  raiz.parentNode.insertBefore(caja, raiz);
+  const barra = document.createElement('div'); barra.className = 'vista-toggle'; barra.setAttribute('role', 'group'); barra.setAttribute('aria-label', 'Tipo de vista');
+  barra.innerHTML = `<button type="button" data-vista-btn="carrusel">${IC_3D}<span>Carrusel 3D</span></button><button type="button" data-vista-btn="grilla">${IC_GRILLA}<span>Miniaturas</span></button>`;
+  const grilla = document.createElement('div'); grilla.className = 'fotos-grilla';
+  grilla.innerHTML = items.map((it) => {
+    const img = it.querySelector('img'); const c = img.cloneNode(true);
+    c.setAttribute('sizes', '(min-width: 900px) 300px, 48vw'); c.setAttribute('loading', 'lazy');
+    return `<button type="button" class="grilla-item" data-lightbox="${it.dataset.lightbox}" data-indice="${it.dataset.indice}" aria-label="${(it.getAttribute('aria-label') || '').replace(/"/g, '&quot;')}">${c.outerHTML}</button>`;
+  }).join('');
+  caja.append(barra, raiz, grilla);
+  barra.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vista-btn]'); if (!b) return;
+    const v = b.dataset.vistaBtn; try { localStorage.setItem(CLAVE_VISTA, v); } catch {}
+    document.querySelectorAll('.fotos-vistas > .carrusel').forEach((r) => aplicarVista(r, v));
+  });
+  aplicarVista(raiz, leerVista());
 }
 
 let reloj = null;
@@ -171,6 +205,7 @@ let medida = null;
 export function iniciarCarruseles(raiz = document) {
   raiz.querySelectorAll('.carrusel:not(.carrusel-activo)').forEach((el) => {
     if (el.querySelector('.carrusel-item')) instancias.add(Object.assign(el, { _carrusel: new Carrusel(el) })._carrusel);
+    agregarGrilla(el);
   });
   for (const c of instancias) if (!document.contains(c.raiz)) { c.observador.disconnect(); instancias.delete(c); }
   if (!reloj) reloj = setInterval(() => instancias.forEach((c) => c.tick()), 4200);
