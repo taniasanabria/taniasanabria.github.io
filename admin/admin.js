@@ -555,7 +555,9 @@ async function cargarFotos() {
   }
   if (error) { toast(errorLegible(error), true); return; }
   fotosActuales = data;
-  $('#f-grilla').innerHTML = data.length ? data.map((f, i) => `<div class="foto-item" data-foto="${f.id}">
+  const vivos = new Set(data.map((f) => f.id)); for (const id of selF.ids) if (!vivos.has(id)) selF.ids.delete(id);
+  $('#f-grilla').innerHTML = data.length ? data.map((f, i) => `<div class="foto-item${selF.ids.has(f.id) ? ' marcada' : ''}" data-foto="${f.id}" data-i="${i}">
+      <button type="button" class="foto-check" data-check aria-label="Seleccionar foto ${i + 1}" aria-pressed="${selF.ids.has(f.id)}"></button>
       <img src="${esc(urlMiniatura(f))}" alt="${esc(f.alt || 'Foto ' + (i + 1))}" loading="lazy" width="300" height="400">
       <span class="foto-num">Foto ${i + 1} de ${data.length}${f.origen === 'sitio' ? ' · original del sitio' : ''}</span>
       <div class="foto-acciones">
@@ -566,6 +568,155 @@ async function cargarFotos() {
       </div>
       <select data-cambiar-destino aria-label="Mover a otro servicio o álbum"><option value="">Mover a…</option>${opcionesDestino('')}</select>
     </div>`).join('') : '<p class="vacio">Todavía no hay fotos aquí. Tocá “Subir fotos”.</p>';
+  pintarSeleccion();
+}
+
+// ---- Selección múltiple de fotos (eliminar / mover / copiar / editar varias a la vez)
+const selF = { activo: false, ids: new Set(), ultimo: -1 };
+const trozos = (arr, n) => { const r = []; for (let i = 0; i < arr.length; i += n) r.push(arr.slice(i, i + n)); return r; };
+function pintarSeleccion() {
+  const g = $('#f-grilla'); g.classList.toggle('modo-sel', selF.activo);
+  $('#f-sel-activar').hidden = selF.activo;
+  $('#f-barra-sel .barra-sel-acciones').hidden = !selF.activo;
+  $('#f-barra-sel').classList.toggle('activa', selF.activo);
+  $('#f-sel-contador').textContent = selF.activo ? `${selF.ids.size} de ${fotosActuales.length} seleccionadas` : '';
+  for (const b of $$('[data-sel="mover"],[data-sel="copiar"],[data-sel="descripcion"],[data-sel="editar"],[data-sel="eliminar"]')) b.disabled = !selF.ids.size;
+}
+function marcar(item, valor) {
+  const id = item.dataset.foto; const v = valor ?? !selF.ids.has(id);
+  if (v) selF.ids.add(id); else selF.ids.delete(id);
+  item.classList.toggle('marcada', v); item.querySelector('[data-check]')?.setAttribute('aria-pressed', String(v));
+}
+function activarSeleccion(on) { selF.activo = on; if (!on) { selF.ids.clear(); $$('#f-grilla .foto-item.marcada').forEach((x) => marcar(x, false)); } selF.ultimo = -1; pintarSeleccion(); }
+function tocarItem(item, rango) {
+  const i = Number(item.dataset.i);
+  if (rango && selF.ultimo >= 0) {
+    const v = !selF.ids.has(item.dataset.foto) || true; const [a, b] = [Math.min(i, selF.ultimo), Math.max(i, selF.ultimo)];
+    for (const x of $$('#f-grilla .foto-item')) { const k = Number(x.dataset.i); if (k >= a && k <= b) marcar(x, v); }
+  } else marcar(item);
+  selF.ultimo = i; pintarSeleccion();
+}
+async function crearAlbum(tituloInicial = '') {
+  const titulo = (prompt('Nombre del álbum nuevo:', tituloInicial) || '').trim(); if (!titulo) return null;
+  const base = slug(titulo).replace(/^curso$/, 'album'); const usados = new Set(estado.albumes.map((a) => a.id));
+  let id = base; for (let n = 2; usados.has(id); n++) id = `${base}-${n}`;
+  const orden = estado.albumes.reduce((m, a) => Math.max(m, a.orden || 0), 0) + 10;
+  const { data, error } = await sb.from('albumes').insert({ id, titulo, orden, activo: true }).select().single();
+  if (error) { toast(errorLegible(error), true); return null; }
+  estado.albumes.push(data); toast(`Álbum “${titulo}” creado ✓`);
+  return 'a:' + id;
+}
+function elegirDestino(titulo) {
+  return new Promise((ok) => {
+    const d = $('#dlg-destino'); $('#dlg-destino-titulo').textContent = titulo;
+    const actual = $('#f-destino').value;
+    $('#dlg-destino-sel').innerHTML = `<option value="__nuevo">➕ Crear álbum nuevo…</option>${opcionesDestino('')}`;
+    const s = $('#dlg-destino-sel'); const op = s.querySelector(`option[value="${CSS.escape(actual)}"]`); if (op) op.disabled = true;
+    s.value = (s.querySelector('option:not([disabled]):not([value="__nuevo"])') || {}).value || '__nuevo';
+    d.returnValue = ''; d.showModal();
+    d.addEventListener('close', async () => {
+      if (d.returnValue !== 'si') return ok(null);
+      ok(s.value === '__nuevo' ? await crearAlbum() : s.value);
+    }, { once: true });
+  });
+}
+const elegidas = () => fotosActuales.filter((f) => selF.ids.has(f.id));
+async function siguienteOrden(destino) {
+  const { servicio_id, album_id } = campoDestino(destino);
+  let q = sb.from('fotos').select('orden').order('orden', { ascending: false }).limit(1);
+  q = servicio_id ? q.eq('servicio_id', servicio_id) : q.eq('album_id', album_id);
+  const { data } = await q; return ((data && data[0] && data[0].orden) || 0) + 10;
+}
+async function moverOCopiar(copiar) {
+  const fotos = elegidas(); if (!fotos.length) return;
+  const destino = await elegirDestino(`${copiar ? 'Copiar' : 'Mover'} ${fotos.length} foto${fotos.length > 1 ? 's' : ''} a…`); if (!destino) return;
+  toast(`⏳ ${copiar ? 'Copiando' : 'Moviendo'} ${fotos.length} fotos…`);
+  let orden = await siguienteOrden(destino); const campo = campoDestino(destino);
+  try {
+    if (copiar) {
+      // La copia reutiliza los mismos archivos (misma "ruta"); al eliminar se verifica que nadie más los use.
+      const filas = fotos.map(({ id: _i, creado: _c, ...resto }) => ({ ...resto, ...campo, orden: (orden += 10) }));
+      for (const t of trozos(filas, 200)) { const { error } = await sb.from('fotos').insert(t); if (error) throw error; }
+    } else {
+      // Un pedido por foto para conservar el orden; en tandas de 25 en paralelo.
+      for (const t of trozos(fotos, 25)) {
+        const r = await Promise.all(t.map((f) => sb.from('fotos').update({ ...campo, orden: (orden += 10) }).eq('id', f.id)));
+        const e = r.find((x) => x.error); if (e) throw e.error;
+      }
+    }
+  } catch (e) { toast(errorLegible(e), true); cargarFotos(); return; }
+  toast(`${fotos.length} foto${fotos.length > 1 ? 's' : ''} ${copiar ? 'copiada' : 'movida'}${fotos.length > 1 ? 's' : ''} ✓`);
+  activarSeleccion(false); cargarFotos();
+}
+async function eliminarSeleccion() {
+  const fotos = elegidas(); if (!fotos.length) return;
+  if (!confirm(`¿Eliminar ${fotos.length} foto${fotos.length > 1 ? 's' : ''}? Se dejan de mostrar en el sitio. No se puede deshacer.`)) return;
+  toast(`⏳ Eliminando ${fotos.length} fotos…`);
+  const ids = fotos.map((f) => f.id); const borrar = new Set(ids);
+  try {
+    // ¿Qué archivos siguen usados por fotos que NO se eliminan (copias en otros álbumes)?
+    const rutas = [...new Set(fotos.filter((f) => f.origen === 'storage').map((f) => f.ruta))];
+    const enUso = new Set();
+    for (const t of trozos(rutas, 150)) {
+      const { data, error } = await sb.from('fotos').select('id,ruta').in('ruta', t); if (error) throw error;
+      for (const u of data) if (!borrar.has(u.id)) enUso.add(u.ruta);
+    }
+    for (const t of trozos(ids, 150)) { const { error } = await sb.from('fotos').delete().in('id', t); if (error) throw error; }
+    const archivos = []; const vistas = new Set();
+    for (const f of fotos) if (f.origen === 'storage' && !enUso.has(f.ruta) && !vistas.has(f.ruta)) { vistas.add(f.ruta); for (const w of f.anchos) archivos.push(`${f.ruta}-${w}.${f.formato || 'webp'}`); }
+    for (const t of trozos(archivos, 500)) { const { error } = await sb.storage.from('fotos').remove(t); if (error) console.warn('archivos sin borrar', error); }
+  } catch (e) { toast(errorLegible(e), true); cargarFotos(); return; }
+  toast(`${fotos.length} foto${fotos.length > 1 ? 's' : ''} eliminada${fotos.length > 1 ? 's' : ''} ✓`);
+  activarSeleccion(false); cargarFotos();
+}
+async function descripcionSeleccion() {
+  const fotos = elegidas(); if (!fotos.length) return;
+  const texto = prompt(`Descripción para ${fotos.length} foto${fotos.length > 1 ? 's' : ''} (la lee Google y quien usa lector de pantalla):`, fotos[0].alt || '');
+  if (texto == null || !texto.trim()) return;
+  for (const t of trozos(fotos.map((f) => f.id), 150)) { const { error } = await sb.from('fotos').update({ alt: texto.trim() }).in('id', t); if (error) { toast(errorLegible(error), true); return; } }
+  toast('Descripción guardada ✓'); cargarFotos();
+}
+async function editarSeleccion() {
+  const ids = elegidas().map((f) => f.id); if (!ids.length) return;
+  if (ids.length > 30 && !confirm(`Vas a editar ${ids.length} fotos una por una. ¿Seguir?`)) return;
+  for (const id of ids) { if (!fotosActuales.some((f) => f.id === id)) continue; await editarFotoExistente(id); }
+}
+function prepararSeleccion() {
+  const g = $('#f-grilla');
+  $('#f-sel-activar').addEventListener('click', () => activarSeleccion(true));
+  $('#f-nuevo-album').addEventListener('click', async () => { const d = await crearAlbum(); if (d) { $('#f-destino').innerHTML = opcionesDestino(d); $('#f-destino').value = d; activarSeleccion(false); cargarFotos(); } });
+  $('#f-barra-sel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sel]'); if (!b) return;
+    const a = b.dataset.sel;
+    if (a === 'todas') { $$('#f-grilla .foto-item').forEach((x) => marcar(x, true)); pintarSeleccion(); }
+    if (a === 'ninguna') { $$('#f-grilla .foto-item').forEach((x) => marcar(x, false)); pintarSeleccion(); }
+    if (a === 'salir') activarSeleccion(false);
+    if (a === 'mover') moverOCopiar(false);
+    if (a === 'copiar') moverOCopiar(true);
+    if (a === 'eliminar') eliminarSeleccion();
+    if (a === 'descripcion') descripcionSeleccion();
+    if (a === 'editar') editarSeleccion();
+  });
+  // En modo selección, tocar la foto la marca (Shift+clic marca un rango). El círculo activa el modo.
+  g.addEventListener('click', (e) => {
+    const item = e.target.closest('.foto-item'); if (!item) return;
+    if (largo.hecho) { largo.hecho = false; e.preventDefault(); e.stopPropagation(); return; }
+    if (e.target.closest('[data-check]')) { e.stopPropagation(); if (!selF.activo) activarSeleccion(true); tocarItem(item, e.shiftKey); return; }
+    if (!selF.activo) return;
+    if (e.target.closest('select')) return;
+    e.preventDefault(); e.stopPropagation(); tocarItem(item, e.shiftKey);
+  }, true);
+  // Mantener apretado (celular) entra al modo selección y marca la foto.
+  const largo = { t: 0, hecho: false, x: 0, y: 0 };
+  g.addEventListener('pointerdown', (e) => {
+    const item = e.target.closest('.foto-item'); if (!item || e.target.closest('button, select') || e.button) return;
+    largo.x = e.clientX; largo.y = e.clientY; clearTimeout(largo.t);
+    largo.t = setTimeout(() => { largo.hecho = true; if (!selF.activo) activarSeleccion(true); tocarItem(item, false); navigator.vibrate?.(30); }, 500);
+  });
+  const cortar = (e) => { if (e.type !== 'pointermove' || Math.hypot(e.clientX - largo.x, e.clientY - largo.y) > 10) clearTimeout(largo.t); };
+  ['pointerup', 'pointercancel', 'pointermove'].forEach((t) => g.addEventListener(t, cortar));
+  g.addEventListener('contextmenu', (e) => { if (e.target.closest('.foto-item')) e.preventDefault(); });
+  pintarSeleccion();
 }
 
 function canvasABlob(canvas, tipo, calidad) { return new Promise((ok) => canvas.toBlob(ok, tipo, calidad)); }
@@ -1803,7 +1954,8 @@ function prepararEventos() {
     toast('Quitado ✓'); cargarHorarios();
   });
   // Fotos
-  $('#f-destino').addEventListener('change', cargarFotos);
+  $('#f-destino').addEventListener('change', () => { activarSeleccion(false); cargarFotos(); });
+  prepararSeleccion();
   $('#f-archivos').addEventListener('change', (e) => { const a = Array.from(e.target.files || []); if (a.length) subirFotos(a); });
   $('#f-grilla').addEventListener('click', (e) => {
     const item = e.target.closest('[data-foto]'); if (!item) return;

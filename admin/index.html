@@ -12,13 +12,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Panel Tania">
-  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin.css?v=20261102b">
   <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
   <script src="vendor/supabase.js" defer></script>
   <script src="mensajes-aprobacion.js"></script>
-  <script type="module" src="admin.js?v=20261102"></script>
+  <script type="module" src="admin.js?v=20261102b"></script>
   <script type="module" src="extras.js?v=20261102"></script>
-  <script type="module" src="aula-admin.js?v=20261102"></script>
+  <script type="module" src="aula-admin.js?v=20261102b"></script>
 </head>
 <body>
   <div class="cargando" id="vista-cargando"><img src="../img/logo-completo-320.webp" width="120" height="105" alt=""><p>Cargando…</p></div>
@@ -155,7 +155,32 @@
           <p class="suave">Podés elegir varias a la vez. Se achican y optimizan solas antes de subir. Para editar una foto ya subida tocá “✏️ Editar” debajo de ella.</p>
           <div id="f-progreso" class="progreso" aria-live="polite"></div>
         </div>
+        <div id="f-barra-sel" class="barra-sel">
+          <div class="barra-sel-fila">
+            <button type="button" class="btn btn-borde" id="f-sel-activar">☑ Seleccionar</button>
+            <button type="button" class="btn btn-borde" id="f-nuevo-album">＋ Nuevo álbum</button>
+            <span class="sel-contador" id="f-sel-contador" aria-live="polite"></span>
+          </div>
+          <div class="barra-sel-fila barra-sel-acciones" hidden>
+            <button type="button" class="btn btn-borde" data-sel="todas">Todas</button>
+            <button type="button" class="btn btn-borde" data-sel="ninguna">Ninguna</button>
+            <button type="button" class="btn btn-borde" data-sel="mover">↪ Mover</button>
+            <button type="button" class="btn btn-borde" data-sel="copiar">📑 Copiar</button>
+            <button type="button" class="btn btn-borde" data-sel="descripcion">✎ Descripción</button>
+            <button type="button" class="btn btn-borde" data-sel="editar">✏️ Editar una por una</button>
+            <button type="button" class="btn btn-borde btn-borrar" data-sel="eliminar">🗑 Eliminar</button>
+            <button type="button" class="btn btn-principal" data-sel="salir">Listo</button>
+          </div>
+        </div>
         <div id="f-grilla" class="grilla-fotos"></div>
+        <dialog id="dlg-destino" class="dlg-destino">
+          <form method="dialog">
+            <h3 id="dlg-destino-titulo">Elegí el álbum</h3>
+            <label for="dlg-destino-sel">Álbum o servicio</label>
+            <select id="dlg-destino-sel"></select>
+            <div class="dlg-destino-botones"><button value="no" class="btn btn-borde">Cancelar</button><button value="si" class="btn btn-principal">Aceptar</button></div>
+          </form>
+        </dialog>
       </section>
 
       <!-- Cursos -->
