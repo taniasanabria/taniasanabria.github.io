@@ -559,10 +559,12 @@ async function cargarFotos() {
   $('#f-grilla').innerHTML = data.length ? data.map((f, i) => `<div class="foto-item${selF.ids.has(f.id) ? ' marcada' : ''}" data-foto="${f.id}" data-i="${i}">
       <button type="button" class="foto-check" data-check aria-label="Seleccionar foto ${i + 1}" aria-pressed="${selF.ids.has(f.id)}"></button>
       <img src="${esc(urlMiniatura(f))}" alt="${esc(f.alt || 'Foto ' + (i + 1))}" loading="lazy" width="300" height="400">
+      ${i === 0 ? '<span class="foto-portada" title="Esta foto es la portada">★ Portada</span>' : ''}
       <span class="foto-num">Foto ${i + 1} de ${data.length}${f.origen === 'sitio' ? ' · original del sitio' : ''}</span>
       <div class="foto-acciones">
         <button type="button" class="btn btn-borde" data-mover="-1" ${i === 0 ? 'disabled' : ''} aria-label="Mover antes">◀ Antes</button>
         <button type="button" class="btn btn-borde" data-mover="1" ${i === data.length - 1 ? 'disabled' : ''} aria-label="Mover después">Después ▶</button>
+        <button type="button" class="btn btn-borde btn-portada" data-portada ${i === 0 ? 'disabled aria-pressed="true"' : ''}>${i === 0 ? '★ Es la portada' : '☆ Usar como portada'}</button>
         <button type="button" class="btn btn-borde btn-borrar" data-borrar>🗑 Eliminar</button>
         <button type="button" class="btn btn-borde btn-editar" data-editar>✏️ Editar · recortar · logo</button>
       </div>
@@ -582,6 +584,7 @@ function pintarSeleccion() {
   $('#f-barra-sel .barra-sel-acciones').hidden = !selF.activo;
   $('#f-barra-sel').classList.toggle('activa', selF.activo);
   $('#f-sel-contador').textContent = selF.activo ? `${selF.ids.size} de ${fotosActuales.length} seleccionadas` : '';
+  const bp = $('[data-sel="portada"]'); if (bp) bp.disabled = selF.ids.size !== 1;
   for (const b of $$('[data-sel="mover"],[data-sel="copiar"],[data-sel="descripcion"],[data-sel="editar"],[data-sel="eliminar"]')) b.disabled = !selF.ids.size;
 }
 function marcar(item, valor) {
@@ -748,6 +751,7 @@ function prepararSeleccion() {
     if (a === 'mover') moverOCopiar(false);
     if (a === 'copiar') moverOCopiar(true);
     if (a === 'eliminar') eliminarSeleccion();
+    if (a === 'portada' && selF.ids.size === 1) { const id = [...selF.ids][0]; activarSeleccion(false); usarComoPortada(id); }
     if (a === 'descripcion') descripcionSeleccion();
     if (a === 'editar') editarSeleccion();
   });
@@ -857,6 +861,39 @@ async function moverFoto(id, paso) {
   const err = res.find((r) => r.error);
   if (err) toast(errorLegible(err.error), true);
   cargarFotos();
+}
+
+// Portada = primera foto por orden. Elegir portada le da a esa fila el orden más bajo de SU álbum/servicio
+// (no toca otros álbumes que compartan el mismo archivo). Avisa si esa imagen ya es portada en otro lado.
+async function portadasActuales() {
+  const filas = [];
+  for (let desde = 0; desde < 20000; desde += 1000) {
+    const r = await sb.from('fotos').select('id,servicio_id,album_id,ruta,orden,creado').order('orden').order('creado').order('id').range(desde, desde + 999);
+    if (r.error) break; filas.push(...r.data); if (r.data.length < 1000) break;
+  }
+  const primera = new Map();
+  for (const f of filas) { const g = f.album_id ? 'a:' + f.album_id : 's:' + f.servicio_id; if (!primera.has(g)) primera.set(g, f); }
+  return primera;
+}
+function nombreGrupo(g) {
+  const [t, id] = [g.slice(0, 1), g.slice(2)];
+  const x = t === 'a' ? estado.albumes.find((a) => a.id === id) : estado.servicios.find((s) => s.id === id);
+  return x ? (x.titulo || x.nombre) : id;
+}
+async function usarComoPortada(id) {
+  const f = fotosActuales.find((x) => x.id === id); if (!f) return;
+  if (fotosActuales[0] && fotosActuales[0].id === id) { toast('Esa foto ya es la portada'); return; }
+  const actual = $('#f-destino').value;
+  try {
+    const otras = [...(await portadasActuales())].filter(([g, p]) => g !== actual && p.ruta === f.ruta).map(([g]) => nombreGrupo(g));
+    if (otras.length && !confirm(`Atención: esta foto ya es la portada de “${otras.join('”, “')}”.\nLo ideal es que cada álbum tenga una portada distinta.\n\n¿Usarla igual como portada aquí?`)) return;
+  } catch { /* si no se pudo verificar, se sigue igual */ }
+  const minimo = Math.min(...fotosActuales.map((x) => x.orden || 0));
+  const { error } = await sb.from('fotos').update({ orden: minimo - 1 }).eq('id', id);
+  if (error) { toast(errorLegible(error), true); return; }
+  toast('Portada actualizada ✓ Ya se ve en la página');
+  await cargarFotos();
+  $('#f-grilla').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 async function borrarFoto(id) {
@@ -2015,6 +2052,7 @@ function prepararEventos() {
     const item = e.target.closest('[data-foto]'); if (!item) return;
     const m = e.target.closest('[data-mover]'); if (m) { moverFoto(item.dataset.foto, Number(m.dataset.mover)); return; }
     if (e.target.closest('[data-borrar]')) borrarFoto(item.dataset.foto);
+    if (e.target.closest('[data-portada]')) usarComoPortada(item.dataset.foto);
     if (e.target.closest('[data-editar]')) editarFotoExistente(item.dataset.foto);
   });
   $('#f-grilla').addEventListener('change', (e) => {

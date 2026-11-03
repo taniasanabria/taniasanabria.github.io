@@ -345,3 +345,6 @@ dialog.editor[open] { display: flex; }
 .tabs button:focus-visible { outline: 2px solid #e9d18c; outline-offset: -2px; }
 html:has(dialog[open]) .tabs { transform: translateY(110%); }
 .tabs { transition: transform .25s ease; }
+
+.foto-portada { position: absolute; top: .5rem; right: .5rem; z-index: 2; padding: .2rem .6rem; border-radius: 999px; background: linear-gradient(115deg, #7d5d12, #c9a24a 45%, #f1dc9c 55%, #c9a24a); color: #1b1610; font-size: .75rem; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.btn-portada[aria-pressed="true"] { color: #7a5b16; border-color: #c9a24a; opacity: 1; }

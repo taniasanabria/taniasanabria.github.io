@@ -12,13 +12,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Panel Tania">
-  <link rel="stylesheet" href="admin.css?v=20261103a">
+  <link rel="stylesheet" href="admin.css?v=20261103b">
   <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
   <script src="vendor/supabase.js" defer></script>
   <script src="mensajes-aprobacion.js"></script>
-  <script type="module" src="admin.js?v=20261102c"></script>
+  <script type="module" src="admin.js?v=20261103b"></script>
   <script type="module" src="extras.js?v=20261102"></script>
-  <script type="module" src="aula-admin.js?v=20261102c"></script>
+  <script type="module" src="aula-admin.js?v=20261103b"></script>
 </head>
 <body>
   <div class="cargando" id="vista-cargando"><img src="../img/logo-completo-320.webp" width="120" height="105" alt=""><p>Cargando…</p></div>
@@ -168,6 +168,7 @@
             <button type="button" class="btn btn-borde" data-sel="ninguna">Ninguna</button>
             <button type="button" class="btn btn-borde" data-sel="mover">↪ Mover</button>
             <button type="button" class="btn btn-borde" data-sel="copiar">📑 Copiar</button>
+            <button type="button" class="btn btn-borde" data-sel="portada" title="Elegí exactamente 1 foto">★ Usar como portada</button>
             <button type="button" class="btn btn-borde" data-sel="descripcion">✎ Descripción</button>
             <button type="button" class="btn btn-borde" data-sel="editar">✏️ Editar una por una</button>
             <button type="button" class="btn btn-borde btn-borrar" data-sel="eliminar">🗑 Eliminar</button>

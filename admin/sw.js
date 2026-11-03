@@ -1,4 +1,4 @@
-// versión 2026-11-03a (barra inferior)
+// versión 2026-11-03b (portadas)
 /*
  * Service worker del Panel de Tania (alcance: /admin/).
  * - Muestra las notificaciones push de solicitudes nuevas, aunque el panel esté cerrado.
