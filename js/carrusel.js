@@ -32,6 +32,7 @@ class Carrusel {
     this.puntos = raiz.querySelector('.carrusel-puntos');
     if (this.prev) { this.prev.hidden = false; this.prev.addEventListener('click', () => this.mover(-1, true)); }
     if (this.sig) { this.sig.hidden = false; this.sig.addEventListener('click', () => this.mover(1, true)); }
+    if (this.puntos && this.items.length > 40) { this.puntos.remove(); this.puntos = null; }
     if (this.puntos) {
       this.puntos.innerHTML = this.items.map((_, i) => `<span data-punto="${i}"></span>`).join('');
       this.puntos.addEventListener('click', (e) => { const p = e.target.closest('[data-punto]'); if (p) this.ir(Number(p.dataset.punto), true); });

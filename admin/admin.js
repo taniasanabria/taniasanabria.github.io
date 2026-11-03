@@ -543,9 +543,16 @@ async function cargarFotos() {
   const actual = sel.value || 'a:' + (estado.albumes[0] && estado.albumes[0].id);
   sel.innerHTML = opcionesDestino(actual);
   const { servicio_id, album_id } = campoDestino(sel.value);
-  let q = sb.from('fotos').select('*').order('orden').order('creado');
-  q = servicio_id ? q.eq('servicio_id', servicio_id) : q.eq('album_id', album_id);
-  const { data, error } = await q;
+  // Supabase entrega máximo 1000 filas por pedido: se traen en páginas (el álbum Instagram tiene más).
+  const data = []; let error = null;
+  for (let desde = 0; desde < 20000; desde += 1000) {
+    let q = sb.from('fotos').select('*').order('orden').order('creado').order('id');
+    q = servicio_id ? q.eq('servicio_id', servicio_id) : q.eq('album_id', album_id);
+    const r = await q.range(desde, desde + 999);
+    if (r.error) { error = r.error; break; }
+    data.push(...r.data);
+    if (r.data.length < 1000) break;
+  }
   if (error) { toast(errorLegible(error), true); return; }
   fotosActuales = data;
   $('#f-grilla').innerHTML = data.length ? data.map((f, i) => `<div class="foto-item" data-foto="${f.id}">

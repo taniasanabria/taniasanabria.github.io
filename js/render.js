@@ -146,7 +146,7 @@ export function carrusel(clave, fotos, manifiesto, { titulo = '', etiqueta = '' 
   if (!fotos.length) return '';
   return `<div class="carrusel" data-carrusel="${esc(clave)}" role="region" aria-roledescription="carrusel" aria-label="${esc(etiqueta || titulo)}">
   <div class="carrusel-pista">${fotos
-    .map((f, i) => `<button type="button" class="carrusel-item" data-lightbox="${esc(clave)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}${titulo ? ' · ' + esc(titulo) : ''}"><span class="carrusel-led" aria-hidden="true"></span><span class="carrusel-marco">${imagen(f, manifiesto, { alt: `${titulo}: foto ${i + 1}`, sizes: '(min-width: 900px) 340px, 64vw', anchoMax: 960 })}</span></button>`)
+    .map((f, i) => `<button type="button" class="carrusel-item" data-lightbox="${esc(clave)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}${titulo ? ' · ' + esc(titulo) : ''}"><span class="carrusel-led" aria-hidden="true"></span><span class="carrusel-marco">${imagen(f, manifiesto, { alt: (manifiesto[f] && manifiesto[f].alt) || `${titulo}: foto ${i + 1}`, sizes: '(min-width: 900px) 340px, 64vw', anchoMax: 960 })}</span></button>`)
     .join('')}</div>
   ${fotos.length > 1 ? `<button type="button" class="carrusel-flecha prev" aria-label="Foto anterior" hidden>${icono('chevron-left')}</button><button type="button" class="carrusel-flecha sig" aria-label="Foto siguiente" hidden>${icono('chevron-right')}</button><div class="carrusel-puntos" aria-hidden="true"></div>` : ''}
 </div>`;

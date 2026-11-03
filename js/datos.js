@@ -86,10 +86,22 @@ const urlFotoStorage = (ruta) => `${SUPABASE.url}/storage/v1/object/public/fotos
  * Combina los datos de Supabase con el catálogo embebido (que aporta categorías, textos del negocio, bio…).
  * Devuelve { catalogo, manifiesto } en el mismo formato que usa render.js.
  */
+// PostgREST devuelve como máximo 1000 filas por pedido: se piden en páginas.
+async function pedirTodasLasFotos() {
+  const todas = [];
+  for (let desde = 0; desde < 20000; desde += 1000) {
+    const pag = await pedir(`fotos?select=id,servicio_id,album_id,origen,ruta,anchos,formato,ancho,alto,alt,orden&order=orden.asc,creado.asc,id.asc&limit=1000&offset=${desde}`);
+    if (!Array.isArray(pag)) return pag;
+    todas.push(...pag);
+    if (pag.length < 1000) break;
+  }
+  return todas;
+}
+
 export async function cargarDesdeSupabase(base, manifiestoBase) {
   const [servicios, fotos, albumes, ajustes] = await Promise.all([
     pedir('servicios?select=*&order=orden.asc,nombre.asc'),
-    pedir('fotos?select=id,servicio_id,album_id,origen,ruta,anchos,formato,ancho,alto,alt,orden&order=orden.asc,creado.asc'),
+    pedirTodasLasFotos(),
     pedir('albumes?select=*&order=orden.asc'),
     pedir('ajustes?select=whatsapp,politica_sena,politica_horario,zona_horaria'),
   ]);
