@@ -167,10 +167,27 @@
   <p class="pie-copy">© {{ANIO}} Tania Sanabria Studio Profesional. Todos los derechos reservados.</p>
 </footer>
 
-<section class="barra-movil" aria-label="Acciones rápidas">
-  <button type="button" class="btn btn-primario" data-reservar="">{{ICONO_CALENDARIO}} Reservar turno</button>
-  <button type="button" class="btn btn-chat" data-chat aria-expanded="false" aria-controls="chat" aria-label="Preguntá en el chat">{{ICONO_CHAT}} <span>Preguntá</span></button>
-</section>
+<nav class="barra-movil tabbar" id="tabbar" aria-label="Navegación principal">
+  <a class="tab" href="#inicio" data-tab="inicio" ><span class="tab-ic">{{ICONO_T_INICIO}}</span><span class="tab-txt">Inicio</span></a>
+  <a class="tab" href="#maquillaje" data-tab="maquillaje" data-grupo="maquillaje estetica eventos"><span class="tab-ic">{{ICONO_T_SERV}}</span><span class="tab-txt">Servicios</span></a>
+  <button type="button" class="tab tab-reservar" data-reservar="" aria-label="Reservar turno"><span class="tab-ic">{{ICONO_CALENDARIO}}</span><span class="tab-txt">Reservar</span></button>
+  <a class="tab" href="#galeria" data-tab="galeria" ><span class="tab-ic">{{ICONO_T_GAL}}</span><span class="tab-txt">Galería</span></a>
+  <button type="button" class="tab" id="tab-mas" data-grupo="academia sobre-tania contacto" aria-haspopup="dialog" aria-controls="hoja-mas" aria-expanded="false"><span class="tab-ic">{{ICONO_T_MAS}}</span><span class="tab-txt">Más</span></button>
+</nav>
+<dialog class="hoja" id="hoja-mas" aria-labelledby="hoja-mas-titulo">
+  <div class="hoja-asa" aria-hidden="true"></div>
+  <div class="hoja-cab"><h2 id="hoja-mas-titulo">Menú</h2><button type="button" class="btn-cerrar" data-cerrar-hoja aria-label="Cerrar menú">{{ICONO_X}}</button></div>
+  <ul class="hoja-lista">
+    <li><a href="#academia" data-ir-hoja="academia">{{ICONO_T_ACA}}<span>Academia<small>Cursos de maquillaje</small></span></a></li>
+    <li><a href="#maquillaje" data-ir-hoja="maquillaje">{{ICONO_T_SERV}}<span>Maquillaje<small>Social, novias, FX y más</small></span></a></li>
+    <li><a href="#estetica" data-ir-hoja="estetica">{{ICONO_T_EST}}<span>Estética &amp; Hair<small>Cejas, trenzas, tocados</small></span></a></li>
+    <li><a href="#eventos" data-ir-hoja="eventos">{{ICONO_T_EVE}}<span>Eventos VIP<small>Glitter bar y neon party</small></span></a></li>
+    <li><a href="#sobre-tania" data-ir-hoja="sobre-tania">{{ICONO_T_SOBRE}}<span>Sobre Tania<small>Trayectoria y estudio</small></span></a></li>
+    <li><a href="#contacto" data-ir-hoja="contacto">{{ICONO_UBICACION}}<span>Contacto<small>Ubicación y horarios</small></span></a></li>
+    <li><a href="aula/">{{ICONO_T_ACA}}<span>Aula Virtual<small>Ingreso de alumnas</small></span></a></li>
+    <li><button type="button" data-chat aria-controls="chat">{{ICONO_CHAT}}<span>Asistente virtual<small>Preguntas y reservas</small></span></button></li>
+  </ul>
+</dialog>
 <button type="button" class="chat-flotante" data-chat aria-expanded="false" aria-controls="chat" aria-label="Abrir el asistente: preguntas y reservas">{{ICONO_CHAT}}<span>¿Dudas? Preguntame</span></button>
 
 <!-- Detalle de servicio -->

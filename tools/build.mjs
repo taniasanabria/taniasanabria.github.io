@@ -135,7 +135,7 @@ const reemplazos = {
   ICONO_MENU: I('bars'), ICONO_CALENDARIO: I('calendar-check'), ICONO_CANDADO: I('user-lock'), ICONO_RELOJ: I('clock'),
   ICONO_UBICACION: I('location-dot'), ICONO_IG: I('instagram'), ICONO_FB: I('facebook-f'), ICONO_TT: I('tiktok'),
   ICONO_COMPARTIR: I('share-nodes'), ICONO_INFO: I('circle-info'), ICONO_WA: I('whatsapp'), ICONO_CHAT: I('comment-dots'), ICONO_MAPA: I('map-location-dot'),
-  ICONO_LUPA: I('magnifying-glass-plus'), MENU_CATS: menuCats, DESTACADOS: destacados,
+  ICONO_LUPA: I('magnifying-glass-plus'), MENU_CATS: menuCats, ICONO_T_INICIO: I('house-chimney'), ICONO_T_SERV: I('wand-magic-sparkles'), ICONO_T_GAL: I('images'), ICONO_T_MAS: I('bars'), ICONO_T_ACA: I('graduation-cap'), ICONO_T_EST: I('scissors'), ICONO_T_EVE: I('bolt'), ICONO_T_SOBRE: I('crown'), DESTACADOS: destacados,
   ICONO_X: I('xmark'), ICONO_IZQ: I('chevron-left'), ICONO_DER: I('chevron-right'), ICONO_CHECK: I('check'),
 };
 

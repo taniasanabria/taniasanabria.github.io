@@ -659,6 +659,12 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
     const chip = $(`.chip[data-album="${CSS.escape(album)}"]`);
     if (chip) elegirAlbum(chip, false);
   }
+  for (const t of $$('.tab[data-tab], #tab-mas')) {
+    const si = t.dataset.tab === vista || (t.dataset.grupo || '').split(' ').includes(vista);
+    t.classList.toggle('activo', si);
+    if (si && t.tagName === 'A') t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
+  }
+  for (const l of $$('[data-ir-hoja]')) { if (l.dataset.irHoja === vista) l.setAttribute('aria-current', 'page'); else l.removeAttribute('aria-current'); }
   const etiqueta = $(`.menu-cat[data-ir="${CSS.escape(vista)}"] span`);
   document.title = vista === 'inicio' || !etiqueta ? TITULO_BASE : `${etiqueta.textContent} · Tania Sanabria Makeup Studio`;
   if (arriba && (cambio || sub)) window.scrollTo({ top: 0, behavior: 'auto' });
@@ -666,6 +672,17 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
 }
 
 function prepararMenu() {
+  const hoja = $('#hoja-mas'), mas = $('#tab-mas');
+  if (hoja && mas) {
+    mas.addEventListener('click', () => { hoja.showModal(); mas.setAttribute('aria-expanded', 'true'); });
+    hoja.addEventListener('close', () => mas.setAttribute('aria-expanded', 'false'));
+    hoja.addEventListener('click', (e) => { if (e.target === hoja || e.target.closest('[data-cerrar-hoja], a, [data-chat]')) hoja.close(); });
+  }
+  $('#tabbar')?.addEventListener('click', (e) => {
+    const t = e.target.closest('a.tab');
+    if (t && location.hash.split('/')[0] === '#' + t.dataset.tab) { e.preventDefault(); if (location.hash !== '#' + t.dataset.tab) location.hash = t.dataset.tab; else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (t && !location.hash && t.dataset.tab === 'inicio') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
   const cabecera = $('#cabecera');
   const observador = new IntersectionObserver(([en]) => cabecera.classList.toggle('compacta', !en.isIntersecting), { rootMargin: '-80px 0px 0px 0px' });
   observador.observe($('#inicio'));
