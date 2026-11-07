@@ -657,7 +657,7 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
     for (const t of $$('.grilla > .tarjeta', seccion)) t.hidden = !!valido && t.id !== 'servicio-' + sub;
     seccion.querySelector('.grilla').classList.toggle('grilla-sola', !!valido);
   }
-  if (vista === 'galeria') elegirAlbum(album, false);
+  const volviendoAlbumes = vista === 'galeria' && elegirAlbum(album, false);
   for (const t of $$('.tab[data-tab], #tab-mas')) {
     const si = t.dataset.tab === vista || (t.dataset.grupo || '').split(' ').includes(vista);
     t.classList.toggle('activo', si);
@@ -666,7 +666,8 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
   for (const l of $$('[data-ir-hoja]')) { if (l.dataset.irHoja === vista) l.setAttribute('aria-current', 'page'); else l.removeAttribute('aria-current'); }
   const etiqueta = $(`.menu-cat[data-ir="${CSS.escape(vista)}"] span`);
   document.title = vista === 'inicio' || !etiqueta ? TITULO_BASE : `${etiqueta.textContent} · Tania Sanabria Makeup Studio`;
-  if (arriba && (cambio || sub || vista === 'galeria')) window.scrollTo({ top: 0, behavior: 'auto' });
+  if (volviendoAlbumes) restaurarScrollIndiceAlbumes();
+  else if (arriba && (cambio || sub || (vista === 'galeria' && album))) window.scrollTo({ top: 0, behavior: 'auto' });
   requestAnimationFrame(() => refrescarCarruseles());
 }
 
@@ -679,7 +680,7 @@ function prepararMenu() {
   }
   $('#tabbar')?.addEventListener('click', (e) => {
     const t = e.target.closest('a.tab');
-    if (t && location.hash.split('/')[0] === '#' + t.dataset.tab) { e.preventDefault(); if (location.hash !== '#' + t.dataset.tab) location.hash = t.dataset.tab; else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (t && location.hash.split('/')[0] === '#' + t.dataset.tab) { e.preventDefault(); if (location.hash !== '#' + t.dataset.tab) irAHashSinSalto('#' + t.dataset.tab); else window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (t && !location.hash && t.dataset.tab === 'inicio') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   });
   const cabecera = $('#cabecera');
@@ -688,13 +689,41 @@ function prepararMenu() {
   // Tocar la categoría en la que ya estás: vuelve arriba (y quita el filtro de subcategoría).
   $('#menu-cats').addEventListener('click', (e) => {
     const a = e.target.closest('.menu-cat');
-    if (a && location.hash.split('/')[0] === '#' + a.dataset.ir) { e.preventDefault(); if (location.hash !== '#' + a.dataset.ir) location.hash = a.dataset.ir; else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (a && location.hash.split('/')[0] === '#' + a.dataset.ir) { e.preventDefault(); if (location.hash !== '#' + a.dataset.ir) irAHashSinSalto('#' + a.dataset.ir); else window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (a && !location.hash && a.dataset.ir === 'inicio') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   });
 }
 
+let albumAbierto = null;
+let scrollIndiceAlbumes = 0;
+
+function scrollSinAnimacion(y) {
+  const html = document.documentElement;
+  const previo = html.style.scrollBehavior;
+  html.style.scrollBehavior = 'auto';
+  window.scrollTo(0, y);
+  html.style.scrollBehavior = previo;
+}
+
+function restaurarScrollIndiceAlbumes() {
+  const y = scrollIndiceAlbumes;
+  scrollSinAnimacion(y);
+  requestAnimationFrame(() => {
+    scrollSinAnimacion(y);
+    requestAnimationFrame(() => scrollSinAnimacion(y));
+  });
+}
+
+function irAHashSinSalto(hash) {
+  if (location.hash === hash) return;
+  history.pushState(history.state, '', hash);
+  atenderHash();
+}
+
 function elegirAlbum(id, actualizarUrl = true) {
   const panel = id ? $(`[data-album-panel="${CSS.escape(id)}"]`) : null;
+  const volviendoAlIndice = !panel && !!albumAbierto;
+  albumAbierto = panel ? id : null;
   const indice = $('[data-albumes-indice]');
   const volver = $('[data-albumes-volver]');
   if (indice) indice.hidden = !!panel;
@@ -705,6 +734,7 @@ function elegirAlbum(id, actualizarUrl = true) {
     if (location.hash !== dest) history.replaceState(history.state, '', dest);
   }
   if (panel) refrescarCarruseles($('#galeria'));
+  return volviendoAlIndice;
 }
 
 // Asistente virtual: se descarga recién al tocar el botón (no afecta la carga de la página).
@@ -727,7 +757,13 @@ function prepararClics() {
   ['pointerenter', 'touchstart', 'focusin'].forEach((ev) => document.addEventListener(ev, (e) => {
     if (e.target.closest && e.target.closest('[data-chat]')) cargarChat().catch(() => { chatModulo = null; });
   }, { passive: true, capture: true }));
+  // Guardar el scroll de las carpetas antes de que el enlace del álbum mueva la página.
   document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('a.album-carpeta')) scrollIndiceAlbumes = window.scrollY;
+  }, true);
+  document.addEventListener('click', (e) => {
+    const volverAlbumes = e.target.closest('a[href="#galeria"]');
+    if (volverAlbumes && albumAbierto) { e.preventDefault(); irAHashSinSalto('#galeria'); return; }
     const asistente = e.target.closest('[data-chat]');
     if (asistente) { e.preventDefault(); abrirAsistente(asistente); return; }
     const reservar = e.target.closest('[data-reservar]');
