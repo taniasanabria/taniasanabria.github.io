@@ -595,7 +595,9 @@ function prepararReserva() {
 // Compartir (con manejo de cancelación y respaldo de copiar enlace)
 // ------------------------------------------------------------------
 async function compartir(ancla) {
-  const url = location.origin + location.pathname + (ancla ? '#' + ancla : '');
+  // WhatsApp no arma bien la portada si el enlace lleva #; usamos ?ir= y al abrir se convierte en el ancla.
+  const base = location.origin + location.pathname;
+  const url = ancla ? `${base}?ir=${encodeURIComponent(ancla)}` : base;
   const datos = { title: 'Tania Sanabria · Makeup Studio Professional', url };
   if (navigator.share) {
     try {
@@ -862,6 +864,13 @@ async function iniciar() {
   prepararMenu();
   prepararClics();
   iniciarCarruseles();
+  const paramsIr = new URLSearchParams(location.search);
+  const ir = paramsIr.get('ir');
+  if (ir) {
+    paramsIr.delete('ir');
+    const resto = paramsIr.toString();
+    history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + '#' + ir);
+  }
   atenderHash();
   window.addEventListener('hashchange', atenderHash);
   document.documentElement.classList.add('js-listo');
