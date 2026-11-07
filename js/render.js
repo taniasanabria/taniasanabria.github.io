@@ -284,23 +284,37 @@ export function seccionDestacados(galerias, manifiesto) {
 </section>`;
 }
 
-/** Galería principal: solo álbumes que tienen fotos; los vacíos se ocultan. */
+/** Galería principal: carpetas en 2 columnas (como en el celular). Los álbumes vacíos se ocultan. */
 export function galeriaPrincipal(galerias, manifiesto) {
   const conFotos = galerias
     .map((g) => ({ ...g, fotos: fotosDisponibles(g.fotos, manifiesto) }))
     .filter((g) => g.fotos.length);
   const proximos = galerias.filter((g) => !fotosDisponibles(g.fotos, manifiesto).length).map((g) => g.titulo);
   if (!conFotos.length) return marcador({ texto: 'Galería en preparación' });
-  const chips = conFotos.length > 1
-    ? `<div class="chips" role="tablist" aria-label="Álbumes">${conFotos.map((g, i) => `<button type="button" role="tab" class="chip" aria-selected="${i === 0}" data-album="${esc(g.id)}">${esc(g.titulo)} <span>${g.fotos.length}</span></button>`).join('')}</div>`
-    : `<p class="album-nombre">${esc(conFotos[0].titulo)} · ${conFotos[0].fotos.length} fotos</p>`;
+  const carpetas = conFotos.map((g) => {
+    const n = g.fotos.length;
+    const cuenta = n === 1 ? '1 foto' : `${n} fotos`;
+    const portada = imagen(g.fotos[0], manifiesto, {
+      alt: '',
+      clase: 'album-carpeta-foto',
+      sizes: '(min-width: 900px) 340px, 46vw',
+      anchoMax: 480,
+    });
+    return `<a class="album-carpeta" href="#galeria/${esc(g.id)}" data-album="${esc(g.id)}">
+      <span class="album-carpeta-caja" aria-hidden="true"><span class="album-carpeta-hoja"></span><span class="album-carpeta-cuerpo">${portada}</span></span>
+      <span class="album-carpeta-meta"><span class="album-carpeta-nombre">${esc(g.titulo)}</span><span class="album-carpeta-cuenta">${cuenta}</span></span>
+    </a>`;
+  }).join('');
+  const indice = `<div data-albumes-indice><nav class="album-carpetas" aria-label="Álbumes">${carpetas}</nav>${
+    proximos.length
+      ? `<p class="galeria-nota">${icono('wand-magic-sparkles')} Muy pronto sumamos nuevos álbumes: ${esc(proximos.join(', '))}.</p>`
+      : ''
+  }</div>`;
+  const volver = `<p class="album-volver" data-albumes-volver hidden><a href="#galeria">${icono('chevron-left')} Álbumes</a></p>`;
   const albumes = conFotos
-    .map((g, gi) => `<div class="album-panel" data-album-panel="${esc(g.id)}"${gi ? ' hidden' : ''}>${carrusel('galeria-' + g.id, g.fotos, manifiesto, { titulo: g.titulo, etiqueta: `Álbum ${g.titulo}` })}</div>`)
+    .map((g) => `<div class="album-panel" data-album-panel="${esc(g.id)}" hidden>${carrusel('galeria-' + g.id, g.fotos, manifiesto, { titulo: g.titulo, etiqueta: `Álbum ${g.titulo}` })}</div>`)
     .join('');
-  const nota = proximos.length
-    ? `<p class="galeria-nota">${icono('wand-magic-sparkles')} Muy pronto sumamos nuevos álbumes: ${esc(proximos.join(', '))}.</p>`
-    : '';
-  return chips + albumes + nota;
+  return indice + volver + albumes;
 }
 
 /** Opciones agrupadas para el selector de servicio del formulario. */

@@ -655,10 +655,7 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
     for (const t of $$('.grilla > .tarjeta', seccion)) t.hidden = !!valido && t.id !== 'servicio-' + sub;
     seccion.querySelector('.grilla').classList.toggle('grilla-sola', !!valido);
   }
-  if (vista === 'galeria' && album) {
-    const chip = $(`.chip[data-album="${CSS.escape(album)}"]`);
-    if (chip) elegirAlbum(chip, false);
-  }
+  if (vista === 'galeria') elegirAlbum(album, false);
   for (const t of $$('.tab[data-tab], #tab-mas')) {
     const si = t.dataset.tab === vista || (t.dataset.grupo || '').split(' ').includes(vista);
     t.classList.toggle('activo', si);
@@ -667,7 +664,7 @@ function mostrarVista(vista, { sub = '', album = '', arriba = true } = {}) {
   for (const l of $$('[data-ir-hoja]')) { if (l.dataset.irHoja === vista) l.setAttribute('aria-current', 'page'); else l.removeAttribute('aria-current'); }
   const etiqueta = $(`.menu-cat[data-ir="${CSS.escape(vista)}"] span`);
   document.title = vista === 'inicio' || !etiqueta ? TITULO_BASE : `${etiqueta.textContent} · Tania Sanabria Makeup Studio`;
-  if (arriba && (cambio || sub)) window.scrollTo({ top: 0, behavior: 'auto' });
+  if (arriba && (cambio || sub || vista === 'galeria')) window.scrollTo({ top: 0, behavior: 'auto' });
   requestAnimationFrame(() => refrescarCarruseles());
 }
 
@@ -694,11 +691,18 @@ function prepararMenu() {
   });
 }
 
-function elegirAlbum(chip, actualizarUrl = true) {
-  $$('.chip[data-album]').forEach((c) => c.setAttribute('aria-selected', String(c === chip)));
-  $$('[data-album-panel]').forEach((p) => { p.hidden = p.dataset.albumPanel !== chip.dataset.album; });
-  if (actualizarUrl) history.replaceState(history.state, '', '#galeria/' + chip.dataset.album);
-  refrescarCarruseles($('#galeria'));
+function elegirAlbum(id, actualizarUrl = true) {
+  const panel = id ? $(`[data-album-panel="${CSS.escape(id)}"]`) : null;
+  const indice = $('[data-albumes-indice]');
+  const volver = $('[data-albumes-volver]');
+  if (indice) indice.hidden = !!panel;
+  if (volver) volver.hidden = !panel;
+  $$('[data-album-panel]').forEach((p) => { p.hidden = p !== panel; });
+  if (actualizarUrl) {
+    const dest = panel ? '#galeria/' + id : '#galeria';
+    if (location.hash !== dest) history.replaceState(history.state, '', dest);
+  }
+  if (panel) refrescarCarruseles($('#galeria'));
 }
 
 // Asistente virtual: se descarga recién al tocar el botón (no afecta la carga de la página).
@@ -732,8 +736,6 @@ function prepararClics() {
     if (foto) { e.preventDefault(); abrirVisor(foto.dataset.lightbox, Number(foto.dataset.indice), foto); return; }
     const comp = e.target.closest('[data-compartir]');
     if (comp) { e.preventDefault(); compartir(comp.dataset.compartir); return; }
-    const chip = e.target.closest('.chip[data-album]');
-    if (chip) { elegirAlbum(chip); return; }
     const dia = e.target.closest('.dia-chip[data-fecha], .dia-celda[data-fecha]');
     if (dia) { const campo = $('#r-fecha'); campo.value = dia.dataset.fecha; campo.dispatchEvent(new Event('change', { bubbles: true })); }
   });
