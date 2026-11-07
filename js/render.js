@@ -152,6 +152,14 @@ export function carrusel(clave, fotos, manifiesto, { titulo = '', etiqueta = '' 
 </div>`;
 }
 
+/** Miniaturas en 2 columnas, se deslizan hacia arriba y abajo (igual que en la galería). */
+export function grillaFotos(clave, fotos, manifiesto, { titulo = '', etiqueta = '' } = {}) {
+  if (!fotos.length) return '';
+  return `<div class="fotos-grilla" role="region" aria-label="${esc(etiqueta || `Fotos de ${titulo}`)}">${fotos
+    .map((f, i) => `<button type="button" class="grilla-item" data-lightbox="${esc(clave)}" data-indice="${i}" aria-label="Ampliar foto ${i + 1} de ${fotos.length}${titulo ? ' · ' + esc(titulo) : ''}">${imagen(f, manifiesto, { alt: (manifiesto[f] && manifiesto[f].alt) || `${titulo}: foto ${i + 1}`, sizes: '(min-width: 900px) 300px, 48vw', anchoMax: 960 })}</button>`)
+    .join('')}</div>`;
+}
+
 function listaDetalles(items) {
   if (!items || !items.length) return '';
   return `<ul class="lista-detalles">${items
@@ -230,7 +238,7 @@ export function flyerCurso(s, manifiesto, { sizes = '(min-width: 700px) 560px, 9
 export function detalleServicio(s, manifiesto) {
   const fotos = fotosDisponibles(s.fotos, manifiesto);
   const galeria = fotos.length
-    ? carrusel(s.id, fotos, manifiesto, { titulo: s.nombre, etiqueta: `Fotos de ${s.nombre}` })
+    ? grillaFotos(s.id, fotos, manifiesto, { titulo: s.nombre })
     : `<div class="tira-vacia">${marcador({ texto: 'Pronto vas a ver fotos de este servicio aquí' })}</div>`;
 
   const complemento = s.complemento
