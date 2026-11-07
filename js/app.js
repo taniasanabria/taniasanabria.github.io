@@ -3,8 +3,8 @@
  * El contenido principal ya viene en el HTML; aquí solo se agrega comportamiento.
  */
 import { cargarCatalogo, cargarManifiestoFotos, cargarDesdeSupabase, rpc, supabaseActivo } from './datos.js?v=20261107c';
-import { detalleServicio, fotosDisponibles, indiceReservas, rutaFoto, seccionCategoria, galeriaPrincipal, seccionDestacados, opcionesServicio, esc } from './render.js?v=20261107e';
-import { iniciarCarruseles, refrescarCarruseles } from './carrusel.js?v=20261107c';
+import { detalleServicio, fotosDisponibles, indiceReservas, rutaFoto, seccionCategoria, galeriaPrincipal, seccionDestacados, opcionesServicio, esc } from './render.js?v=20261107f';
+import { iniciarCarruseles, refrescarCarruseles } from './carrusel.js?v=20261107f';
 import { crearVisor } from './visor.js?v=20261107c';
 import { pintarDias, pintarHoras } from './agenda-ui.js?v=20261107c';
 

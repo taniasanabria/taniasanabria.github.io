@@ -181,7 +181,7 @@ function aplicarVista(raiz, vista) {
 }
 function agregarGrilla(raiz) {
   const items = Array.from(raiz.querySelectorAll('.carrusel-item'));
-  if (items.length < 2 || raiz.closest('.fotos-vistas')) return;
+  if (items.length < 2 || raiz.closest('.fotos-vistas') || raiz.closest('.dialogo')) return;
   const caja = document.createElement('div'); caja.className = 'fotos-vistas';
   raiz.parentNode.insertBefore(caja, raiz);
   const barra = document.createElement('div'); barra.className = 'vista-toggle'; barra.setAttribute('role', 'group'); barra.setAttribute('aria-label', 'Tipo de vista');

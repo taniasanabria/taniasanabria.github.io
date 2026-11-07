@@ -238,7 +238,7 @@ export function flyerCurso(s, manifiesto, { sizes = '(min-width: 700px) 560px, 9
 export function detalleServicio(s, manifiesto) {
   const fotos = fotosDisponibles(s.fotos, manifiesto);
   const galeria = fotos.length
-    ? grillaFotos(s.id, fotos, manifiesto, { titulo: s.nombre })
+    ? carrusel(s.id, fotos, manifiesto, { titulo: s.nombre })
     : `<div class="tira-vacia">${marcador({ texto: 'Pronto vas a ver fotos de este servicio aquí' })}</div>`;
 
   const complemento = s.complemento
