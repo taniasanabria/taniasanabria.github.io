@@ -251,3 +251,15 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
 @media print { .no-imprimir, .cabecera, .nav-movil, .nav-escritorio, .toast { display: none !important; } .cert { border-width: 8px; } }
 .semana-bloqueada .clase{opacity:.6;cursor:default}.semana-tit{margin:.6rem 0 0;color:var(--oro,#7a5b16);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.72rem}
 .guia-oral{margin:.5rem 0;background:#faf7f2;border:1px solid #e6dccb;border-radius:12px;padding:.5rem .8rem}.guia-oral summary{cursor:pointer;font-weight:600}.guia-oral ol{margin:.5rem 0 0;padding-left:1.2rem}.guia-oral li{margin-bottom:.45rem}
+
+/* Pausa y cuotas */
+.aviso-pausa { margin: 1rem 0; padding: .8rem 1rem; border: 1.5px solid #d9c8f2; background: #f6f0fd; border-radius: 14px; color: #4a2f73; }
+.aviso-pausa p { margin: .3rem 0 0; font-size: .9rem; }
+.cuotas-tarjeta { max-width: 680px; margin: 0 auto 1rem; }
+.cuotas-lista { list-style: none; margin: 0 0 .6rem; padding: 0; }
+.cuota-fila { display: grid; grid-template-columns: 1fr auto auto; gap: .6rem; align-items: center; padding: .65rem 0; border-bottom: 1px solid var(--linea, #e8dfcf); }
+.cuota-fila:last-child { border-bottom: 0; }
+.cuota-fila small { display: block; color: var(--suave); font-size: .78rem; }
+.cuota-datos { text-align: right; }
+.cuota-datos b { display: block; }
+@media (max-width: 340px) { .cuota-fila { grid-template-columns: 1fr auto; } .cuota-fila .etiqueta { grid-column: 1 / -1; justify-self: start; } .cuota-datos { text-align: right; } }

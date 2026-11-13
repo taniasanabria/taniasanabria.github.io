@@ -12,13 +12,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Panel Tania">
-  <link rel="stylesheet" href="admin.css?v=20261103b">
+  <link rel="stylesheet" href="admin.css?v=20261113a">
   <!-- supabase-js 2.118.0 (MIT), copia local para no depender de un CDN -->
   <script src="vendor/supabase.js" defer></script>
   <script src="mensajes-aprobacion.js"></script>
-  <script type="module" src="admin.js?v=20261103b"></script>
+  <script type="module" src="admin.js?v=20261113a"></script>
   <script type="module" src="extras.js?v=20261102"></script>
-  <script type="module" src="aula-admin.js?v=20261103b"></script>
+  <script type="module" src="aula-admin.js?v=20261113a"></script>
 </head>
 <body>
   <div class="cargando" id="vista-cargando"><img src="../img/logo-completo-320.webp" width="120" height="105" alt=""><p>Cargando…</p></div>
@@ -78,6 +78,11 @@
         <a class="aviso-cursos" id="aviso-cursos" href="#cursos" data-ir-tab="cursos" hidden>🎓 <span id="aviso-cursos-texto"></span> <strong>Ver en Cursos ›</strong></a>
         <h3 class="subtitulo">Pendientes de confirmar <span class="pildora" id="n-pendientes">0</span></h3>
         <div id="lista-pendientes" class="lista"></div>
+        <details class="incompletas" id="incompletas" hidden>
+          <summary>Incompletas · sin comprobante <span class="pildora" id="n-incompletas">0</span></summary>
+          <p class="suave">Personas que empezaron a reservar o a inscribirse pero todavía no enviaron el comprobante del pago. No te llegó aviso de estas. Se borran solas a las 48 horas.</p>
+          <div id="lista-incompletas" class="lista"></div>
+        </details>
 
         <h3 class="subtitulo">Agenda</h3>
         <div class="agenda-controles">
@@ -204,12 +209,14 @@
       <section class="tab" id="tab-cursos" aria-labelledby="t-cursos" hidden>
         <div class="tab-cabecera">
           <h2>Cursos</h2>
-          <button type="button" class="btn btn-principal" id="btn-nueva-alumna">＋ Agregar alumna</button>
+          <div class="cabecera-botones"><button type="button" class="btn btn-borde" id="btn-nuevo-curso-arriba">＋ Nuevo curso</button>
+          <button type="button" class="btn btn-principal" id="btn-nueva-alumna">＋ Agregar alumna</button></div>
         </div>
         <h3 class="subtitulo">Inscripciones</h3>
         <div class="segmentado" role="group" aria-label="Filtrar inscripciones">
           <button type="button" data-filtro-ins="pendiente" aria-pressed="true">Pendientes <span class="pildora" id="n-ins-pendientes">0</span></button>
           <button type="button" data-filtro-ins="pagada" aria-pressed="false">Confirmadas</button>
+          <button type="button" data-filtro-ins="suspendida" aria-pressed="false">⏸ Suspendidas</button>
           <button type="button" data-filtro-ins="todas" aria-pressed="false">Todas</button>
         </div>
         <div id="lista-inscripciones" class="lista"></div>
@@ -476,12 +483,21 @@
         <div>
           <label for="cu-precio">Precio del curso (se abona aparte)</label>
           <input id="cu-precio" name="precio" maxlength="80" placeholder="Ej: Gs. 450.000 / mes">
+          <p class="suave">Si se paga por mes, escribí «Gs. 450.000 / mes»: de ahí salen las cuotas de la alumna.</p>
         </div>
       </div>
       <label for="cu-modalidad">Modalidad</label>
       <input id="cu-modalidad" name="modalidad" maxlength="200" placeholder="Ej: Presencial, 1 clase semanal + material online">
-      <label for="cu-duracion">Duración (opcional)</label>
-      <input id="cu-duracion" name="duracion" maxlength="120" placeholder="Ej: 3 meses">
+      <div class="dos-col">
+        <div>
+          <label for="cu-duracion">Duración (texto que se ve en la web)</label>
+          <input id="cu-duracion" name="duracion" maxlength="120" placeholder="Ej: 3 meses">
+        </div>
+        <div>
+          <label for="cu-meses">Meses de cursado (cantidad de cuotas / niveles)</label>
+          <input id="cu-meses" name="meses" type="number" min="1" max="36" inputmode="numeric" placeholder="Ej: 3 · 1 si es un taller de un día">
+        </div>
+      </div>
       <div class="dos-col">
         <div>
           <label for="cu-cupo">Cupo máximo por horario</label>

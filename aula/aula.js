@@ -17,7 +17,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let sb;
 const E = { user: null, perfil: null, admin: false, servicios: [], misCursos: [], inscripciones: [], entregas: [], urls: new Map(),
-  v2: false, v3: false, config: [], avance: [], examenes: [], pagos: [], whatsapp: '595976122979' };
+  v2: false, v3: false, config: [], avance: [], cuotas: [], examenes: [], pagos: [], whatsapp: '595976122979' };
 // v2 = la base ya tiene supabase/migracion-aula-2026-11-02.sql (meses por pago, niveles, pagos, exámenes). Sin ella el aula funciona como antes.
 
 // ---------- Íconos (trazo fino, estilo del sitio) ----------
@@ -40,7 +40,13 @@ const ic = (n, c = 'ic') => `<svg class="${c}" viewBox="0 0 24 24" fill="none" s
 // Fotos de Tania del sitio como portada de cada curso
 const PORTADAS = { 'curso-automaquillaje': 'social-2', 'curso-maquillador-inicial': 'social-1', 'curso-maquillador-avanzado': 'social-alta-1',
   'curso-maquillaje-artistico': 'social-4', 'curso-fotografia-beauty': 'social-alta-3' };
-const portada = (id, w = 960) => `../img/${PORTADAS[id] || 'maquillaje-social'}-${w}.webp`;
+const portada = (id, w = 960) => {
+  if (PORTADAS[id]) return `../img/${PORTADAS[id]}-${w}.webp`;
+  // Cursos nuevos (creados desde el panel): usan el flyer que subió Tania
+  const f = E.servicios.find((x) => x.id === id)?.extra?.flyer;
+  if (f?.ruta) { const ancho = f.anchos.find((a) => a >= Math.min(w, 960)) || f.anchos[f.anchos.length - 1]; return `${CFG.url}/storage/v1/object/public/fotos/${f.ruta}-${ancho}.${f.formato === 'jpg' ? 'jpg' : 'webp'}`; }
+  return `../img/maquillaje-social-${w}.webp`;
+};
 const NOTA_TXT = { 1: 'Insuficiente', 2: 'Regular', 3: 'Bueno', 4: 'Muy bueno', 5: 'Excelente' };
 const estrellas = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 const fecha = (t) => new Date(t).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -52,6 +58,7 @@ function errorTxt(e) {
   const m = `${e?.code || ''} ${e?.message || e || ''}`;
   const T = { COMPLETA_TU_PERFIL: 'Completá tu nombre y celular en tu perfil para inscribirte.', YA_INSCRIPTA: 'Ya te inscribiste a este curso.', DEMASIADAS_SOLICITUDES: 'Ya hay solicitudes pendientes. Esperá la confirmación de Tania.',
     SIN_ACCESO_AL_CURSO: 'Todavía no tenés acceso a este curso.', FOTO_INVALIDA: 'La foto no es válida. Volvé a sacarla.', DEMASIADAS_ENTREGAS: 'Llegaste al máximo de entregas por hoy.',
+    CURSADA_EN_PAUSA: 'Tu cursada está en pausa. Cuando Tania la reanude, vas a poder seguir donde quedaste.',
     NO_AUTORIZADO: 'No tenés permiso para esto.', MES_BLOQUEADO: 'Ese mes todavía no está habilitado. Primero la profe tiene que confirmar tu pago.',
     PAGO_YA_ENVIADO: 'Ya enviaste un comprobante. Esperá que la profe lo confirme.', COMPROBANTE_INVALIDO: 'No se pudo registrar el comprobante. Volvé a subirlo.',
     FALTAN_CLASES_APROBADAS: 'Primero tienen que estar aprobadas todas las clases del mes.', FALTA_CUESTIONARIO: 'Primero respondé el cuestionario de la clase.',
@@ -79,7 +86,8 @@ async function cargarServicios() {
 }
 const servicio = (id) => E.servicios.find((s) => s.id === id);
 async function cargarAlumna() {
-  const [c, i, e, av] = await Promise.all([sb.rpc('mis_cursos'), sb.rpc('aula_mis_inscripciones'), sb.from('entregas').select('*').order('creado', { ascending: false }), sb.rpc('aula_mi_avance')]);
+  const [c, i, e, av, cu] = await Promise.all([sb.rpc('mis_cursos'), sb.rpc('aula_mis_inscripciones'), sb.from('entregas').select('*').order('creado', { ascending: false }), sb.rpc('aula_mi_avance'), sb.rpc('aula_mis_cuotas')]);
+  E.cuotas = cu.error || !Array.isArray(cu.data) ? [] : cu.data;
   E.misCursos = c.data || []; E.inscripciones = i.data || []; E.entregas = e.data || [];
   E.v2 = !av.error; E.avance = av.data || []; if (E.v2) await cargarConfig();
   if (E.v2) {
@@ -114,7 +122,7 @@ async function hidratarFotos(raiz = document) {
 
 // ---------- Marco: navegación ----------
 function navegacion() {
-  const al = [['#/', 'casa', 'Mi sala'], ['#/cursos', 'libro', 'Cursos'], ['#/notas', 'estrella', 'Mis notas'], ['#/perfil', 'usuario', 'Perfil']];
+  const al = [['#/', 'casa', 'Mi sala'], ['#/cursos', 'libro', 'Cursos'], ['#/cuotas', 'lista', 'Mis cuotas'], ['#/notas', 'estrella', 'Mis notas'], ['#/perfil', 'usuario', 'Perfil']];
   const pend = E.adminPend || 0;
   const ad = [['#/admin', 'check', 'Corregir', pend], ['#/admin/materiales', 'subir', 'Materiales'], ['#/admin/alumnas', 'alumnas', 'Alumnas'],
     ...(E.v3 ? [['#/admin/examenes', 'video', 'Exámenes', E.adminExam || 0], ['#/admin/pagos', 'lista', 'Pagos', E.adminPagos || 0], ['#/admin/seguimiento', 'estrella', 'Seguimiento']]
@@ -222,11 +230,46 @@ async function contarPendientes() {
   if (E.v2) { await cargarConfig(); if (E.v3) { const x = await sb.rpc('admin_examenes_aula2'); E.adminExam = (x.data || []).filter((e) => ['entregado', 'solicitado'].includes(e.estado)).length; } }
 }
 
+// ---------- Pausa (suspensión) y cuotas ----------
+const enPausa = (servicioId) => E.cuotas.find((c) => c.servicio_id === servicioId && c.pausada);
+const bannerPausa = (servicioId) => { const c = enPausa(servicioId); return c
+  ? `<div class="aviso-pausa" role="status"><strong>⏸ Tu cursada está en pausa</strong><p>${esc(c.curso)}: no se cobran cuotas ni se abren clases nuevas. Cuando Tania la reanude, seguís exactamente donde quedaste.</p></div>` : ''; };
+const CUOTA_CHIP = { pagada: ['verde', 'Pagada'], pendiente: ['ambar', 'Pendiente'], vencida: ['rojo', 'Vencida'], en_suspension: ['gris', 'En suspensión'] };
+const fechaCorta = (d) => (d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const MES_TXT = (ym) => { const [a, m] = String(ym || '').split('-').map(Number); return a && m ? new Date(a, m - 1, 1).toLocaleDateString('es-PY', { month: 'long', year: 'numeric' }).replace(/^./, (x) => x.toUpperCase()) : ''; };
+function vistaCuotas() {
+  const lista = E.cuotas;
+  const tarjeta = (c) => {
+    const pagadas = c.cuotas.filter((q) => q.pagado), debe = c.cuotas.filter((q) => !q.pagado);
+    const total = debe.reduce((t, q) => t + q.monto, 0);
+    const av = E.avance.find((a) => a.inscripcion_id === c.inscripcion_id);
+    const enRevision = E.pagos.some((p) => p.inscripcion_id === c.inscripcion_id && p.estado === 'pendiente');
+    const puedePagar = !c.pausada && E.v2 && av && debe.length && !enRevision;
+    const fila = (q) => { const [cl, tx] = CUOTA_CHIP[q.estado] || ['gris', q.estado];
+      return `<li class="cuota-fila"><div><strong>Cuota ${q.n}</strong>${q.mes ? `<small>${esc(MES_TXT(q.mes))}</small>` : ''}</div>
+        <div class="cuota-datos"><b>${q.monto ? gs(q.monto) : '—'}</b><small>${q.pagado ? (q.fecha_pago ? 'Pagada el ' + esc(fechaCorta(q.fecha_pago)) : 'Pagada') : q.venc ? 'Vence ' + esc(fechaCorta(q.venc)) : ''}</small></div>
+        <span class="etiqueta ${cl}">${tx}</span></li>`; };
+    return `<section class="tarjeta cuotas-tarjeta">
+      <div class="fila entre"><h2 style="margin:0">${esc(c.curso)}</h2>${c.pausada ? '<span class="etiqueta gris">⏸ En pausa</span>' : ''}</div>
+      <p class="chico suave" style="margin:.2rem 0 .6rem">Ref. ${esc(c.referencia)}</p>
+      ${bannerPausa(c.servicio_id)}
+      ${c.matricula ? `<ul class="cuotas-lista"><li class="cuota-fila"><div><strong>Matrícula</strong></div><div class="cuota-datos"><b>${gs(c.matricula.monto)}</b>${c.matricula.fecha ? `<small>Pagada el ${esc(fechaCorta(c.matricula.fecha))}</small>` : ''}</div><span class="etiqueta ${c.matricula.pagada ? 'verde' : 'ambar'}">${c.matricula.pagada ? 'Pagada' : 'Pendiente'}</span></li></ul>` : ''}
+      ${c.cuotas.length ? `<ul class="cuotas-lista">${c.cuotas.map(fila).join('')}</ul>
+        <p class="chico" style="margin:.7rem 0 0">${pagadas.length} de ${c.cuotas.length} cuotas pagadas${debe.length ? ` · Falta pagar <b>${gs(total)}</b>` : ' · ¡al día! ✓'}</p>`
+        : '<p class="chico suave">Tania todavía no cargó tu plan de cuotas. Cuando lo haga, lo vas a ver acá.</p>'}
+      ${enRevision ? '<p class="chico"><span class="etiqueta ambar">Comprobante en revisión</span> La profe lo está verificando.</p>' : ''}
+      ${puedePagar ? `<div class="acciones" style="margin-top:.7rem"><a class="btn btn-oro btn-chico" href="#/pagar/${esc(c.inscripcion_id)}">Enviar comprobante de pago</a></div>` : ''}
+    </section>`;
+  };
+  pintar(`<h1>Mis cuotas</h1><p class="suave">Tus pagos del curso, con el estado y la fecha de cada uno. Los pagos los confirma Tania.</p>
+    ${lista.length ? lista.map(tarjeta).join('') : '<div class="vacio"><span class="grande">🧾</span>Cuando tengas un curso habilitado, acá vas a ver tus cuotas.</div>'}`);
+}
+
 // ---------- Alumna: Mi sala ----------
 function tarjetaMiCurso(c) {
   const s = servicio(c.servicio_id) || {}; const ent = E.entregas.filter((e) => e.servicio_id === c.servicio_id);
   const notas = ent.filter((e) => e.calificacion); const prom = notas.length ? (notas.reduce((a, e) => a + e.calificacion, 0) / notas.length).toFixed(1) : null;
-  return `<a class="curso" href="#/curso/${esc(c.servicio_id)}"><div class="curso-foto" style="background-image:url('${portada(c.servicio_id)}')"><span class="etiqueta">${c.clases} clases</span></div>
+  return `<a class="curso" href="#/curso/${esc(c.servicio_id)}"><div class="curso-foto" style="background-image:url('${portada(c.servicio_id)}')"><span class="etiqueta">${enPausa(c.servicio_id) ? '⏸ En pausa' : c.clases + ' clases'}</span></div>
     <div class="curso-cuerpo"><h3>${esc(s.nombre || c.nombre)}</h3><p class="suave chico" style="margin:0">${esc(s.extra?.subtitulo || '')}</p>
     <div class="fila entre chico"><span>${ent.length} trabajo${ent.length === 1 ? '' : 's'} entregado${ent.length === 1 ? '' : 's'}</span>${prom ? `<span class="etiqueta">Promedio ${prom}</span>` : ''}</div>
     <div class="acciones"><span class="btn btn-principal btn-chico">Entrar al curso →</span></div></div></a>`;
@@ -238,6 +281,7 @@ function vistaSala() {
   const prom = notas.length ? (notas.reduce((a, e) => a + e.calificacion, 0) / notas.length).toFixed(1) : '–';
   pintar(`<section class="portada"><div><span class="eyebrow">Academia Tania Sanabria</span><h1>¡Hola, ${esc(nombreCorto())}!</h1><p>Bienvenida a tu sala de clases. Acá tenés tus cursos, materiales y las devoluciones de la profe.</p></div>
       <img src="../img/retrato-280.webp" width="280" height="398" alt=""></section>
+    ${E.misCursos.map((c) => bannerPausa(c.servicio_id)).join('')}
     <div class="estadisticas"><div class="dato"><strong>${E.misCursos.length}</strong><span>Cursos</span></div><div class="dato"><strong>${E.entregas.length}</strong><span>Trabajos</span></div><div class="dato"><strong>${prom}</strong><span>Promedio</span></div></div>
     ${pend.length ? `<div class="tarjeta" style="border-color:#f0d896;background:#fffaf0">${pend.map((i) => `<p style="margin:.2rem 0"><span class="etiqueta ambar">En revisión</span> <strong>${esc(i.curso_nombre)}</strong> · Ref. ${esc(i.referencia)}</p>`).join('')}
       <p class="chico suave" style="margin:.5rem 0 0">Tania habilita tu acceso cuando confirma tu inscripción (matrícula). Te va a aparecer acá abajo automáticamente.</p></div>` : ''}
@@ -343,7 +387,7 @@ async function vistaCurso(id, pestana = 'clases') {
   const tabs = [['clases', 'libro', 'Clases'], ['trabajos', 'camara', `Mis trabajos (${ent.length})`], ['examen', 'video', 'Examen']];
   pintar(`<a class="volver" href="#/">‹ Mi sala</a>
     <div class="cabeza-curso" style="background-image:url('${portada(id, 1440)}')"><span class="etiqueta" style="align-self:flex-start">${(lecciones || []).length} clases${E.v2 ? ` · Mes ${hab} habilitado` : ''}</span><h1>${esc(s.extra?.tituloDetalle || s.nombre)}</h1><p style="margin:0;opacity:.9">${esc(av?.curso_nombre || s.extra?.subtitulo || '')}</p></div>
-    ${AVISO_IA}
+    ${bannerPausa(id)}${AVISO_IA}
     <div class="subpestanas" role="tablist">${tabs.map(([t, i, n]) => `<button role="tab" data-tab="${t}" aria-selected="${pestana === t}">${ic(i)} ${n}</button>`).join('')}</div>
     <div id="tab-clases" data-panel ${pestana === 'clases' ? '' : 'hidden'}>${tabClases}</div><div id="tab-trabajos" data-panel ${pestana === 'trabajos' ? '' : 'hidden'}>${tabTrabajos}</div>
     <div id="tab-examen" data-panel ${pestana === 'examen' ? '' : 'hidden'}>${tabExamen}</div>
@@ -364,6 +408,7 @@ async function vistaPagar(inscId) {
   const av = E.avance.find((a) => a.inscripcion_id === inscId); if (!E.v2 || !av) { location.hash = '#/'; return; }
   const mes = av.meses_habilitados + 1; const pend = E.pagos.find((p) => p.inscripcion_id === inscId && p.estado === 'pendiente');
   const volver = `<a class="volver" href="#/curso/${esc(av.servicio_id)}">‹ ${esc(av.curso_nombre)}</a>`;
+  if (enPausa(av.servicio_id)) { pintar(`${volver}${bannerPausa(av.servicio_id)}`); return; }
   if (pend) { pintar(`${volver}<div class="vacio"><span class="grande">⏳</span>Ya enviaste el comprobante del mes ${pend.mes}. La profe lo está revisando; apenas lo confirme, el mes se abre solo.</div>`); return; }
   pintar(`${volver}<h1>Pagar el mes ${mes}</h1><div class="tarjeta" style="max-width:620px">
     <p>El acceso a cada mes se habilita <strong>solo con pago por transferencia</strong>, cuando la profe confirma que recibió el pago${E.v3 ? ' <strong>y</strong> aprobaste las clases y el examen del mes anterior' : ''}.</p>
@@ -775,7 +820,7 @@ async function vistaCursoMerito(id, pestana = 'clases') {
   const tabs = [['clases', 'libro', 'Clases'], ['trabajos', 'camara', `Mis trabajos (${ent.length})`], ['examen', 'video', 'Examen']];
   pintar(`<a class="volver" href="#/">‹ Mi sala</a>
     <div class="cabeza-curso" style="background-image:url('${portada(id, 1440)}')"><span class="etiqueta" style="align-self:flex-start">Mes ${hab}${actual.clases != null ? ' · ' + esc(textoProgreso(actual)) : ''}</span><h1>${esc(s.extra?.tituloDetalle || s.nombre)}</h1><p style="margin:0;opacity:.9">${esc(av?.curso_nombre || '')}</p></div>
-    ${AVISO_IA}
+    ${bannerPausa(id)}${AVISO_IA}
     <div class="subpestanas" role="tablist">${tabs.map(([t, i, n]) => `<button role="tab" data-tab="${t}" aria-selected="${pestana === t}">${ic(i)} ${n}</button>`).join('')}</div>
     <div id="tab-clases" data-panel ${pestana === 'clases' ? '' : 'hidden'}>${tabClases}</div><div id="tab-trabajos" data-panel ${pestana === 'trabajos' ? '' : 'hidden'}>${tabTrabajos}</div>
     <div id="tab-examen" data-panel ${pestana === 'examen' ? '' : 'hidden'}>${tabExamen}</div>`);
@@ -1035,6 +1080,7 @@ async function router() {
     if (p[0] === 'certificado' && E.v3) return await vistaCertificado(p[1]);
     if (p[0] === 'entregar') return vistaEntregar(p[1], q);
     if (p[0] === 'pagar') return await vistaPagar(p[1]);
+    if (p[0] === 'cuotas') return vistaCuotas();
     if (p[0] === 'notas') return vistaNotas();
     if (p[0] === 'perfil') return vistaPerfil();
     return vistaSala();

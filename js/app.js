@@ -427,12 +427,17 @@ const MENSAJES_ERROR = {
   SERVICIO_NO_DISPONIBLE: 'Ese servicio no está disponible en este momento. Preguntá en el chat.',
 };
 
-function mostrarReservaOk({ registrada, url, resumen, abrir, id, texto }) {
+function mostrarReservaOk({ registrada, url, resumen, abrir, id, texto, borrador }) {
   const f = $('#form-reserva');
   const cajaPago = $('#reserva-pago');
   cajaPago.hidden = true; cajaPago.innerHTML = ''; $('#reserva-ok-registrada').classList.remove('con-pago');
-  if (registrada && id) pintarPagoReserva(cajaPago, id, texto);
-  $('#reserva-ok-titulo').textContent = registrada ? '¡Solicitud enviada!' : '¡Solicitud lista!';
+  if (registrada && id) pintarPagoReserva(cajaPago, id, texto, borrador);
+  $('#reserva-ok-titulo').textContent = registrada ? (borrador ? '¡Último paso!' : '¡Solicitud enviada!') : '¡Solicitud lista!';
+  // Con pago previo (borrador), Tania recién recibe la solicitud cuando la persona sube el comprobante o lo envía por WhatsApp.
+  $('#reserva-ok-msg').innerHTML = borrador
+    ? '<strong>Falta un paso para enviar tu solicitud a Tania:</strong> transferí la seña y subí el comprobante (o enviáselo por WhatsApp). Tu horario queda reservado unas horas mientras tanto.'
+    : '<strong>Tania te va a confirmar por WhatsApp.</strong> Tu horario queda reservado como pendiente hasta que ella lo apruebe.';
+  $('#reserva-ok-extra').hidden = !!borrador;
   $('#reserva-ok-registrada').hidden = !registrada;
   $('#reserva-ok-whatsapp').hidden = registrada;
   $('#reserva-ok-resumen').textContent = resumen || '';
@@ -452,11 +457,13 @@ function mostrarReservaOk({ registrada, url, resumen, abrir, id, texto }) {
 }
 
 // Después de crear el turno: datos de transferencia + comprobante + WhatsApp (solo si comprobantes.sql está instalado).
-async function pintarPagoReserva(caja, id, texto) {
+async function pintarPagoReserva(caja, id, texto, borrador) {
   let mod;
-  try { mod = await import('./comprobante.js'); } catch { return; }
+  // Si por algún motivo no se puede mostrar el paso de pago, la solicitud se completa igual: nunca se pierde una reserva.
+  const completar = () => { if (borrador) rpc('completar_solicitud', { p_tipo: 'r', p_id: id }).catch(() => {}); };
+  try { mod = await import('./comprobante.js?v=20261113a'); } catch { completar(); return; }
   const pago = await mod.datosPago('r', id);
-  if (!pago) return; // sin la función nueva: queda el flujo anterior
+  if (!pago) { completar(); return; } // sin la función nueva: queda el flujo anterior
   const tel = (catalogo.negocio && catalogo.negocio.whatsapp) || mod.WA_TANIA;
   mod.pintarComprobante(caja, { tipo: 'r', id, pago, tel, conPago: !!(pago.datos_pago || pago.monto_gs || pago.monto_texto),
     mensaje: [texto, pago.monto_texto ? `💳 *${pago.es_sena ? 'Seña' : 'Monto'} a transferir:* ${pago.monto_texto}` : ''].filter(Boolean).join('\n') });
@@ -533,6 +540,7 @@ async function enviarReserva(e) {
     p_email: f.email.value.trim() || null,
     p_notas: notas || null,
     p_pago: f.pago.value === 'total' && datos.sena ? 'total' : 'sena',
+    p_borrador: !!datos.sena,   // con seña: Tania recibe el aviso recién cuando se envía el comprobante
     p_personas: personas,
     p_fecha_preferida: f.fecha.value,
     p_hora_preferida: aCoordinar ? 'a coordinar' : horaLocal,
@@ -546,7 +554,7 @@ async function enviarReserva(e) {
   try {
     const r = await rpc('crear_reserva', args);
     if (!r || r.ok === false) throw Object.assign(new Error('reserva'), { codigo: (r && r.error) || 'ERROR' });
-    mostrarReservaOk({ registrada: true, url, resumen, id: r.id, texto: lineas.join('\n') });
+    mostrarReservaOk({ registrada: true, url, resumen, id: r.id, texto: lineas.join('\n'), borrador: r.estado === 'borrador' });
   } catch (err) {
     const msg = MENSAJES_ERROR[err.codigo];
     if (msg) {
@@ -911,7 +919,7 @@ async function iniciar() {
   window.addEventListener('hashchange', atenderHash);
   document.documentElement.classList.add('js-listo');
   actualizarDesdeSupabase();
-  if (/[?&]comprobante=/.test(location.search)) import('./comprobante.js').then((m) => m.abrirDesdeEnlace(catalogo.negocio && catalogo.negocio.whatsapp)).catch(() => {});
+  if (/[?&]comprobante=/.test(location.search)) import('./comprobante.js?v=20261113a').then((m) => m.abrirDesdeEnlace(catalogo.negocio && catalogo.negocio.whatsapp)).catch(() => {});
 }
 
 iniciar().catch((err) => {

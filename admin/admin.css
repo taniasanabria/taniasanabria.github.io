@@ -348,3 +348,14 @@ html:has(dialog[open]) .tabs { transform: translateY(110%); }
 
 .foto-portada { position: absolute; top: .5rem; right: .5rem; z-index: 2; padding: .2rem .6rem; border-radius: 999px; background: linear-gradient(115deg, #7d5d12, #c9a24a 45%, #f1dc9c 55%, #c9a24a); color: #1b1610; font-size: .75rem; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 .btn-portada[aria-pressed="true"] { color: #7a5b16; border-color: #c9a24a; opacity: 1; }
+
+/* Pausa (suspensión) de alumnas e incompletas */
+.etiqueta.suspendida { background: #efe6fb; color: #5b3a8a; border-color: #d9c8f2; font-weight: 700; }
+.aviso-pausa { background: #f6f0fd; border: 1px solid #d9c8f2; color: #4a2f73; border-radius: 10px; padding: .5rem .7rem; margin: .4rem 0; font-size: .9rem; }
+.cabecera-botones { display: flex; gap: .5rem; flex-wrap: wrap; }
+.incompletas { margin: 1rem 0; background: #fff; border: 1px dashed var(--borde); border-radius: var(--radio); padding: .4rem .9rem; }
+.incompletas > summary { cursor: pointer; font-weight: 700; padding: .5rem 0; }
+.cita.incompleta { border-left-color: #b9b2a5; background: #fbfaf7; }
+.segmentado { max-width: 100%; overflow-x: auto; }
+.segmentado button { padding: 0 .65rem; flex: none; }
+.tab-cabecera { flex-wrap: wrap; }

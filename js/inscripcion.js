@@ -1,9 +1,11 @@
 /*
  * inscripcion.js: inscripción online a los cursos (se carga recién cuando alguien toca "Inscribirme").
- * 1) La clienta completa nombre, teléfono y email → public.crear_inscripcion() la guarda como pendiente
- *    (y Tania recibe el aviso push).
+ * 1) La clienta completa nombre, teléfono y email → public.crear_inscripcion() la guarda. Con matrícula queda como
+ *    BORRADOR ("pendiente de pago"): Tania NO recibe aviso todavía y el panel/app no la muestran (aparece en
+ *    "Incompletas"); se borra sola a las 48 h. Sin matrícula se avisa enseguida, como siempre.
  * 2) Se le muestran el monto (curso + matrícula), los datos de transferencia o QR que Tania carga en
- *    Ajustes y un botón para mandarle el comprobante por WhatsApp.
+ *    Ajustes y un botón para mandarle el comprobante por WhatsApp. La inscripción se COMPLETA (y recién ahí
+ *    Tania recibe el aviso) al subir el comprobante o al tocar "Enviar por WhatsApp" (completar_solicitud).
  * 3) Cuando Tania confirma el pago, le envía su código para entrar al aula (/alumnas/).
  * Si Supabase no responde o todavía no tiene la parte de cursos, la solicitud sigue como antes
  * (crear_reserva o WhatsApp), así nunca se pierde una inscripción.
@@ -13,7 +15,7 @@ import { SUPABASE, PAGOS, URL_SITIO } from './config.js';
 import { rpc } from './datos.js';
 import { esc, icono, opcionesCurso, cursoAparte, formatoGs, fichaCurso } from './render.js';
 import { botonesCopiar, activarCopiar } from './copiar.js';
-import { pintarComprobante, datosPago } from './comprobante.js';
+import { pintarComprobante, datosPago, completarSolicitud } from './comprobante.js?v=20261113a';
 import { grillaHorariosCurso, horariosAConfirmar, pocos } from './agenda-ui.js';
 
 const V = new URL(import.meta.url).search;
@@ -137,7 +139,7 @@ function pintarMonto() {
   if (!caja) return;
   caja.hidden = !o;
   if (!o) return;
-  $('#ins-nota-final').textContent = o.matricula ? 'Tu lugar queda reservado como pendiente hasta que Tania confirme la matrícula.' : 'Tania te confirma tu lugar por WhatsApp.';
+  $('#ins-nota-final').textContent = o.matricula ? 'Para terminar, pagás la matrícula y enviás el comprobante: tu lugar queda reservado 48 horas.' : 'Tania te confirma tu lugar por WhatsApp.';
   caja.innerHTML = (o.matricula
     ? `Para inscribirte pagás solo la matrícula: <strong>${formatoGs(o.matricula)}</strong>`
     : '<strong>Sin matrícula:</strong> no pagás nada para inscribirte.') + `<br><small>${esc(cursoAparte(o))}</small>`;
@@ -334,15 +336,17 @@ function mostrarOk(d) {
     pago = `<div class="ins-pago"><h3>${icono('check')} Sin matrícula</h3><p>No tenés que pagar nada para inscribirte. Tania te escribe por WhatsApp para confirmar tu lugar.</p>
       ${d.referencia ? `<p>Referencia de tu inscripción: <strong class="ins-ref">${esc(d.referencia)}</strong></p>` : ''}</div>`;
   }
-  const titulo = d.modo === 'whatsapp' ? '¡Ya casi!' : '¡Inscripción recibida!';
+  const titulo = d.modo === 'whatsapp' || d.borrador ? '¡Ya casi!' : '¡Inscripción recibida!';
   const bajada = d.modo === 'online'
-    ? `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`
+    ? (d.borrador
+      ? `${esc(d.nombre.split(/\s+/)[0])}, reservamos tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} por 48 horas. <strong>Tu inscripción queda completa cuando enviás el comprobante de la matrícula.</strong>`
+      : `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`)
     : d.modo === 'registrada'
       ? `Tania recibió tu solicitud para <strong>${esc(d.curso)}</strong> y te va a escribir por WhatsApp${conMatricula ? ' con los datos para pagar la matrícula' : ''}.`
       : esc(d.aviso || 'Enviale tu inscripción a Tania por WhatsApp y ella te confirma los pasos.');
   const pasos = d.modo === 'online'
     ? (conMatricula
-      ? '<li>Pagá la matrícula por transferencia o con el QR.</li><li><strong>Enviá el comprobante</strong> a Tania por WhatsApp (botón de abajo).</li>'
+      ? '<li>Pagá la matrícula por transferencia o con el QR.</li><li><strong>Subí el comprobante</strong> o enviáselo a Tania por WhatsApp (botón de abajo): así tu inscripción le llega a ella.</li>'
       : '<li>Avisale a Tania por WhatsApp (botón de abajo) y esperá su confirmación.</li>')
     : `<li>Escribile a Tania por WhatsApp (botón de abajo).</li>${conMatricula ? '<li>Pagá la matrícula con los datos que te envíe.</li>' : ''}`;
   ok.innerHTML = `
@@ -370,6 +374,10 @@ function mostrarOk(d) {
       caja.hidden = false;
       const viejo = $('#ins-wa'); if (viejo) viejo.hidden = true;
     });
+  }
+  // Si el paso de comprobante no se puede mostrar, el botón de WhatsApp también completa la inscripción (nunca se pierde).
+  if (d.borrador && d.id) {
+    const viejo = $('#ins-wa'); if (viejo) viejo.addEventListener('click', () => completarSolicitud('i', d.id));
   }
   const bt = $('#ins-tarjeta');
   if (bt) bt.addEventListener('click', () => pagarConTarjeta(d, bt));

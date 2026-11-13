@@ -97,3 +97,11 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 ## Publicación
 10. **Repositorio.** Definido: cuenta nueva `taniasanabria`, repo `taniasanabria.github.io`, URL `https://taniasanabria.github.io/`. Falta crear la cuenta y el repo. Si se usa otro nombre, hay que cambiar `url` en `data/sitio.json` y volver a compilar.
 11. **Dominio propio.** ¿Se va a usar uno (por ejemplo, taniasanabria.com.py)? Si es así, hay que agregar el archivo `CNAME` y actualizar `url`.
+
+## Borradores, suspensión, cuotas y cursos nuevos (13/11/2026)
+- ✅ **Aviso solo con comprobante:** una inscripción con matrícula o un turno con seña nace como *borrador* ("pendiente de pago"). Tania NO recibe aviso (push, agenda ni calendario) hasta que la persona sube el comprobante o toca "Enviar por WhatsApp". Los borradores no se ven en el panel ni en la app: aparecen en Citas → "Incompletas · sin comprobante" (plegada, sin alerta). Un turno borrador retiene el horario 3 h; una inscripción retiene el cupo 48 h; a las 48 h se borran (limpieza al paso, no hay pg_cron). Sin matrícula/seña todo sigue igual que antes.
+- ✅ **Suspensión:** botón "Suspender" / "Reanudar" en el panel (Cursos → Inscripciones, filtro "Suspendidas") y en la app 1.11.0. Congela cuotas y semanas del aula; al reanudar se corren por los días pausados. El aula muestra "Tu cursada está en pausa".
+- ✅ **Cuotas en el aula:** pestaña "Mis cuotas" (solo lectura; matrícula + cuotas con estado y vencimiento; enlace para enviar el comprobante cuando corresponde).
+- ✅ **Cursos nuevos:** Cursos → "Nuevo curso" (nombre, descripción, flyer, matrícula, precio, duración, meses de cursado, cupo, días y horarios). Aparecen solos en la web, en la inscripción, en el aula y en la app de agenda.
+- ✅ **Alumna eliminada:** al cancelar o borrar una inscripción se limpian sus pedidos de examen, entregas, cuestionarios, pagos y certificados de ese curso. SQL: `supabase/migracion-pausa-borradores-2026-11-13.sql`.
+- ⚠️ La función `avisar-reserva` no se redeployó: para que el aviso salga al completar, la reserva se "renueva" (`creado = now()`) en ese momento.

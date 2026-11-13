@@ -235,10 +235,29 @@ function tarjetaCita(r, { nueva = false } = {}) {
 
 const cacheReservas = new Map();
 
+// Solicitudes que todavía no mandaron el comprobante (borradores): se ven aparte, sin aviso, y se borran solas a las 48 h.
+async function cargarIncompletas() {
+  const caja = $('#incompletas'); if (!caja) return;
+  const { data, error } = await sb.rpc('admin_incompletas');
+  if (error || !Array.isArray(data)) { caja.hidden = true; return; }
+  $('#n-incompletas').textContent = data.length;
+  caja.hidden = data.length === 0;
+  $('#lista-incompletas').innerHTML = data.map((x) => `<article class="cita incompleta" data-incompleta="${esc(x.tipo)}:${esc(x.id)}">
+    <div class="cita-cuando">${esc(fmtFecha(new Date(x.creado), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }))} · ${x.tipo === 'i' ? 'Inscripción' : 'Turno'} sin comprobante</div>
+    <div class="cita-servicio">${esc(x.detalle)}</div>
+    <div class="cita-cliente">${esc(x.nombre)} · <a href="tel:${esc(String(x.telefono || '').replace(/[^\d+]/g, ''))}">${esc(x.telefono)}</a>${x.email ? ` · ${esc(x.email)}` : ''}</div>
+    <p class="suave">Se borra sola el ${esc(fmtFecha(new Date(x.expira), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }))}.</p>
+    <div class="cita-acciones">
+      <a class="btn btn-wa" target="_blank" rel="noopener" href="${esc(urlWhatsApp(x.telefono, `¡Hola ${String(x.nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. Vi que empezaste ${x.tipo === 'i' ? 'tu inscripción a ' : 'tu reserva de '}${x.detalle.split(' · ')[0].replace(/^Curso: /, '')} y no llegaste a enviar el comprobante. ¿Te ayudo a terminarla? 💛`))}">💬 WhatsApp</a>
+      <button type="button" class="btn btn-borde" data-descartar="${esc(x.tipo)}:${esc(x.id)}">Descartar</button>
+    </div></article>`).join('');
+}
+
 async function cargarPendientes({ avisar = false } = {}) {
   const { data, error } = await sb.from('reservas').select('*').eq('estado', 'pendiente').neq('origen', 'app')
     .order('inicio', { ascending: true, nullsFirst: false }).order('creado', { ascending: true });
   if (error) { toast(errorLegible(error), true); return; }
+  cargarIncompletas();
   data.forEach((r) => cacheReservas.set(r.id, r));
   const previos = estado.pendientesVistos;
   const nuevas = previos ? data.filter((r) => !previos.has(r.id)) : [];
@@ -1233,6 +1252,7 @@ function abrirEditorCurso(id) {
   f.precio.value = c ? c.precio_texto : '';
   f.modalidad.value = ex.modalidad || ex.subtitulo || '';
   f.duracion.value = (c && c.duracion_texto) || '';
+  f.meses.value = ex.meses_total || '';
   f.cupo.value = ex.cupo_max || '';
   f.clases_semana.value = String(c ? clasesDe(c) : 1);
   f.horarios.value = (Array.isArray(ex.horarios) ? ex.horarios : []).join('\n');
@@ -1332,6 +1352,8 @@ async function guardarCurso(e) {
   ex.accion = ex.accion || 'inscribirme a este curso';
   if (edCurso.flyer) ex.flyer = edCurso.flyer; else delete ex.flyer;
   // Cupos y horarios: la web muestra lugares libres por horario (public.disponibilidad_cursos, sin datos personales).
+  const meses = parseInt(f.meses.value, 10);
+  if (meses >= 1 && meses <= 36) ex.meses_total = meses; else delete ex.meses_total;
   const cupo = parseInt(f.cupo.value, 10);
   if (cupo > 0 && cupo <= 500) ex.cupo_max = cupo; else delete ex.cupo_max;
   ex.clases_semana = Math.min(Math.max(parseInt(f.clases_semana.value, 10) || 1, 1), 3);
@@ -1352,6 +1374,8 @@ async function guardarCurso(e) {
   btn.disabled = false;
   if (r.error) { err.textContent = errorLegible(r.error); return; }
   if (c) Object.assign(c, r.data); else estado.servicios.push(r.data);
+  // La cantidad de meses también la usa el aula (niveles y cuotas).
+  if (meses >= 1 && meses <= 36) await sb.from('aula_config_curso').upsert({ servicio_id: r.data.id, meses_total: meses }, { onConflict: 'servicio_id' });
   estado.servicios.sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
   // Flyers que ya no se usan: los subidos y descartados, y el original si se cambió o se quitó.
   const sinUsar = edCurso.subidos.filter((x) => x !== edCurso.flyer);
@@ -1416,6 +1440,7 @@ function tarjetaInscripcion(i, codigos) {
   const conMat = i.monto_gs > 0;
   const fase = i.estado === 'pagada' && i.app_estado === 'finalizada' ? 'Finalizó el curso' : i.estado === 'pagada' && i.origen === 'app' ? 'Cursando' : null;
   const et = [`<span class="etiqueta e-${i.estado === 'pendiente' ? 'pendiente' : i.estado}">${fase || (i.estado === 'pendiente' ? (conMat ? 'Matrícula por cobrar' : 'Por confirmar') : i.estado === 'pagada' ? (conMat ? 'Matrícula pagada' : 'Confirmada') : 'Cancelada')}</span>`];
+  if (i.suspendida_desde) et.push(`<span class="etiqueta suspendida">⏸ Suspendida desde ${esc(fmtFecha(new Date(i.suspendida_desde + 'T12:00:00'), { day: 'numeric', month: 'short' }))}</span>`);
   if (i.acceso) et.push('<span class="etiqueta acceso-si">🔓 Con acceso</span>');
   else if (i.estado !== 'cancelada') et.push('<span class="etiqueta">🔒 Sin acceso</span>');
   if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
@@ -1432,6 +1457,9 @@ function tarjetaInscripcion(i, codigos) {
       : `<button type="button" class="btn btn-aprobar" data-ins="dar" data-id="${i.id}">🔓 Dar acceso</button>`)
     + `<button type="button" class="btn btn-borde" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>`;
   else acc = `<button type="button" class="btn btn-borde btn-borrar" data-ins="borrar" data-id="${i.id}">🗑 Borrar</button>`;
+  if (i.estado === 'pagada') acc += i.suspendida_desde
+    ? `<button type="button" class="btn btn-aprobar" data-ins="reanudar" data-id="${i.id}">▶ Reanudar</button>`
+    : `<button type="button" class="btn btn-borde" data-ins="suspender" data-id="${i.id}">⏸ Suspender</button>`;
   if (i.estado !== 'cancelada') acc += `<button type="button" class="btn btn-borde" data-ins="horario" data-id="${i.id}">🕒 ${i.horario ? 'Cambiar horario' : 'Asignar horario'}</button>`;
   const cod = codigos[i.cliente_email];
   return `<article class="cita inscripcion estado-${i.estado === 'pendiente' ? 'pendiente' : i.estado}" data-inscripcion="${i.id}">
@@ -1439,6 +1467,7 @@ function tarjetaInscripcion(i, codigos) {
     <div class="cita-servicio">${esc(i.curso_nombre)}</div>
     <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a>${i.cliente_email ? ` · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a>` : ''}</div>
     ${progresoAlumna(i)}
+    ${i.suspendida_desde ? `<p class="aviso-pausa">⏸ <strong>Cursada en pausa.</strong> No se cobran cuotas ni se abren clases nuevas hasta que la reanudes${i.pausa_dias ? ` · ${i.pausa_dias} día(s) pausados antes` : ''}.</p>` : i.pausa_dias > 0 ? `<p class="suave">⏸ Estuvo en pausa ${i.pausa_dias} día(s): sus clases y cuotas se corrieron ese tiempo.</p>` : ''}
     <p class="cita-monto">${conMat ? 'Matrícula: ' + gs(i.monto_gs) : 'Sin matrícula'}</p>
     ${i.precio_ref ? `<p class="suave">${esc(/^Curso: /.test(i.precio_ref) ? i.precio_ref.split(' · ')[0] : i.precio_ref)} · se cobra aparte, durante el curso</p>` : ''}
     ${i.notas ? `<p class="cita-notas">📝 ${esc(i.notas)}</p>` : ''}
@@ -1463,7 +1492,8 @@ function progresoAlumna(i) {
 
 async function cargarInscripciones() {
   let q = sb.from('inscripciones').select('*').order('creado', { ascending: false }).limit(200);
-  if (estado.filtroIns !== 'todas') q = q.eq('estado', estado.filtroIns);
+  if (estado.filtroIns === 'suspendida') q = q.not('suspendida_desde', 'is', null).neq('estado', 'cancelada');
+  else if (estado.filtroIns !== 'todas') q = q.eq('estado', estado.filtroIns);
   const [r, al, np] = await Promise.all([q, sb.from('alumnos').select('email,codigo,user_id'), sb.from('inscripciones').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')]);
   const err = r.error || al.error;
   estado.cursosInstalado = !faltaInstalar(err);
@@ -1473,7 +1503,7 @@ async function cargarInscripciones() {
   const n = np.count || 0;
   $('#n-ins-pendientes').textContent = n; $('#n-ins-pendientes').classList.toggle('hay', n > 0);
   $('#lista-inscripciones').innerHTML = r.data.length ? r.data.map((i) => tarjetaInscripcion(i, codigos)).join('')
-    : `<p class="vacio">${estado.filtroIns === 'pendiente' ? 'No hay inscripciones pendientes. 🎉' : 'Todavía no hay inscripciones.'}</p>`;
+    : `<p class="vacio">${estado.filtroIns === 'pendiente' ? 'No hay inscripciones pendientes. 🎉' : estado.filtroIns === 'suspendida' ? 'No hay alumnas suspendidas.' : 'Todavía no hay inscripciones.'}</p>`;
 }
 
 async function cargarCursos() {
@@ -1527,6 +1557,20 @@ async function accionInscripcion(accion, id, boton) {
     toast('Inscripción confirmada ✓');
     await Promise.all([cargarInscripciones(), cargarPendientes()]);
     return;
+  }
+  if (accion === 'suspender') {
+    if (!confirm(`¿Suspender la cursada de ${i.cliente_nombre}?\n\nQueda en pausa: no se cuentan cuotas ni se abren semanas nuevas. Cuando la reanudes, sigue exactamente donde quedó (sus fechas se corren por el tiempo pausado).`)) return;
+    const { error } = await sb.rpc('admin_suspender_inscripcion', { p_id: i.id });
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Cursada suspendida ⏸');
+    await cargarInscripciones(); return;
+  }
+  if (accion === 'reanudar') {
+    if (!confirm(`¿Reanudar la cursada de ${i.cliente_nombre}? Sus clases y cuotas se corren por los días que estuvo en pausa.`)) return;
+    const { error } = await sb.rpc('admin_reanudar_inscripcion', { p_id: i.id });
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Cursada reanudada ▶');
+    await cargarInscripciones(); return;
   }
   if (accion === 'whatsapp') { window.open(urlWhatsApp(i.cliente_telefono, i.estado === 'pendiente' && i.monto_gs ? mensajeAprobacionInscripcion(i) : `¡Hola ${(i.cliente_nombre || '').split(/\s+/)[0]}! Soy Tania Sanabria. `), '_blank'); return; }
   if (accion === 'dar' || accion === 'reenviar') {
@@ -2074,9 +2118,18 @@ function prepararEventos() {
   $$('[data-filtro-ins]').forEach((b) => b.addEventListener('click', () => {
     estado.filtroIns = b.dataset.filtroIns; $$('[data-filtro-ins]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); cargarInscripciones();
   }));
+  $('#lista-incompletas').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-descartar]'); if (!b) return;
+    const [tipo, id] = b.dataset.descartar.split(':');
+    if (!confirm('¿Descartar esta solicitud incompleta? Se libera el lugar.')) return;
+    const { error } = await sb.rpc('admin_descartar_incompleta', { p_tipo: tipo, p_id: id });
+    if (error) { toast(errorLegible(error), true); return; }
+    toast('Descartada'); cargarIncompletas();
+  });
   $('#lista-inscripciones').addEventListener('click', (e) => { const b = e.target.closest('[data-ins]'); if (b) accionInscripcion(b.dataset.ins, b.dataset.id, b); });
   $('#form-pago').addEventListener('submit', confirmarPago);
   $('#btn-nuevo-curso').addEventListener('click', () => abrirEditorCurso(null));
+  $('#btn-nuevo-curso-arriba').addEventListener('click', () => abrirEditorCurso(null));
   $('#lista-cursos-admin').addEventListener('click', (e) => {
     const b = e.target.closest('[data-cu]'); if (!b) return;
     const id = b.closest('[data-curso-admin]').dataset.cursoAdmin;

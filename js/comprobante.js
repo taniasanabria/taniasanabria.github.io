@@ -57,6 +57,11 @@ export async function subirComprobante(tipo, id, archivo) {
   return ruta;
 }
 
+/** Marca la solicitud como completa (pasa de borrador a pendiente y recién ahí avisa a Tania). Silencioso si falla. */
+export function completarSolicitud(tipo, id) {
+  return rpc('completar_solicitud', { p_tipo: tipo, p_id: id }).catch(() => null);
+}
+
 /** Datos de pago de un turno/inscripción recién creado (null si comprobantes.sql no está instalado). */
 export async function datosPago(tipo, id) {
   try {
@@ -82,7 +87,7 @@ export function pintarComprobante(cont, op) {
   cont.innerHTML = `${bloquePago}
     <div class="comp-subida">
       <h3>📎 Comprobante de la transferencia</h3>
-      <p class="comp-ayuda">Después de transferir, subí la foto o captura del comprobante (o el PDF). Es opcional, pero así Tania confirma más rápido.</p>
+      <p class="comp-ayuda">Después de transferir, subí la foto o captura del comprobante (o el PDF). Al subirlo, tu solicitud le llega a Tania; también le llega cuando se la enviás por WhatsApp.</p>
       <label class="btn btn-secundario btn-ancho comp-elegir"><input type="file" accept="image/*,application/pdf" class="comp-input" hidden> 📷 Elegir foto o captura</label>
       <div class="comp-vista" hidden></div>
       <p class="comp-estado" role="status" aria-live="polite">${subido ? '✅ Comprobante enviado.' : ''}</p>
@@ -98,6 +103,9 @@ export function pintarComprobante(cont, op) {
     wa.href = urlWhatsapp(t, op.tel);
   };
   actualizarWa();
+  // Tania recibe el aviso de una solicitud con pago recién cuando la persona la completa: al subir el comprobante
+  // (lo hace registrar_comprobante) o al tocar "Enviar por WhatsApp" (acá). Si ya estaba completa, no pasa nada.
+  wa.addEventListener('click', () => { completarSolicitud(tipo, id); });
   const btShare = $('.comp-compartir');
   btShare.addEventListener('click', async () => {
     if (!archivo) return;
