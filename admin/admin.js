@@ -97,7 +97,8 @@ function mensajeAprobacionReserva(r) {
 }
 function mensajeAprobacionInscripcion(i) {
   return window.mensajeAprobacion({ tipo: 'i', nombre: i.cliente_nombre, curso: i.curso_nombre, horario: i.horario || '', monto: i.monto_gs ? gs(i.monto_gs) : 'a coordinar', pago: 'la matrícula',
-    comprobante_estado: i.comprobante_estado, comprobante_ruta: i.comprobante_ruta, datos_pago: estado.privados && estado.privados.datos_pago });
+    comprobante_estado: i.comprobante_estado, comprobante_ruta: i.comprobante_ruta, datos_pago: estado.privados && estado.privados.datos_pago,
+    efectivo: i.estado === 'pendiente' && i.pago_metodo === 'efectivo' });
 }
 
 function errorLegible(error) {
@@ -1443,10 +1444,12 @@ function tarjetaInscripcion(i, codigos) {
   if (i.suspendida_desde) et.push(`<span class="etiqueta suspendida">⏸ Suspendida desde ${esc(fmtFecha(new Date(i.suspendida_desde + 'T12:00:00'), { day: 'numeric', month: 'short' }))}</span>`);
   if (i.acceso) et.push('<span class="etiqueta acceso-si">🔓 Con acceso</span>');
   else if (i.estado !== 'cancelada') et.push('<span class="etiqueta">🔒 Sin acceso</span>');
-  if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
+  const efecInicio = i.estado === 'pendiente' && i.pago_metodo === 'efectivo';
+  if (efecInicio) et.push('<span class="etiqueta efectivo-inicio">💵 Efectivo al inicio</span>');
+  else if (i.pago_metodo) et.push(`<span class="etiqueta">${esc(METODOS[i.pago_metodo] || i.pago_metodo)}${i.pago_ref ? ' · ' + esc(i.pago_ref) : ''}</span>`);
   et.push(`<span class="etiqueta">${i.origen === 'web' ? 'Desde la web' : i.origen === 'app' ? '📱 Desde la app' : 'Cargada a mano'}</span>`);
   let acc = '';
-  if (i.estado === 'pendiente') acc = `${conMat ? `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Matrícula pagada</button>` : `<button type="button" class="btn btn-aprobar" data-ins="confirmar" data-id="${i.id}">✓ Confirmar inscripción</button>`}
+  if (i.estado === 'pendiente') acc = `${efecInicio ? `<button type="button" class="btn btn-aprobar" data-ins="efectivo" data-id="${i.id}">💵 Marcar cobrado en efectivo</button>` : conMat ? `<button type="button" class="btn btn-aprobar" data-ins="pago" data-id="${i.id}">💰 Matrícula pagada</button>` : `<button type="button" class="btn btn-aprobar" data-ins="confirmar" data-id="${i.id}">✓ Confirmar inscripción</button>`}
       <button type="button" class="btn btn-wa" data-ins="whatsapp" data-id="${i.id}">💬 WhatsApp</button>
       <button type="button" class="btn btn-borde" data-ins="cancelar" data-id="${i.id}">Cancelar</button>`;
   else if (i.estado === 'pagada' && !i.cliente_email) acc = `<span class="suave">Sin email: cargalo en la app para darle acceso al aula.</span>`
@@ -1467,6 +1470,7 @@ function tarjetaInscripcion(i, codigos) {
     <div class="cita-servicio">${esc(i.curso_nombre)}</div>
     <div class="cita-cliente">${esc(i.cliente_nombre)} · <a href="tel:${esc(i.cliente_telefono.replace(/[^\d+]/g, ''))}">${esc(i.cliente_telefono)}</a>${i.cliente_email ? ` · <a href="mailto:${esc(i.cliente_email)}">${esc(i.cliente_email)}</a>` : ''}</div>
     ${progresoAlumna(i)}
+    ${efecInicio ? `<p class="aviso-efectivo">💵 <strong>Paga en efectivo al iniciar el curso.</strong> No hay comprobante: cuando cobres la matrícula, tocá “Marcar cobrado en efectivo”.</p>` : ''}
     ${i.suspendida_desde ? `<p class="aviso-pausa">⏸ <strong>Cursada en pausa.</strong> No se cobran cuotas ni se abren clases nuevas hasta que la reanudes${i.pausa_dias ? ` · ${i.pausa_dias} día(s) pausados antes` : ''}.</p>` : i.pausa_dias > 0 ? `<p class="suave">⏸ Estuvo en pausa ${i.pausa_dias} día(s): sus clases y cuotas se corrieron ese tiempo.</p>` : ''}
     <p class="cita-monto">${conMat ? 'Matrícula: ' + gs(i.monto_gs) : 'Sin matrícula'}</p>
     ${i.precio_ref ? `<p class="suave">${esc(/^Curso: /.test(i.precio_ref) ? i.precio_ref.split(' · ')[0] : i.precio_ref)} · se cobra aparte, durante el curso</p>` : ''}
@@ -1522,9 +1526,9 @@ async function enviarAcceso(i, codigo, ventana) {
 }
 
 let insPago = null;
-function abrirPago(i) {
+function abrirPago(i, metodo) {
   insPago = i;
-  const f = $('#form-pago'); f.reset(); f.acceso.checked = true; $('#pago-error').textContent = '';
+  const f = $('#form-pago'); f.reset(); f.acceso.checked = true; if (metodo) f.metodo.value = metodo; $('#pago-error').textContent = '';
   $('#pago-resumen').textContent = `${i.cliente_nombre} · ${i.curso_nombre}${i.monto_gs ? ' · matrícula ' + gs(i.monto_gs) : ''} · Ref. ${i.referencia}. Al confirmarla, la alumna queda inscripta; el curso se cobra aparte.`;
   $('#dlg-pago').showModal();
 }
@@ -1546,6 +1550,7 @@ async function confirmarPago(e) {
 async function accionInscripcion(accion, id, boton) {
   const i = cacheIns.get(id); if (!i) return;
   if (accion === 'pago') { abrirPago(i); return; }
+  if (accion === 'efectivo') { abrirPago(i, 'efectivo'); return; }
   if (accion === 'horario') { abrirCambioHora('i', i); return; }
   if (accion === 'confirmar') {
     // Curso sin matrícula: se confirma la inscripción y se da acceso (no hay pago que registrar).

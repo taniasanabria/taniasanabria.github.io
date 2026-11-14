@@ -263,3 +263,5 @@ a.curso:hover { transform: translateY(-3px); box-shadow: var(--sombra-fuerte); }
 .cuota-datos { text-align: right; }
 .cuota-datos b { display: block; }
 @media (max-width: 340px) { .cuota-fila { grid-template-columns: 1fr auto; } .cuota-fila .etiqueta { grid-column: 1 / -1; justify-self: start; } .cuota-datos { text-align: right; } }
+
+.nota-efectivo { background: #eef8ef; border: 1px solid #bfe0c5; color: #1d4f2a; border-radius: 12px; padding: .55rem .8rem; max-width: 680px; margin: 0 auto 1rem; }

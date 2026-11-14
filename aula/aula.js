@@ -253,7 +253,7 @@ function vistaCuotas() {
       <div class="fila entre"><h2 style="margin:0">${esc(c.curso)}</h2>${c.pausada ? '<span class="etiqueta gris">⏸ En pausa</span>' : ''}</div>
       <p class="chico suave" style="margin:.2rem 0 .6rem">Ref. ${esc(c.referencia)}</p>
       ${bannerPausa(c.servicio_id)}
-      ${c.matricula ? `<ul class="cuotas-lista"><li class="cuota-fila"><div><strong>Matrícula</strong></div><div class="cuota-datos"><b>${gs(c.matricula.monto)}</b>${c.matricula.fecha ? `<small>Pagada el ${esc(fechaCorta(c.matricula.fecha))}</small>` : ''}</div><span class="etiqueta ${c.matricula.pagada ? 'verde' : 'ambar'}">${c.matricula.pagada ? 'Pagada' : 'Pendiente'}</span></li></ul>` : ''}
+      ${c.matricula ? `<ul class="cuotas-lista"><li class="cuota-fila"><div><strong>Matrícula</strong></div><div class="cuota-datos"><b>${gs(c.matricula.monto)}</b>${c.matricula.fecha ? `<small>Pagada el ${esc(fechaCorta(c.matricula.fecha))}</small>` : ''}</div><span class="etiqueta ${c.matricula.pagada || c.matricula.efectivo_inicio ? 'verde' : 'ambar'}">${c.matricula.pagada ? 'Pagada' : c.matricula.efectivo_inicio ? '💵 Efectivo al inicio' : 'Pendiente'}</span></li></ul>` : ''}
       ${c.cuotas.length ? `<ul class="cuotas-lista">${c.cuotas.map(fila).join('')}</ul>
         <p class="chico" style="margin:.7rem 0 0">${pagadas.length} de ${c.cuotas.length} cuotas pagadas${debe.length ? ` · Falta pagar <b>${gs(total)}</b>` : ' · ¡al día! ✓'}</p>`
         : '<p class="chico suave">Tania todavía no cargó tu plan de cuotas. Cuando lo haga, lo vas a ver acá.</p>'}
@@ -262,6 +262,7 @@ function vistaCuotas() {
     </section>`;
   };
   pintar(`<h1>Mis cuotas</h1><p class="suave">Tus pagos del curso, con el estado y la fecha de cada uno. Los pagos los confirma Tania.</p>
+    <p class="chico nota-efectivo">💵 Si pagás en efectivo, entregáselo a Tania y ella lo marca como pagado.</p>
     ${lista.length ? lista.map(tarjeta).join('') : '<div class="vacio"><span class="grande">🧾</span>Cuando tengas un curso habilitado, acá vas a ver tus cuotas.</div>'}`);
 }
 
@@ -283,8 +284,8 @@ function vistaSala() {
       <img src="../img/retrato-280.webp" width="280" height="398" alt=""></section>
     ${E.misCursos.map((c) => bannerPausa(c.servicio_id)).join('')}
     <div class="estadisticas"><div class="dato"><strong>${E.misCursos.length}</strong><span>Cursos</span></div><div class="dato"><strong>${E.entregas.length}</strong><span>Trabajos</span></div><div class="dato"><strong>${prom}</strong><span>Promedio</span></div></div>
-    ${pend.length ? `<div class="tarjeta" style="border-color:#f0d896;background:#fffaf0">${pend.map((i) => `<p style="margin:.2rem 0"><span class="etiqueta ambar">En revisión</span> <strong>${esc(i.curso_nombre)}</strong> · Ref. ${esc(i.referencia)}</p>`).join('')}
-      <p class="chico suave" style="margin:.5rem 0 0">Tania habilita tu acceso cuando confirma tu inscripción (matrícula). Te va a aparecer acá abajo automáticamente.</p></div>` : ''}
+    ${pend.length ? `<div class="tarjeta" style="border-color:#f0d896;background:#fffaf0">${pend.map((i) => `<p style="margin:.2rem 0"><span class="etiqueta ambar">En revisión</span> ${i.pago_metodo === 'efectivo' ? '<span class="etiqueta verde">💵 Efectivo al inicio</span> ' : ''}<strong>${esc(i.curso_nombre)}</strong> · Ref. ${esc(i.referencia)}</p>`).join('')}
+      <p class="chico suave" style="margin:.5rem 0 0">${pend.some((i) => i.pago_metodo === 'efectivo') ? 'Pagás la matrícula en efectivo el día que empieza tu curso: Tania la marca como pagada y te habilita el acceso.' : 'Tania habilita tu acceso cuando confirma tu inscripción (matrícula). Te va a aparecer acá abajo automáticamente.'}</p></div>` : ''}
     <div class="dos-columnas"><div>
       <div class="seccion"><h2>Mis cursos</h2><a href="#/cursos">Ver todos los cursos →</a></div>
       ${E.misCursos.length ? `<div class="grilla" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${E.misCursos.map(tarjetaMiCurso).join('')}</div>`

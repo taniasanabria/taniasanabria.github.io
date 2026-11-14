@@ -4,7 +4,8 @@
        comprobante_estado ('enviado'|'verificado'|null), comprobante_ruta, plantilla, datos_pago}
    (a) comprobante recibido sin verificar → se agradece, SIN datos bancarios
    (b) pago verificado → se confirma el pago, SIN datos bancarios
-   (c) sin comprobante → datos de transferencia (plantilla de Ajustes para turnos). */
+   (c) sin comprobante → datos de transferencia (plantilla de Ajustes para turnos).
+   (d) o.efectivo (inscripción que paga en efectivo al iniciar el curso) → se confirma el lugar, SIN datos bancarios. */
 (function (g) {
   function estadoPago(o) {
     if (o.comprobante_estado === 'verificado') return 'verificado';
@@ -16,6 +17,9 @@
     const monto = o.monto || 'a coordinar';
     const pago = o.pago || (o.tipo === 'i' ? 'la matrícula' : 'la seña');
     const ep = estadoPago(o);
+    if (o.efectivo && ep === 'sin') {
+      return `¡Hola ${n}! ✨ Soy Tania Sanabria, de la Academia. Tu inscripción al curso *${o.curso || ''}*${o.horario ? ` (${o.horario})` : ''} está aprobada ✅.\n\nQuedamos en que abonás ${pago} de *${monto}* *en efectivo el día que empieza el curso*. ¡Te espero! 💛`;
+    }
     const cab = o.tipo === 'i'
       ? `¡Hola ${n}! ✨ Soy Tania Sanabria, de la Academia. Tu inscripción al curso *${o.curso || ''}*${o.horario ? ` (${o.horario})` : ''} está aprobada ✅.`
       : `¡Hola ${n}! 💄 Soy Tania Sanabria. Tu turno de *${o.servicio || ''}* para el *${o.fecha || 'a coordinar'}* a las *${o.hora || 'a coordinar'}* está aprobado ✅.`;

@@ -105,3 +105,8 @@ No se inventó ningún dato. Donde había contradicciones se mantuvo el texto ac
 - ✅ **Cursos nuevos:** Cursos → "Nuevo curso" (nombre, descripción, flyer, matrícula, precio, duración, meses de cursado, cupo, días y horarios). Aparecen solos en la web, en la inscripción, en el aula y en la app de agenda.
 - ✅ **Alumna eliminada:** al cancelar o borrar una inscripción se limpian sus pedidos de examen, entregas, cuestionarios, pagos y certificados de ese curso. SQL: `supabase/migracion-pausa-borradores-2026-11-13.sql`.
 - ⚠️ La función `avisar-reserva` no se redeployó: para que el aviso salga al completar, la reserva se "renueva" (`creado = now()`) en ese momento.
+
+## Pago en efectivo al iniciar el curso (13/11/2026)
+- ✅ En el paso de pago de la inscripción a un curso con matrícula se elige **Transferencia o QR** (comprobante) o **Pago en efectivo al iniciar el curso**. Con efectivo la inscripción se completa sin comprobante, Tania recibe el aviso ("Ref. … · pagará en efectivo al inicio del curso") y queda marcada `pago_metodo = efectivo`.
+- ✅ Panel: distintivo "💵 Efectivo al inicio" y botón "Marcar cobrado en efectivo" (registra la matrícula como pagada con método efectivo y da acceso). Aula: distintivo en la sala y en "Mis cuotas", más la nota "Si pagás en efectivo, entregáselo a Tania y ella lo marca como pagado". App de agenda 1.11.1: distintivo y mensaje de aprobación sin datos bancarios.
+- SQL: `supabase/migracion-efectivo-2026-11-13.sql` (nueva función `inscripcion_pago_efectivo`). Los turnos de servicios no cambian.

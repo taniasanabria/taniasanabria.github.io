@@ -313,6 +313,12 @@ function mensajeComprobante(d) {
     !conMatricula ? '¿Me confirmás mi lugar?' : d.modo === 'online' ? 'Te envío el comprobante de pago de la matrícula 👇' : '¿Me pasás los datos para pagar la matrícula?'].filter(Boolean).join('\n');
 }
 
+function mensajeEfectivo(d) {
+  return [`¡Hola Tania! Me inscribí al *${d.curso}* desde la web.`, d.horario ? `Horario: ${d.horario}` : '', d.referencia ? `Referencia: *${d.referencia}*` : '',
+    `Matrícula: ${formatoGs(d.monto_gs)}`, `Nombre: ${d.nombre}`, `Email: ${d.email}`,
+    '💵 Elegí *pagar en efectivo al inicio del curso* (te entrego la matrícula ese día).'].filter(Boolean).join('\n');
+}
+
 function mostrarOk(d) {
   const ok = $('#ins-ok');
   const conMatricula = !d.sin_matricula && d.monto_gs > 0;
@@ -336,10 +342,11 @@ function mostrarOk(d) {
     pago = `<div class="ins-pago"><h3>${icono('check')} Sin matrícula</h3><p>No tenés que pagar nada para inscribirte. Tania te escribe por WhatsApp para confirmar tu lugar.</p>
       ${d.referencia ? `<p>Referencia de tu inscripción: <strong class="ins-ref">${esc(d.referencia)}</strong></p>` : ''}</div>`;
   }
+  const elige = d.modo === 'online' && conMatricula && d.borrador && !!d.id;   // transferencia o efectivo
   const titulo = d.modo === 'whatsapp' || d.borrador ? '¡Ya casi!' : '¡Inscripción recibida!';
   const bajada = d.modo === 'online'
     ? (d.borrador
-      ? `${esc(d.nombre.split(/\s+/)[0])}, reservamos tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} por 48 horas. <strong>Tu inscripción queda completa cuando enviás el comprobante de la matrícula.</strong>`
+      ? `${esc(d.nombre.split(/\s+/)[0])}, reservamos tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} por 48 horas. <strong>Tu inscripción queda completa cuando enviás el comprobante de la matrícula o elegís pagar en efectivo al iniciar el curso.</strong>`
       : `${esc(d.nombre.split(/\s+/)[0])}, tu lugar en <strong>${esc(d.curso)}</strong>${d.horario ? ` (${esc(d.horario)})` : ''} quedó reservado como pendiente${conMatricula ? ' hasta que Tania reciba la matrícula' : ''}.`)
     : d.modo === 'registrada'
       ? `Tania recibió tu solicitud para <strong>${esc(d.curso)}</strong> y te va a escribir por WhatsApp${conMatricula ? ' con los datos para pagar la matrícula' : ''}.`
@@ -352,6 +359,11 @@ function mostrarOk(d) {
   ok.innerHTML = `
     <h2 class="dialogo-titulo">${titulo} ${icono('check')}</h2>
     <p>${bajada}</p>
+    ${elige ? `<fieldset class="opciones-pago ins-metodo"><legend>¿Cómo vas a pagar la matrícula?</legend>
+      <label class="check"><input type="radio" name="ins-metodo" value="transferencia" checked> <span><strong>Transferencia o QR</strong> (ahora, con comprobante)</span></label>
+      <label class="check"><input type="radio" name="ins-metodo" value="efectivo"> <span><strong>Pago en efectivo al iniciar el curso</strong> (sin transferencia)</span></label>
+    </fieldset>` : ''}
+    <div id="ins-via-transf">
     ${pago}
     ${aparte}
     <ol class="ins-pasos">
@@ -359,6 +371,15 @@ function mostrarOk(d) {
       <li>Cuando Tania confirme tu ${conMatricula ? 'matrícula' : 'inscripción'}, te manda tu <strong>código de acceso</strong> para ver las clases en <a href="${esc(urlAula())}">el Aula Virtual</a>.</li>
     </ol>
     <div id="ins-comprobante" hidden></div>
+    </div>
+    ${elige ? `<div id="ins-via-efectivo" hidden>
+      <div class="ins-pago"><h3>${icono('receipt')} Pago en efectivo</h3>
+        <p>Pagás la matrícula de <strong>${formatoGs(d.monto_gs)}</strong> <strong>en efectivo el día que empieza tu curso</strong>. No hace falta transferir ni subir comprobante.</p>
+        <p>Tania recibe tu inscripción apenas la confirmes acá y, cuando cobra la matrícula, te manda tu <strong>código de acceso</strong> al <a href="${esc(urlAula())}">Aula Virtual</a>.</p>
+        ${d.referencia ? `<p>Tu referencia: <strong class="ins-ref">${esc(d.referencia)}</strong></p>` : ''}</div>
+      <p class="form-error" id="ins-efectivo-error" role="alert"></p>
+      <button type="button" class="btn btn-primario btn-grande btn-ancho" id="ins-efectivo-ok">Confirmar inscripción (pago en efectivo)</button>
+    </div>` : ''}
     <a class="btn btn-primario btn-grande btn-ancho" id="ins-wa" href="${esc(urlWa(mensajeComprobante(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} ${d.modo === 'online' && conMatricula ? 'Enviar comprobante por WhatsApp' : d.modo === 'online' ? 'Avisar a Tania por WhatsApp' : 'Escribir a Tania por WhatsApp'}</a>
     <button type="button" class="btn btn-secundario btn-ancho" data-cerrar>Listo</button>`;
   $('#form-inscripcion').hidden = true;
@@ -381,6 +402,33 @@ function mostrarOk(d) {
   }
   const bt = $('#ins-tarjeta');
   if (bt) bt.addEventListener('click', () => pagarConTarjeta(d, bt));
+  if (elige) prepararEfectivo(d, ok);
+}
+
+// Elección "Pago en efectivo al iniciar el curso": completa la inscripción SIN comprobante y avisa a Tania como una completa.
+function prepararEfectivo(d, ok) {
+  const via = (v) => {
+    $('#ins-via-transf').hidden = v === 'efectivo';
+    $('#ins-via-efectivo').hidden = v !== 'efectivo';
+    const wa = $('#ins-wa'); if (wa) wa.hidden = v === 'efectivo' || !!$('#ins-comprobante') && !$('#ins-comprobante').hidden;
+  };
+  ok.querySelectorAll('input[name="ins-metodo"]').forEach((r) => r.addEventListener('change', () => via(r.value)));
+  $('#ins-efectivo-ok').addEventListener('click', async (e) => {
+    const b = e.currentTarget; const err = $('#ins-efectivo-error'); err.textContent = ''; b.disabled = true; b.textContent = 'Confirmando…';
+    let r = null;
+    try { r = await rpc('inscripcion_pago_efectivo', { p_id: d.id }); } catch { r = null; }
+    if (!r || r.ok === false) {
+      err.textContent = r && r.error === 'YA_PAGADA_O_COMPROBANTE' ? 'Esta inscripción ya tiene un comprobante enviado. Tania la va a confirmar.'
+        : 'No pudimos confirmar tu inscripción (puede que haya vencido). Volvé a inscribirte o escribile a Tania por WhatsApp.';
+      b.disabled = false; b.textContent = 'Confirmar inscripción (pago en efectivo)'; return;
+    }
+    ok.querySelector('.dialogo-titulo').firstChild.textContent = '¡Inscripción recibida! ';
+    ok.querySelector('.ins-metodo').remove();
+    $('#ins-via-efectivo').innerHTML = `<div class="ins-pago"><h3>${icono('check')} Pago en efectivo al inicio</h3>
+      <p>${esc(d.nombre.split(/\s+/)[0])}, tu inscripción a <strong>${esc(d.curso)}</strong> quedó registrada. Tania ya fue avisada.</p>
+      <p>Pagás la matrícula de <strong>${formatoGs(d.monto_gs)}</strong> <strong>en efectivo el día que empieza tu curso</strong>. Ella la marca como pagada cuando la cobra y te manda tu código de acceso al <a href="${esc(urlAula())}">Aula Virtual</a>.</p></div>
+      <a class="btn btn-primario btn-grande btn-ancho" href="${esc(urlWa(mensajeEfectivo(d)))}" target="_blank" rel="noopener">${icono('whatsapp')} Avisar a Tania por WhatsApp (opcional)</a>`;
+  });
 }
 
 // Pasarela de tarjeta (futuro): la Edge Function crea el cobro y devuelve la URL de pago de uPay/Bancard.
