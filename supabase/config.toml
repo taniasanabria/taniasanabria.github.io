@@ -4,3 +4,7 @@ project_id = "wfngdgqihtiqkokhxjqv"
 [functions.avisar-reserva]
 # La llama el trigger de la base sin JWT; la función se protege sola (ver index.ts).
 verify_jwt = false
+
+[functions.avisar-aula]
+# La llama el trigger de la base sin JWT; se protege sola (solo recibe un id y avisa una vez).
+verify_jwt = false

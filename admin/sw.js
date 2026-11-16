@@ -1,4 +1,4 @@
-// versión 2026-11-03b (portadas)
+// versión 2026-11-16 (avisos del aula)
 /*
  * Service worker del Panel de Tania (alcance: /admin/).
  * - Muestra las notificaciones push de solicitudes nuevas, aunque el panel esté cerrado.
@@ -40,6 +40,12 @@ self.addEventListener('notificationclick', (e) => {
   const destino = (e.notification.data && e.notification.data.url) || PANEL;
   e.waitUntil((async () => {
     const abiertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Avisos del aula (entregas, exámenes, comprobantes): abren el aula de la profesora en la pestaña que corresponde.
+    if (!destino.startsWith(self.registration.scope) && new URL(destino).origin === self.location.origin) {
+      const aula = abiertas.find((c) => c.url.startsWith(new URL('../aula/', self.registration.scope).href));
+      if (aula && 'navigate' in aula) { try { await aula.navigate(destino); await aula.focus(); return; } catch { /* abre una nueva */ } }
+      await self.clients.openWindow(destino); return;
+    }
     const panel = abiertas.find((c) => c.url.startsWith(self.registration.scope));
     if (panel) { await panel.focus(); panel.postMessage({ tipo: 'ir-a', tab: new URL(destino).hash.slice(1) || 'citas' }); return; }
     await self.clients.openWindow(destino);

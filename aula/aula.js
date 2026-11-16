@@ -58,6 +58,7 @@ function errorTxt(e) {
   const m = `${e?.code || ''} ${e?.message || e || ''}`;
   const T = { COMPLETA_TU_PERFIL: 'Completá tu nombre y celular en tu perfil para inscribirte.', YA_INSCRIPTA: 'Ya te inscribiste a este curso.', DEMASIADAS_SOLICITUDES: 'Ya hay solicitudes pendientes. Esperá la confirmación de Tania.',
     SIN_ACCESO_AL_CURSO: 'Todavía no tenés acceso a este curso.', FOTO_INVALIDA: 'La foto no es válida. Volvé a sacarla.', DEMASIADAS_ENTREGAS: 'Llegaste al máximo de entregas por hoy.',
+    FALTA_AUTOEVALUACION: 'Respondé la autoevaluación (son preguntas rápidas) antes de enviar.',
     CURSADA_EN_PAUSA: 'Tu cursada está en pausa. Cuando Tania la reanude, vas a poder seguir donde quedaste.',
     NO_AUTORIZADO: 'No tenés permiso para esto.', MES_BLOQUEADO: 'Ese mes todavía no está habilitado. Primero la profe tiene que confirmar tu pago.',
     PAGO_YA_ENVIADO: 'Ya enviaste un comprobante. Esperá que la profe lo confirme.', COMPROBANTE_INVALIDO: 'No se pudo registrar el comprobante. Volvé a subirlo.',
@@ -132,6 +133,11 @@ function navegacion() {
   $('#nav-escritorio').innerHTML = html; $('#nav-movil').innerHTML = html; $('#nav-movil').hidden = false;
   $('#btn-perfil').hidden = false; $('#btn-perfil').textContent = (nombreCorto()[0] || '?').toUpperCase();
   $('#marca-sub').textContent = E.admin ? 'Panel de la profesora' : 'Aula Virtual';
+  if (E.admin) {   // número de pendientes (entregas + exámenes + pagos) en la pestaña y en el ícono de la app instalada
+    const tot = pend + (E.adminExam || 0) + (E.adminPagos || 0);
+    document.title = (tot ? `(${tot}) ` : '') + 'Aula Virtual · Tania Sanabria Makeup Academy';
+    try { tot ? navigator.setAppBadge?.(tot) : navigator.clearAppBadge?.(); } catch { /* sin insignia */ }
+  }
 }
 function marcarNav() {
   const h = location.hash || '#/';
@@ -462,11 +468,29 @@ function cargarPdfJs() {
     sc.onerror = () => { pdfjsP = null; ko(new Error('No se pudo cargar el visor')); }; document.head.append(sc);
   }));
 }
+// Imprimir: se dibujan las páginas como imágenes en una zona que solo existe al imprimir y se llama a window.print().
+// No depende del visor de PDF del navegador (que en Android no imprime PDF desde un iframe/blob). Si algo falla, abre el PDF en otra pestaña.
+async function imprimirPdf(doc, url, btn) {
+  const txt = btn.textContent; btn.disabled = true; btn.textContent = 'Preparando…';
+  let zona = $('#zona-impresion'); if (!zona) { zona = document.createElement('div'); zona.id = 'zona-impresion'; document.body.append(zona); }
+  zona.innerHTML = '';
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const pg = await doc.getPage(n), vp0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: Math.min(2.2, 1700 / vp0.width) });
+      const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+      await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      const im = new Image(); im.alt = `Página ${n}`; im.src = cv.toDataURL('image/jpeg', .92); await im.decode().catch(() => {}); zona.append(im);
+    }
+    const limpiar = () => { zona.innerHTML = ''; window.removeEventListener('afterprint', limpiar); };
+    window.addEventListener('afterprint', limpiar); btn.textContent = txt; btn.disabled = false;
+    window.print();
+  } catch (x) { btn.textContent = txt; btn.disabled = false; zona.innerHTML = ''; toast('No se pudo preparar la impresión. Te abro el PDF para imprimirlo desde ahí.', true); window.open(url, '_blank'); }
+}
 async function verPdf(url, titulo) {
   const d = $('#visor'); const ficha = Symbol(); d._pdf = ficha; let zoom = 1, doc = null;
   $('#visor-cuerpo').innerHTML = `<div class="pdf-visor"><div class="pdf-barra"><strong>${esc(titulo || 'PDF')}</strong>
     <span class="pdf-acc"><button type="button" class="btn btn-claro btn-chico" data-zoom="-1" aria-label="Alejar">−</button><button type="button" class="btn btn-claro btn-chico" data-zoom="1" aria-label="Acercar">+</button>
-    <a class="btn btn-claro btn-chico" href="${esc(url)}" target="_blank" rel="noopener" download>⬇ Descargar</a></span></div>
+    <a class="btn btn-claro btn-chico" href="${esc(url)}" target="_blank" rel="noopener" download>⬇ Descargar</a><button type="button" class="btn btn-claro btn-chico" id="pdf-imprimir" disabled>🖨 Imprimir</button></span></div>
     <div class="pdf-paginas" id="pdf-pag"><p class="cargando" style="color:#fff"><span class="giro"></span>Abriendo el PDF…</p></div></div>`;
   if (!d.open) d.showModal();
   const pintarPdf = async () => {
@@ -481,7 +505,9 @@ async function verPdf(url, titulo) {
     }
   };
   try {
-    const lib = await cargarPdfJs(); doc = await lib.getDocument({ url }).promise; await pintarPdf();
+    const lib = await cargarPdfJs(); doc = await lib.getDocument({ url }).promise;
+    { const bi = $('#pdf-imprimir'); if (bi) { bi.disabled = false; bi.onclick = () => imprimirPdf(doc, url, bi); } }
+    await pintarPdf();
     for (const b of $$('[data-zoom]', d)) b.onclick = () => { zoom = Math.min(3, Math.max(.6, zoom + (+b.dataset.zoom) * .4)); pintarPdf(); };
   } catch (x) {
     const c = $('#pdf-pag'); if (c && d._pdf === ficha) c.innerHTML = `<div class="vacio" style="margin:2rem 1rem">No se pudo mostrar el PDF acá.<br><a class="btn btn-oro" href="${esc(url)}" target="_blank" rel="noopener">Abrirlo en otra pestaña</a></div>`;
@@ -499,6 +525,7 @@ function tarjetaEntrega(e, conCurso = false) {
   return `<article class="entrega"><div class="entrega-cab"><div><h3>${esc(e.titulo)}</h3><span class="chico suave">${conCurso && s ? esc(s.nombre) + ' · ' : ''}${e.modulo ? esc(e.modulo) + ' · ' : ''}${fechaHora(e.creado)}</span></div>${est}</div>
     <div class="fotos">${e.fotos.map((f) => `<button data-ver="${esc(f)}"><img data-bucket="entregas" data-ruta="${esc(f)}" alt="Foto del trabajo"></button>`).join('')}</div>
     ${e.mensaje ? `<p class="chico" style="margin:.2rem 0">💬 ${esc(e.mensaje)}</p>` : ''}
+    ${Array.isArray(e.autoevaluacion) && e.autoevaluacion.length ? `<div class="ae-resp"><b>Autoevaluación de la alumna</b>${e.autoevaluacion.map((x) => `<div class="ae-fila"><span>${esc(x.q)}</span><span class="ae-r ae-${esc(x.r)}">${{ si: 'Sí', a_veces: 'A veces', no: 'No' }[x.r] || ''}</span></div>`).join('')}</div>` : ''}
     ${e.calificacion ? `<div class="nota"><span class="nota-num">${e.calificacion}</span><div><div class="estrellas">${estrellas(e.calificacion)}</div><strong>${NOTA_TXT[e.calificacion]}</strong></div></div>` : ''}
     ${e.estado === 'anulada_ia' ? `<p class="chico" style="margin:.3rem 0;color:var(--rojo)">La profe detectó uso de inteligencia artificial en las respuestas o en las fotos, por eso la clase quedó anulada. Podés volver a presentarla.</p>` : ''}
     ${e.comentario ? `<div class="comentario"><b><img src="../img/retrato-280.webp" alt="">Comentario de la profe Tania</b>${esc(e.comentario).replace(/\n/g, '<br>')}</div>` : ''}
@@ -512,22 +539,28 @@ document.addEventListener('click', async (ev) => {
 });
 
 // ---------- Alumna: entregar trabajo (solo cámara) ----------
-function vistaEntregar(id, q = '') {
+async function vistaEntregar(id, q = '') {
   const s = servicio(id); if (!E.misCursos.some((c) => c.servicio_id === id)) { location.hash = '#/'; return; }
   const fotos = []; const mods = [...new Set((s.extra?.detalles || []).map((d) => d.texto))];
   const reemplaza = new URLSearchParams(q).get('reemplaza'); const previa = reemplaza && E.entregas.find((x) => x.id === reemplaza);
   const leccionId = new URLSearchParams(q).get('leccion') || previa?.leccion_id || null;
   const hab = avanceDe(id)?.meses_habilitados || 1;
+  let autoeval = [], tituloClase = '';
+  if (leccionId) { const { data: lc } = await sb.from('lecciones').select('titulo,autoevaluacion').eq('id', leccionId).maybeSingle();
+    if (Array.isArray(lc?.autoevaluacion)) autoeval = lc.autoevaluacion.filter((x) => typeof x === 'string' && x.trim()); tituloClase = lc?.titulo || ''; }
+  const nPaso = autoeval.length ? 4 : 3;
   pintar(`<a class="volver" href="#/curso/${esc(id)}">‹ ${esc(s.nombre)}</a><h1>${previa ? 'Volver a presentar' : 'Entregar trabajo práctico'}</h1>
     ${previa ? `<p class="suave">Reentrega de <strong>${esc(previa.titulo)}</strong>.</p>` : ''}${AVISO_IA}
     <div class="tarjeta"><form id="f-entrega" novalidate>
       <div class="paso"><span class="paso-num">1</span><div style="flex:1"><strong>¿Qué trabajo es?</strong>
-        <label for="e-titulo">Título</label><input id="e-titulo" name="titulo" required maxlength="160" placeholder="Ej: Smokey eyes – práctica 1" value="${esc(previa ? previa.titulo : '')}">
+        <label for="e-titulo">Título</label><input id="e-titulo" name="titulo" required maxlength="160" placeholder="Ej: Smokey eyes – práctica 1" value="${esc(previa ? previa.titulo : tituloClase)}">
         ${E.v2 ? `<label for="e-mes">Mes de la clase</label><select id="e-mes" name="mes">${Array.from({ length: hab }, (_, i) => hab - i).map((m) => `<option value="${m}" ${previa?.mes === m ? 'selected' : ''}>Mes ${m}</option>`).join('')}</select>` : ''}
         ${mods.length ? `<label for="e-modulo">Módulo (opcional)</label><select id="e-modulo" name="modulo"><option value="">—</option>${mods.map((m) => `<option>${esc(m)}</option>`).join('')}</select>` : ''}</div></div>
       <div class="paso"><span class="paso-num">2</span><div style="flex:1"><strong>Sacá las fotos con la cámara</strong><p class="chico suave" style="margin:.2rem 0">Solo se aceptan fotos sacadas ahora mismo con la cámara del aula: no se puede elegir de la galería ni subir fotos de otras aplicaciones. Hasta 6 fotos.</p>
         <div class="tomadas" id="tomadas"></div><div class="sello-camara">${ic('check')} Cada foto queda sellada con tu nombre, la fecha y la hora.</div></div></div>
-      <div class="paso"><span class="paso-num">3</span><div style="flex:1"><label for="e-msj" style="margin-top:0">Mensaje para la profe (opcional)</label><textarea id="e-msj" name="mensaje" maxlength="1000" placeholder="Contale qué productos usaste o qué te costó…"></textarea></div></div>
+      ${autoeval.length ? `<div class="paso"><span class="paso-num">3</span><div style="flex:1"><strong>Autoevaluación rápida</strong><p class="chico suave" style="margin:.2rem 0 .5rem">Contestá con sinceridad, no tiene nota. La profe la ve junto a tus fotos.</p>
+        ${autoeval.map((q, i) => `<div class="autoeval" data-ae="${i}" role="radiogroup" aria-label="${esc(q)}"><p class="ae-q">${esc(q)}</p><div class="ae-op">${[['si', 'Sí'], ['a_veces', 'A veces'], ['no', 'No']].map(([v, t]) => `<label><input type="radio" name="ae${i}" value="${v}"><span>${t}</span></label>`).join('')}</div></div>`).join('')}</div></div>` : ''}
+      <div class="paso"><span class="paso-num">${nPaso}</span><div style="flex:1"><label for="e-msj" style="margin-top:0">Mensaje para la profe (opcional)</label><textarea id="e-msj" name="mensaje" maxlength="1000" placeholder="Contale qué productos usaste o qué te costó…"></textarea></div></div>
       <p class="error" id="e-error" role="alert"></p><button class="btn btn-oro btn-ancho" id="e-btn">Enviar a la profe</button>
     </form></div>`);
   const pintarFotos = () => { $('#tomadas').innerHTML = fotos.map((f, i) => `<div class="tomada"><img src="${f.url}" alt="Foto ${i + 1}"><button type="button" data-quitar="${i}" aria-label="Quitar">✕</button></div>`).join('')
@@ -543,6 +576,8 @@ function vistaEntregar(id, q = '') {
     ev.preventDefault(); const f = ev.target, err = $('#e-error'); err.textContent = '';
     if (f.titulo.value.trim().length < 2) { err.textContent = 'Poné un título al trabajo.'; return f.titulo.focus(); }
     if (!fotos.length) { err.textContent = 'Sacá al menos una foto con la cámara.'; return; }
+    const respAE = autoeval.map((q, i) => ({ q, r: f.querySelector(`input[name="ae${i}"]:checked`)?.value || null }));
+    if (respAE.some((x) => !x.r)) { err.textContent = 'Respondé las preguntas de autoevaluación (Sí / A veces / No).'; f.querySelector(`[data-ae="${respAE.findIndex((x) => !x.r)}"]`)?.scrollIntoView({ block: 'center' }); return; }
     const btn = $('#e-btn'); btn.disabled = true;
     try {
       const rutas = [];
@@ -555,6 +590,7 @@ function vistaEntregar(id, q = '') {
       btn.textContent = 'Enviando…';
       const fila = { servicio_id: id, titulo: f.titulo.value.trim(), modulo: f.modulo?.value || null, mensaje: f.mensaje.value.trim(), fotos: rutas };
       if (E.v3 && leccionId) fila.leccion_id = leccionId;
+      if (autoeval.length) fila.autoevaluacion = respAE;
       if (E.v2) Object.assign(fila, { mes: +(f.mes?.value || hab), reemplaza_id: previa ? previa.id : null,
         captura: { origen: 'camara-en-vivo', dispositivo: await huellaDispositivo(), fotos: fotos.map((x) => x.blob.meta || null), enviada: new Date().toISOString(), agente: navigator.userAgent.slice(0, 200) } });
       const { error } = await sb.from('entregas').insert(fila);
@@ -624,6 +660,7 @@ async function vistaAdminCorregir() {
       ${e.estado === 'enviada' ? '<span class="etiqueta ambar">Nuevo</span>' : e.estado === 'rehacer' ? '<span class="etiqueta rojo">Rehacer</span>' : e.estado === 'anulada_ia' ? '<span class="etiqueta rojo">Anulada IA</span>' : `<span class="nota-num" style="width:44px;height:44px;font-size:1.2rem">${e.calificacion ?? '–'}</span>`}</div>
       <div class="fotos">${e.fotos.map((f) => `<button data-ver="${esc(f)}"><img data-bucket="entregas" data-ruta="${esc(f)}" alt="Foto del trabajo"></button>`).join('')}</div>
       ${e.mensaje ? `<p class="chico" style="margin:.2rem 0">💬 ${esc(e.mensaje)}</p>` : ''}
+      ${Array.isArray(e.autoevaluacion) && e.autoevaluacion.length ? `<div class="ae-resp"><b>Autoevaluación de la alumna</b> <span class="chico suave">(no se califica)</span>${e.autoevaluacion.map((x) => `<div class="ae-fila"><span>${esc(x.q)}</span><span class="ae-r ae-${esc(x.r)}">${{ si: 'Sí', a_veces: 'A veces', no: 'No' }[x.r] || ''}</span></div>`).join('')}</div>` : ''}
       ${E.v3 ? `${e.leccion ? `<p class="chico" style="margin:.2rem 0">📘 Clase: <b>${esc(e.leccion)}</b></p>` : ''}${flagsHtml(e.flags)}
         <div class="rubrica">${criteriosDe(e.servicio_id).map((c) => `<span>${esc(c)}</span><span class="escala" data-crit="${esc(c)}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-pressed="${(e.rubrica || {})[c] == n}">${n}</button>`).join('')}</span>`).join('')}</div>` : ''}
       <div class="calificar"><div class="escala" role="group" aria-label="Nota" ${E.v3 ? 'hidden' : ''}>${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-nota="${n}" aria-pressed="${e.calificacion === n}">${n}</button>`).join('')}</div>
@@ -673,6 +710,8 @@ function editarMaterial(l, { vars, mods, recargar }) {
       <label for="e-nivel">Nivel / categoría</label><select id="e-nivel" name="nivel"><option value="">Todos los niveles</option>${vars.map((v) => `<option value="${esc(v.id)}" ${v.id === l.variante_id ? 'selected' : ''}>${esc(v.etiqueta || v.id)}</option>`).join('')}</select>` : ''}
     <label for="e-modulo">Módulo</label><input id="e-modulo" name="modulo" list="e-mods" maxlength="120" value="${esc(l.modulo || '')}"><datalist id="e-mods">${mods.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>
     <label for="e-desc">Descripción</label><textarea id="e-desc" name="descripcion" maxlength="4000">${esc(l.descripcion || '')}</textarea>
+    <label for="e-ae">Preguntas de autoevaluación (una por línea)</label><textarea id="e-ae" name="autoeval" maxlength="2000" placeholder="¿Sé por qué…?&#10;¿Usé…?">${esc((Array.isArray(l.autoevaluacion) ? l.autoevaluacion : []).join('\n'))}</textarea>
+    <p class="chico suave" style="margin:.2rem 0">La alumna las responde (Sí / A veces / No) al entregar el trabajo de esta clase. Dejalo vacío si la clase no lleva autoevaluación.</p>
     ${esArch ? `<label class="subir" style="margin-top:.8rem">${ic('subir')} <span id="e-arch-txt">Reemplazar el archivo (PDF o foto, opcional)</span><input type="file" id="e-file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
       <p class="chico suave" style="margin:.3rem 0">Archivo actual: ${esc(l.archivo_nombre || l.archivo || '')}. Al reemplazarlo, el anterior queda guardado como versión previa.</p>`
       : `<label for="e-url">Enlace</label><input id="e-url" type="url" value="${esc(l.url || '')}" placeholder="https://…">`}
@@ -694,7 +733,8 @@ function editarMaterial(l, { vars, mods, recargar }) {
   $('#f-edit', dlg).onsubmit = async (e) => {
     e.preventDefault(); const f = e.target, err = $('#e-error', dlg), btn = $('#e-guardar', dlg); err.textContent = '';
     const titulo = f.titulo.value.trim(); if (!titulo) { err.textContent = 'Escribí un título.'; return; }
-    const cambios = { titulo, descripcion: f.descripcion.value.trim(), modulo: f.modulo.value.trim() || null };
+    const preguntas = f.autoeval.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 10);
+    const cambios = { titulo, descripcion: f.descripcion.value.trim(), modulo: f.modulo.value.trim() || null, autoevaluacion: preguntas.length ? preguntas : null };
     if (E.v2) {
       const m = +f.mes.value; if (!(m >= 1 && m <= 36)) { err.textContent = 'El mes va de 1 a 36.'; return; }
       Object.assign(cambios, { mes: m, variante_id: f.nivel.value || null });
