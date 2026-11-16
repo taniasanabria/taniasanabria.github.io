@@ -448,8 +448,44 @@ async function abrirLeccion(l) {
     return window.open(l.url, '_blank', 'noopener');
   }
   const u = await urlFirmada('cursos', l.archivo); if (!u) return toast('No se pudo abrir el archivo.', true);
-  if (/\.pdf$/.test(l.archivo)) { if (matchMedia('(max-width: 899px)').matches) return window.open(u, '_blank', 'noopener'); return visor(`<iframe src="${u}" title="${esc(l.titulo)}"></iframe>`); }
+  if (/\.pdf$/i.test(l.archivo)) return verPdf(u, l.titulo);
   visor(`<img src="${u}" alt="${esc(l.titulo)}">`);
+}
+// Visor de PDF propio (pdf.js): funciona igual en Android, iPhone y compu, sin depender del visor del navegador
+// (Chrome de Android no muestra PDF en pestaña: los descarga). Se carga solo cuando se abre un PDF.
+let pdfjsP = null;
+function cargarPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return pdfjsP || (pdfjsP = new Promise((ok, ko) => {
+    const sc = document.createElement('script'); sc.src = 'vendor/pdf.min.js?v=3.11.174';
+    sc.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js?v=3.11.174'; ok(window.pdfjsLib); };
+    sc.onerror = () => { pdfjsP = null; ko(new Error('No se pudo cargar el visor')); }; document.head.append(sc);
+  }));
+}
+async function verPdf(url, titulo) {
+  const d = $('#visor'); const ficha = Symbol(); d._pdf = ficha; let zoom = 1, doc = null;
+  $('#visor-cuerpo').innerHTML = `<div class="pdf-visor"><div class="pdf-barra"><strong>${esc(titulo || 'PDF')}</strong>
+    <span class="pdf-acc"><button type="button" class="btn btn-claro btn-chico" data-zoom="-1" aria-label="Alejar">−</button><button type="button" class="btn btn-claro btn-chico" data-zoom="1" aria-label="Acercar">+</button>
+    <a class="btn btn-claro btn-chico" href="${esc(url)}" target="_blank" rel="noopener" download>⬇ Descargar</a></span></div>
+    <div class="pdf-paginas" id="pdf-pag"><p class="cargando" style="color:#fff"><span class="giro"></span>Abriendo el PDF…</p></div></div>`;
+  if (!d.open) d.showModal();
+  const pintarPdf = async () => {
+    const cont = $('#pdf-pag'); if (!cont || d._pdf !== ficha) return;
+    const ancho = Math.max(240, cont.clientWidth - 16) * zoom, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cont.innerHTML = '';
+    for (let n = 1; n <= doc.numPages; n++) {
+      if (d._pdf !== ficha || !d.open) return;
+      const pg = await doc.getPage(n), vp0 = pg.getViewport({ scale: 1 }), esc_ = ancho / vp0.width, vp = pg.getViewport({ scale: esc_ * dpr });
+      const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); cv.style.width = Math.floor(ancho) + 'px'; cv.setAttribute('aria-label', `Página ${n}`);
+      cont.append(cv); await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    }
+  };
+  try {
+    const lib = await cargarPdfJs(); doc = await lib.getDocument({ url }).promise; await pintarPdf();
+    for (const b of $$('[data-zoom]', d)) b.onclick = () => { zoom = Math.min(3, Math.max(.6, zoom + (+b.dataset.zoom) * .4)); pintarPdf(); };
+  } catch (x) {
+    const c = $('#pdf-pag'); if (c && d._pdf === ficha) c.innerHTML = `<div class="vacio" style="margin:2rem 1rem">No se pudo mostrar el PDF acá.<br><a class="btn btn-oro" href="${esc(url)}" target="_blank" rel="noopener">Abrirlo en otra pestaña</a></div>`;
+  }
 }
 function visor(html) { const d = $('#visor'); $('#visor-cuerpo').innerHTML = html; d.showModal(); }
 
@@ -624,6 +660,65 @@ async function vistaAdminCorregir() {
 }
 
 // ---------- Admin: materiales ----------
+// Editar una clase ya cargada: datos, enlace o PDF nuevo. El PDF anterior queda guardado como versión previa (se puede restaurar).
+function editarMaterial(l, { vars, mods, recargar }) {
+  if (!l) return;
+  const esArch = l.tipo === 'archivo', prev = Array.isArray(l.versiones_previas) ? l.versiones_previas : [];
+  const dlg = document.createElement('dialog'); dlg.className = 'modal-edicion';
+  const fecha = (x) => { try { return new Date(x).toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' }); } catch { return ''; } };
+  dlg.innerHTML = `<form id="f-edit" novalidate><h2>Editar clase</h2>
+    <label for="e-titulo">Título</label><input id="e-titulo" name="titulo" required maxlength="160" value="${esc(l.titulo)}">
+    ${E.v2 ? `<div class="fila" style="gap:.6rem;flex-wrap:nowrap"><div style="flex:0 0 6rem"><label for="e-mes">Mes</label><input id="e-mes" name="mes" type="number" min="1" max="36" value="${l.mes || 1}"></div>
+      <div style="flex:0 0 6rem"><label for="e-semana">Semana</label><input id="e-semana" name="semana" type="number" min="1" max="160" value="${l.semana || ''}"></div></div>
+      <label for="e-nivel">Nivel / categoría</label><select id="e-nivel" name="nivel"><option value="">Todos los niveles</option>${vars.map((v) => `<option value="${esc(v.id)}" ${v.id === l.variante_id ? 'selected' : ''}>${esc(v.etiqueta || v.id)}</option>`).join('')}</select>` : ''}
+    <label for="e-modulo">Módulo</label><input id="e-modulo" name="modulo" list="e-mods" maxlength="120" value="${esc(l.modulo || '')}"><datalist id="e-mods">${mods.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>
+    <label for="e-desc">Descripción</label><textarea id="e-desc" name="descripcion" maxlength="4000">${esc(l.descripcion || '')}</textarea>
+    ${esArch ? `<label class="subir" style="margin-top:.8rem">${ic('subir')} <span id="e-arch-txt">Reemplazar el archivo (PDF o foto, opcional)</span><input type="file" id="e-file" accept="application/pdf,image/jpeg,image/png,image/webp"></label>
+      <p class="chico suave" style="margin:.3rem 0">Archivo actual: ${esc(l.archivo_nombre || l.archivo || '')}. Al reemplazarlo, el anterior queda guardado como versión previa.</p>`
+      : `<label for="e-url">Enlace</label><input id="e-url" type="url" value="${esc(l.url || '')}" placeholder="https://…">`}
+    ${prev.length ? `<h3 style="margin:1rem 0 .3rem">Versiones anteriores</h3>${prev.map((v, k) => `<div class="fila entre chico" style="padding:.25rem 0"><span>${esc(v.nombre || 'archivo')} · ${esc(fecha(v.reemplazado))}</span><span class="fila" style="gap:.3rem"><button type="button" class="btn btn-borde btn-chico" data-prev-ver="${k}">Ver</button><button type="button" class="btn btn-borde btn-chico" data-prev-rest="${k}">Restaurar</button></span></div>`).join('')}` : ''}
+    <p class="error" id="e-error"></p>
+    <div class="fila" style="justify-content:flex-end;margin-top:.8rem"><button type="button" class="btn btn-borde" data-cancelar>Cancelar</button><button class="btn btn-oro" id="e-guardar">Guardar cambios</button></div></form>`;
+  document.body.append(dlg); dlg.showModal();
+  const cerrar = () => { dlg.close(); dlg.remove(); };
+  dlg.addEventListener('close', () => dlg.remove());
+  $('[data-cancelar]', dlg).onclick = cerrar;
+  const inpF = $('#e-file', dlg); if (inpF) inpF.onchange = (e) => { $('#e-arch-txt', dlg).textContent = e.target.files[0]?.name || 'Reemplazar el archivo (PDF o foto, opcional)'; };
+  for (const b of $$('[data-prev-ver]', dlg)) b.onclick = async () => { const v = prev[+b.dataset.prevVer]; const u = await urlFirmada('cursos', v.archivo); if (!u) return toast('No se pudo abrir esa versión.', true); cerrar(); /\.pdf$/i.test(v.archivo) ? verPdf(u, v.nombre) : visor(`<img src="${u}" alt="">`); };
+  for (const b of $$('[data-prev-rest]', dlg)) b.onclick = async () => {
+    const v = prev[+b.dataset.prevRest]; if (!confirm('¿Volver a esta versión? La actual queda guardada como versión previa.')) return;
+    const nuevas = [{ archivo: l.archivo, nombre: l.archivo_nombre, bytes: l.archivo_bytes, reemplazado: new Date().toISOString() }, ...prev.filter((_, k) => k !== +b.dataset.prevRest)].filter((x) => x.archivo).slice(0, 20);
+    const { error } = await sb.from('lecciones').update({ archivo: v.archivo, archivo_nombre: v.nombre || null, archivo_bytes: v.bytes || null, versiones_previas: nuevas }).eq('id', l.id);
+    if (error) return toast(errorTxt(error), true); toast('Versión restaurada ✓'); cerrar(); recargar();
+  };
+  $('#f-edit', dlg).onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target, err = $('#e-error', dlg), btn = $('#e-guardar', dlg); err.textContent = '';
+    const titulo = f.titulo.value.trim(); if (!titulo) { err.textContent = 'Escribí un título.'; return; }
+    const cambios = { titulo, descripcion: f.descripcion.value.trim(), modulo: f.modulo.value.trim() || null };
+    if (E.v2) {
+      const m = +f.mes.value; if (!(m >= 1 && m <= 36)) { err.textContent = 'El mes va de 1 a 36.'; return; }
+      Object.assign(cambios, { mes: m, variante_id: f.nivel.value || null });
+      if (f.semana.value) { const w = +f.semana.value; if (!(w >= 1 && w <= 160)) { err.textContent = 'La semana va de 1 a 160.'; return; } cambios.semana = w; } else cambios.semana = null;
+    }
+    let subida = null; btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      if (esArch) {
+        const file = f.querySelector('#e-file')?.files[0];
+        if (file) {
+          if (file.size > 26214400) throw new Error('El archivo pesa más de 25 MB.');
+          const ext = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]; if (!ext) throw new Error('Solo PDF, JPG, PNG o WEBP.');
+          const ruta = `${l.servicio_id}/${crypto.randomUUID()}.${ext}`;
+          const up = await sb.storage.from('cursos').upload(ruta, file, { contentType: file.type }); if (up.error) throw up.error; subida = ruta;
+          Object.assign(cambios, { archivo: ruta, archivo_nombre: file.name.slice(0, 200), archivo_bytes: file.size,
+            versiones_previas: [{ archivo: l.archivo, nombre: l.archivo_nombre, bytes: l.archivo_bytes, reemplazado: new Date().toISOString() }, ...prev].filter((x) => x.archivo).slice(0, 20) });
+        }
+      } else { const u = f.querySelector('#e-url').value.trim(); if (!/^https:\/\/\S+$/.test(u)) throw new Error('Pegá un enlace que empiece con https://'); cambios.url = u; }
+      const { error } = await sb.from('lecciones').update(cambios).eq('id', l.id); if (error) throw error;
+      toast('Clase actualizada ✓'); cerrar(); recargar();
+    } catch (x) { if (subida) sb.storage.from('cursos').remove([subida]); err.textContent = errorTxt(x); btn.disabled = false; btn.textContent = 'Guardar cambios'; }
+  };
+}
+
 async function vistaAdminMateriales() {
   const cur = sessionStorage.getItem('aula-curso-mat') || E.servicios[0]?.id;
   const s = servicio(cur);
@@ -633,9 +728,9 @@ async function vistaAdminMateriales() {
   pintar(`${E.v3 ? '<p class="chico" style="float:right"><a href="#/admin/config">⚙️ Rúbrica, plazos y cuestionarios</a></p>' : ''}<h1>Materiales de los cursos</h1><p class="suave">Subí los PDF por mes/módulo y por nivel. Cada alumna ve solo los de su nivel y solo de los meses que ya tiene pagos y confirmados.</p>
     <div class="filtros"><select id="m-curso">${E.servicios.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></div>
     <div class="dos-columnas"><div><h2>Clases cargadas (${(lecciones || []).length})</h2>
-      ${(lecciones || []).length ? (lecciones || []).map((l) => `<div class="clase" style="cursor:default"><span class="clase-ic">${/\.(jpg|png|webp)$/.test(l.archivo || '') ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo])}</span>
-        <span><strong>${esc(l.titulo)}</strong><small>${E.v2 ? `Mes ${l.mes || 1}${l.semana ? ' · semana ' + l.semana : ''} · ${esc(nivelTxt(l.variante_id))} · ` : ''}${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
-        <span class="fila" style="margin-left:auto;flex-wrap:nowrap"><button class="btn btn-borde btn-chico" data-ocultar="${l.id}" data-activo="${l.activo}">${l.activo ? 'Ocultar' : 'Mostrar'}</button><button class="btn btn-peligro btn-chico" data-borrar="${l.id}" data-archivo="${esc(l.archivo || '')}" aria-label="Borrar">✕</button></span></div>`).join('')
+      ${(lecciones || []).length ? (lecciones || []).map((l) => `<div class="clase clase-admin"><span class="clase-ic" data-ver-mat="${l.id}" role="button" tabindex="0" aria-label="Ver ${esc(l.titulo)}">${/\.(jpg|png|webp)$/.test(l.archivo || '') ? `<img data-bucket="cursos" data-ruta="${esc(l.archivo)}" alt="">` : ic(l.tipo === 'archivo' ? 'pdf' : TIPO_IC[l.tipo])}</span>
+        <span class="clase-txt" data-ver-mat="${l.id}" role="button" tabindex="0"><strong>${esc(l.titulo)}</strong><small>${E.v2 ? `Mes ${l.mes || 1}${l.semana ? ' · semana ' + l.semana : ''} · ${esc(nivelTxt(l.variante_id))} · ` : ''}${esc(l.modulo || 'General')}${l.activo ? '' : ' · <b style="color:var(--rojo)">oculta</b>'}</small></span>
+        <span class="clase-acc"><button class="btn btn-oro btn-chico" data-ver-mat="${l.id}">Ver</button><button class="btn btn-borde btn-chico" data-editar-mat="${l.id}">Editar</button><button class="btn btn-borde btn-chico" data-ocultar="${l.id}" data-activo="${l.activo}">${l.activo ? 'Ocultar' : 'Mostrar'}</button><button class="btn btn-peligro btn-chico" data-borrar="${l.id}" data-archivo="${esc(l.archivo || '')}" aria-label="Borrar">✕</button></span></div>`).join('')
         : '<div class="vacio">Este curso todavía no tiene materiales.</div>'}</div>
     <div class="tarjeta"><h2>Agregar material</h2><form id="f-mat" novalidate>
       ${E.v2 ? `<div class="fila" style="gap:.6rem;flex-wrap:nowrap"><div style="flex:0 0 7rem"><label for="m-mes">Mes</label><input id="m-mes" name="mes" type="number" min="1" max="36" value="1" required></div>
@@ -651,6 +746,8 @@ async function vistaAdminMateriales() {
   $('#m-curso').value = cur; $('#m-curso').onchange = (e) => { sessionStorage.setItem('aula-curso-mat', e.target.value); vistaAdminMateriales(); };
   $('#m-tipo').onchange = (e) => { $('#m-arch').hidden = e.target.value !== 'archivo'; $('#m-url').hidden = e.target.value === 'archivo'; };
   $('#m-file').onchange = (e) => { $('#m-arch-txt').textContent = e.target.files[0]?.name || 'Elegir PDF o foto'; };
+  for (const b of $$('[data-ver-mat]')) { const abrir = () => abrirLeccion((lecciones || []).find((l) => l.id === b.dataset.verMat)); b.onclick = abrir; b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } }; }
+  for (const b of $$('[data-editar-mat]')) b.onclick = () => editarMaterial((lecciones || []).find((l) => l.id === b.dataset.editarMat), { vars, mods: [...new Set([...modsUsados, ...modsCat])], recargar: vistaAdminMateriales });
   for (const b of $$('[data-ocultar]')) b.onclick = async () => { await sb.from('lecciones').update({ activo: b.dataset.activo !== 'true' }).eq('id', b.dataset.ocultar); vistaAdminMateriales(); };
   for (const b of $$('[data-borrar]')) b.onclick = async () => {
     if (!confirm('¿Borrar este material? Las alumnas ya no lo van a ver.')) return;
@@ -725,7 +822,7 @@ async function vistaAdminPagos() {
         <label class="chico">Hasta el mes <input type="number" min="1" max="36" value="${i.meses_habilitados || 1}" data-meses="${i.id}" style="width:4.5rem"></label></div>`).join('')}</div></div>`);
   for (const b of $$('[data-comp]')) b.onclick = async () => {
     const u = await urlFirmada('pagos-aula', b.dataset.comp); if (!u) return toast('No se pudo abrir.', true);
-    if (/\.pdf$/.test(b.dataset.comp)) return window.open(u, '_blank', 'noopener'); visor(`<img src="${u}" alt="Comprobante">`);
+    if (/\.pdf$/i.test(b.dataset.comp)) return verPdf(u, 'Comprobante'); visor(`<img src="${u}" alt="Comprobante">`);
   };
   const revisar = async (id, ok) => {
     const resp = ok ? null : prompt('¿Qué le decimos? (por ejemplo: "No me llegó la transferencia, revisá el comprobante")', 'No pudimos confirmar la transferencia. Revisá el comprobante y volvé a enviarlo.');
@@ -1090,7 +1187,9 @@ async function router() {
 
 // ---------- Arranque ----------
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__instalar = e; });
-$('#visor').addEventListener('click', (e) => { if (e.target.closest('.visor-cerrar') || e.target.id === 'visor-cuerpo') { $('#visor').close(); $('#visor-cuerpo').innerHTML = ''; } });
+$('#visor').addEventListener('click', (e) => { if (e.target.closest('.visor-cerrar') || e.target.id === 'visor-cuerpo') cerrarVisor(); });
+$('#visor').addEventListener('close', () => { $('#visor')._pdf = null; $('#visor-cuerpo').innerHTML = ''; });
+function cerrarVisor() { const d = $('#visor'); d._pdf = null; if (d.open) d.close(); $('#visor-cuerpo').innerHTML = ''; }
 $('#btn-perfil').onclick = () => { location.hash = '#/perfil'; };
 window.addEventListener('hashchange', router);
 if ('serviceWorker' in navigator && !LOCAL) navigator.serviceWorker.register('sw.js').catch(() => {});
